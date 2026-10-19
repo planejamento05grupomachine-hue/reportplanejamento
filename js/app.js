@@ -925,7 +925,7 @@
         x: `<span class="rx-pb rx-pb-k" aria-hidden="true"><i style="width:${lim01(r.real)}%"></i><em style="left:${lim01(r.prevCorte)}%"></em></span>`,
         s: `posição de ${dBR(r.corte)}` },
       { k: 'Planejado', ac: 'plan', v: pct(r.prevCorte), s: r.baseCorte !== null && r.baseCorte !== undefined ? `base ${pct(r.baseCorte)}` : 'cronograma atual' },
-      { k: 'Desvio físico', ac: dsv || 'real', cls: dsv,
+      { k: 'Comparado ao plano', ac: dsv || 'real', cls: dsv,
         v: cp.dir === 0 ? 'Em linha' : pp(r.desvio), s: r.idp ? `IDP ${fmtNum(r.idp, 2)}` : 'IDP indisponível' },
       { k: P.contrFim ? 'Término previsto (base)' : 'Término previsto', ac: 'base', v: P.contrFim ? dBR(P.contrFim) : P.fimCron ? dBR(P.fimCron) : '—',
         s: P.contrFim ? `cronograma atual ${dBR(P.fimCron)}${slipFim ? ` · <b class="${slipFim > 0 ? 'warn' : 'ok'}">${dias(slipFim)}</b>` : ''}` : 'cronograma atual (sem linha de base)', html: true },
