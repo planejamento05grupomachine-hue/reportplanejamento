@@ -12,13 +12,14 @@
   'use strict';
 
   // ---------- utilidades ----------
-  // Número em pt-BR ou en-US, com ou sem %. "0,0300" → 0.03 · "76.79%" → 0.7679
+  // Número em pt-BR ou en-US, com ou sem % ou prefixo R$. "0,0300" → 0.03 · "76.79%" → 0.7679
+  // "R$ 10.678.787,43" → 10678787.43 (Progresso por tarefas financeiro vem com o valor já formatado em texto)
   function num(v) {
     if (v === null || v === undefined || v === '') return null;
     if (typeof v === 'number') return v;
     let s = String(v).trim();
     const pct = s.endsWith('%');
-    s = s.replace('%', '').replace(/\s/g, '');
+    s = s.replace(/^R\$\s*/i, '').replace('%', '').replace(/\s/g, '');
     if (s.includes(',') && s.includes('.')) {
       s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
     } else if (s.includes(',')) s = s.replace(',', '.');
@@ -44,11 +45,107 @@
 
   // ---------- planilhas (SheetJS) ----------
   // raw:true é obrigatório: sem ele o SheetJS lê "0,0300" como 300 e "Mar/2026" como data.
-  function lerLinhas(XLSX, buffer) {
-    const wb = XLSX.read(buffer, { type: 'array', raw: true });
-    const ws = wb.Sheets[wb.SheetNames[0]];
+  function wbDe(XLSX, buffer) {
+    return XLSX.read(buffer, { type: 'array', raw: true });
+  }
+  function linhasDaAba(XLSX, wb, nomeAba) {
+    const ws = wb.Sheets[nomeAba];
+    if (!ws) return [];
     return XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: null })
       .filter(r => r.some(c => c !== null && String(c).trim() !== ''));
+  }
+  function lerLinhas(XLSX, buffer) {
+    const wb = wbDe(XLSX, buffer);
+    return linhasDaAba(XLSX, wb, wb.SheetNames[0]);
+  }
+
+  // Controle de Medição (contrato): tem uma aba "Visão geral"/"Controle Mensal" (valor do
+  // contrato, medido acumulado, saldo) e uma aba por boletim mensal (M1, M2...), diferente das
+  // outras planilhas do Prevision (uma aba só, cabeçalho na 1ª linha) — por isso a detecção é
+  // pelo nome das abas, não pelo cabeçalho de uma tabela.
+  function ehMedicao(wb) {
+    return wb.SheetNames.some(n => /^m\s*\d/.test(norm(n)) || /visao geral|controle mensal/.test(norm(n)));
+  }
+  function achaCelula(linhas, re, filtraLinha) {
+    for (let i = 0; i < linhas.length; i++) {
+      if (filtraLinha && !filtraLinha(linhas[i])) continue;
+      for (let j = 0; j < linhas[i].length; j++) if (re.test(norm(linhas[i][j]))) return { i, j };
+    }
+    return null;
+  }
+  // o valor de um rótulo ("Contrato", "Total do contrato"...) é a próxima célula não vazia da mesma linha
+  function valorApos(linhas, i, j) {
+    for (let k = j + 1; k < linhas[i].length; k++) if (linhas[i][k] !== null) return linhas[i][k];
+    return null;
+  }
+  function parseResumoMedicao(linhas) {
+    const r = {};
+    // rótulos como "Contrato"/"Obra" também aparecem como cabeçalho de outras tabelas da mesma
+    // aba (ex.: a tabela de Aditivos tem uma coluna "Contrato"); o bloco de metadados real é
+    // sempre uma linha esparsa (rótulo + valor), bem diferente de uma linha de cabeçalho de tabela
+    // (muitas colunas preenchidas) — por isso só considera linhas com poucas células preenchidas.
+    const linhaEsparsa = row => row.filter(x => x !== null).length <= 4;
+    const campo = (re, conv = num) => { const c = achaCelula(linhas, re, linhaEsparsa); if (!c) return null; const v = valorApos(linhas, c.i, c.j); return v === null ? null : conv(v); };
+    r.contrato = campo(/^contrato$/, v => String(v).trim());
+    r.obra = campo(/^obra$/, v => String(v).trim());
+    // "Total do contrato" (obra 198) ou "Valor do contrato" (obra 208) — nomenclatura varia por obra
+    r.totalContrato = campo(/total do contrato|^valor do contrato$/);
+    r.medidoAcumulado = campo(/total medido acumulado/);
+    r.saldo = campo(/saldo de contrato/);
+    r.ultimaMedicao = campo(/ultima medi[cç][ãa]o|última medição/, v => String(v).trim());
+    // tabela mensal: acha o cabeçalho pelas colunas-chave (a linha varia de obra para obra)
+    const ih = linhas.findIndex(l => l.some(c => norm(c) === 'mes') && l.some(c => norm(c).startsWith('previsto (ct')));
+    const meses = [];
+    let totalRow = null;
+    if (ih >= 0) {
+      const h = linhas[ih].map(norm);
+      const ix = k => h.findIndex(x => x.startsWith(k));
+      const iMes = ix('mes'), iPrevCT = ix('previsto (ct'), iRealCT = ix('realizado (ct'), iFat = ix('faturamento direto'),
+        iMP = ix('medicao machine prevista'), iMR = ix('medicao machine realizada'), iSt = ix('status');
+      for (let i = ih + 1; i < linhas.length; i++) {
+        const row = linhas[i], nomeMes = row[iMes];
+        if (!nomeMes) break;
+        if (/^total/i.test(String(nomeMes).trim())) { totalRow = { previstoCT: num(row[iPrevCT]), realizadoCT: num(row[iRealCT]) }; break; }
+        meses.push({ mes: String(nomeMes).trim(), previstoCT: num(row[iPrevCT]), realizadoCT: num(row[iRealCT]),
+          faturamentoDireto: num(row[iFat]), medicaoPrevista: num(row[iMP]), medicaoRealizada: num(row[iMR]),
+          status: iSt >= 0 ? (String(row[iSt] || '').trim() || null) : null });
+      }
+    }
+    r.meses = meses;
+    // algumas obras não têm rótulo dedicado de "Total do contrato"/"Total medido acumulado" —
+    // cai para o total da própria tabela mensal (sempre presente)
+    if (r.totalContrato === null && totalRow) r.totalContrato = totalRow.previstoCT;
+    if (r.medidoAcumulado === null && totalRow) r.medidoAcumulado = totalRow.realizadoCT;
+    return r;
+  }
+  // Boletim de medição por item de EAP ("M1", "M2"... ou variantes como "M4 ADITIVO").
+  // O número de colunas varia por obra; a leitura é pelo rótulo do cabeçalho, nunca pela posição.
+  function parseBoletim(linhas) {
+    const ih = linhas.findIndex(l => l.some(c => norm(c).startsWith('referencia')) && l.some(c => norm(c).startsWith('%exe')));
+    if (ih < 0) return [];
+    const h = linhas[ih].map(norm);
+    const ix = k => h.indexOf(k) >= 0 ? h.indexOf(k) : h.findIndex(x => x.startsWith(k));
+    const ixUlt = k => { let r = -1; h.forEach((x, i) => { if (x.startsWith(k)) r = i; }); return r; };
+    const iRef = ix('referencia'), iDesc = ix('descri'), iUn = ix('un'), iContr = ix('contratada'),
+      iAcum = ixUlt('acum'), iMedida = ix('medida'), iPct = ix('%exe'), iPreco = ix('preco unitario'), iMed = ixUlt('medicao');
+    const out = [];
+    for (let i = ih + 1; i < linhas.length; i++) {
+      const row = linhas[i], ref = row[iRef];
+      if (!ref) continue;
+      if (/^total/i.test(String(ref).trim())) break;
+      out.push({ eap: String(ref).trim(), descricao: String(row[iDesc] || '').trim(), unidade: iUn >= 0 ? row[iUn] : null,
+        contratada: num(row[iContr]), acumuladoAnterior: num(row[iAcum]), medida: num(row[iMedida]), pctExec: num(row[iPct]),
+        precoUnitario: num(row[iPreco]), medicao: num(row[iMed]) });
+    }
+    return out;
+  }
+  function parseMedicaoContrato(XLSX, wb) {
+    const abaResumo = wb.SheetNames.find(n => /visao geral|controle mensal/.test(norm(n))) || wb.SheetNames[0];
+    const resumo = parseResumoMedicao(linhasDaAba(XLSX, wb, abaResumo));
+    const boletins = wb.SheetNames.filter(n => n !== abaResumo && /^m\s*\d/.test(norm(n)))
+      .map(nome => ({ aba: nome, itens: parseBoletim(linhasDaAba(XLSX, wb, nome)) }))
+      .filter(b => b.itens.length);
+    return { resumo, boletins };
   }
 
   // Reconhece o tipo pelo cabeçalho
@@ -467,7 +564,7 @@
     return out;
   }
 
-  const api = { num, dataISO, mesISO, lerLinhas, tipoPlanilha, parseCurva, parseMensal, parseTarefas, parseCronograma, pdfItens, pdfFotos, linhasDe, parseRDOs };
+  const api = { num, dataISO, mesISO, lerLinhas, wbDe, linhasDaAba, ehMedicao, parseMedicaoContrato, tipoPlanilha, parseCurva, parseMensal, parseTarefas, parseCronograma, pdfItens, pdfFotos, linhasDe, parseRDOs };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Parsers = api;
 })(typeof window !== 'undefined' ? window : globalThis);

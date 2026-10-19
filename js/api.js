@@ -423,8 +423,13 @@
         const e = OB[id]; if (!e) throw erro('Obra não encontrada.');
         const base = e.ras || e.pub;
         const ras = clone(base);
-        ['curva', 'mensal', 'tarefas', 'rdos', 'cronograma'].forEach(k => { if (pacote[k]) ras[k] = pacote[k]; });
-        ras.dataCorte = corte; ras.atualizadoEm = hoje();
+        ['curva', 'mensal', 'tarefas', 'rdos', 'cronograma', 'medicao'].forEach(k => { if (pacote[k]) ras[k] = pacote[k]; });
+        // financeiro tem 3 subtipos (curva/mensal/tarefas) em lotes separados: funde em vez de substituir,
+        // senão enviar só a Curva S financeira apagaria o Progresso por tarefas financeiro do mês anterior.
+        if (pacote.financeiro) ras.financeiro = { ...(ras.financeiro || {}), ...pacote.financeiro };
+        if (['curva', 'mensal', 'tarefas', 'rdos', 'cronograma'].some(k => pacote[k])) ras.dataCorte = corte;
+        if (['financeiro', 'medicao'].some(k => pacote[k])) ras.dataCorteFinanceiro = corte;
+        ras.atualizadoEm = hoje();
         ras.fontes = { ...(base.fontes || {}), ...fontes };
         delete ras.publicadoEm;
         const arq = {};
