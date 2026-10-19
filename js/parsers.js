@@ -1,3 +1,4 @@
+
 // ============================================================
 // Parsers — leem os arquivos de planejamento no navegador.
 //   Prevision: Curva S (.xls/HTML), Progresso mensal (.xls/HTML),
@@ -323,7 +324,10 @@
     const iA = todas.findIndex(t => /^Atividades \(\d+\)$/.test(t));
     const iF = todas.findIndex(t => /^Fotos \((\d+)\)$/.test(t));
     if (iF >= 0) r.fotos = +todas[iF].match(/\((\d+)\)/)[1];
-    if (iA >= 0) r.atividades = lerAtividades(todas.slice(iA + 1, iF >= 0 ? iF : undefined));
+    // a lista termina em "Fotos (n)" ou, no layout com comentários, em "Comentários (n)"
+    const iC = todas.findIndex((t, i) => i > iA && /^Coment[aá]rios \(\d+\)$/.test(t));
+    const iFim = [iF, iC].filter(i => i > iA).sort((a, b) => a - b)[0];
+    if (iA >= 0) r.atividades = lerAtividades(todas.slice(iA + 1, iFim));
 
     const cp = todas.find(t => /^Criado por:/.test(t));
     const mp = todas.find(t => /^Última modificação:/.test(t));
@@ -410,6 +414,16 @@
         cur = { empresa: null, servico: e[2].trim(), eap: e[1], local: null, area: null, descricao: '', pct: null, situacao: null, motivo: null, acumulado: null, total: null, unidade: null };
         continue;
       }
+      // layout sem percentual: "Serviço | Em Andamento" (ex.: obra 208); "Sem atividades neste dia" não é atividade
+      if (/^(Sem atividades|N[ãa]o houve atividades)/i.test(t)) { fecha(); cur = null; continue; }
+      const ss = !RE_PCT.test(t) && t.match(/^(.+?)\s*\|\s*(Em Andamento|Conclu[ií]d[ao]|Paralisad[ao]|N[ãa]o [Ii]niciad[ao]|Atrasad[ao])\s*$/);
+      if (ss) {
+        fecha();
+        const segs = ss[1].split(/\s+-\s+/);
+        cur = { empresa: null, servico: ss[1].trim(), local: null, area: null, descricao: ss[1].trim(), pct: null,
+          situacao: ss[2].trim(), motivo: null, acumulado: null, total: null, unidade: null, semPercentual: true };
+        continue;
+      }
       const so = t.match(/^(\d{1,3})%\s*-\s*(.+)$/);
       if (so && cur && cur.pct === null) { cur.pct = +so[1] / 100; cur.situacao = so[2].trim(); continue; }
       const m = t.match(RE_PCT);
@@ -457,3 +471,4 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Parsers = api;
 })(typeof window !== 'undefined' ? window : globalThis);
+

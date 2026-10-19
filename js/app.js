@@ -1,7 +1,7 @@
+
 // ============================================================
 // Machine · Painel de Obras — app (telas e navegação).
-// Fase 1 (protótipo): dados em memória (js/seed.js) e login por perfil de demonstração.
-// Fase 2: a mesma interface lê do Supabase (js/api.js) com e-mail e senha reais.
+// Dados cifrados no próprio repositório (js/api.js); acesso só com e-mail e senha.
 // ============================================================
 (function () {
   'use strict';
@@ -10,23 +10,17 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
   // ---------- estado ----------
-  // Produção: dados e login vêm do Supabase (js/api.js + js/config.js). Sem configuração: demonstração.
-  const PROD = !!(window.API && window.API.ativo);
-  const DB = PROD ? { obras: [] } : JSON.parse(JSON.stringify(window.SEED));
+  const DB = { obras: [] };
   const ROTULO = { admin: 'Planejamento · Administrador', diretoria: 'Diretoria · todas as obras', cliente: 'Cliente' };
+  const PERFIL = { admin: 'Administrador', diretoria: 'Diretoria', cliente: 'Cliente' };
+  const EMAIL = API.emailAcesso || 'planejamento05@grupomachine.com.br';
   const iniciais = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
   const temDados = o => !!(o && !o.semDados && o.curva && o.curva.length && o.tarefas && o.tarefas.length);
-  const USUARIOS = [
-    { id: 'adm', nome: 'Carlos Castro', ini: 'CC', perfil: 'admin', rotulo: 'Planejamento · Administrador', obras: '*' },
-    { id: 'dir', nome: 'Diretoria Machine', ini: 'DM', perfil: 'diretoria', rotulo: 'Diretoria · todas as obras', obras: '*' },
-    { id: 'cli', nome: 'Visão do cliente', ini: 'VC', perfil: 'cliente', rotulo: 'Cliente · só o publicado', obras: '*' },
-  ];
-  const S = { user: null, view: 'login', carregando: PROD, loginMsg: null, loginErro: null, acessos: null, obraId: null, filtroTarefas: 'atrasada', verTodas: false, abertos: {}, menu: false, imp: null, fotoRdo: null, fotosTodas: false, lb: null };
+  const S = { user: null, view: 'login', carregando: true, loginMsg: null, loginErro: null, obraId: null, filtroTarefas: 'atrasada', verTodas: false, abertos: {}, menu: false, imp: null, fotoRdo: null, fotosTodas: false, lb: null, modal: null, ocupado: null, editAcesso: null };
   const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* sem armazenamento: segue sem lembrar */ } };
 
-  const podeVer = (u, o) => u.obras === '*' || u.obras.includes(o.id);
-  const obrasDoUsuario = () => PROD ? DB.obras : DB.obras.filter(o => podeVer(S.user, o));
+  const obrasDoUsuario = () => DB.obras;
   const ehAdmin = () => S.user && S.user.perfil === 'admin';
   const ehCliente = () => S.user && S.user.perfil === 'cliente';
   // Cliente vê só RDO aprovado e só até a data publicada
@@ -63,25 +57,25 @@
   function shell(conteudo) {
     const u = S.user;
     const o = S.obraId ? DB.obras.find(x => x.id === S.obraId) : null;
-    const crumb = S.view === 'obra' && o ? `<b>${esc(o.codigo)} · ${esc(o.nome)}</b>` : S.view === 'alimentar' ? '<b>Alimentar dados</b>' : S.view === 'report' ? `<b>Report${o ? ' · ' + esc(o.codigo) : ''}</b>` : S.view === 'acessos' ? '<b>Acessos</b>' : S.view === 'nova-obra' ? '<b>Nova obra</b>' : '<b>Portfólio</b>';
+    const crumb = S.view === 'obra' && o ? `<b>${esc(o.codigo)} · ${esc(o.nome)}</b>` : S.view === 'alimentar' ? '<b>Alimentar dados</b>' : S.view === 'report' ? `<b>Report${o ? ' · ' + esc(o.codigo) : ''}</b>` : S.view === 'acessos' ? '<b>Acessos</b>' : S.view === 'nova-obra' ? '<b>Nova obra</b>' : S.view === 'editar-obra' ? '<b>Cadastro da obra</b>' : S.view === 'senha' ? '<b>Senha</b>' : S.view === 'github' ? '<b>Publicação</b>' : '<b>Portfólio</b>';
     const itens = [
       ['portfolio', 'Portfólio', IC.home, !ehCliente() || obrasDoUsuario().length > 1],
       ['obra', 'Obra', IC.obra, true],
       ['alimentar', 'Alimentar', IC.up, ehAdmin()],
       ['report', 'Report', IC.doc, true],
-      ['acessos', 'Acessos', IC.users, PROD && ehAdmin()],
+      ['acessos', 'Acessos', IC.users, ehAdmin()],
     ].filter(i => i[3]);
     return `
       <header class="mast"><div class="mast-in">
         <img src="${LOGO}" alt="Machine · Realizações com base sólida">
         <span class="ttl">Painel de Obras</span><span class="crumb">${crumb}</span>
         <span class="sp"></span>
-        ${PROD ? '' : '<span class="demo-flag" title="Dados reais da Obra 207, login de demonstração">Protótipo</span>'}
+        ${S.ocupado ? `<span class="sync" role="status"><i></i>${esc(S.ocupado)}</span>` : ''}
         <button class="iconbtn" id="bt-tema" aria-label="Tema: ${tema === 'auto' ? 'automático' : tema === 'light' ? 'claro' : 'escuro'}">${tema === 'auto' ? IC.auto : tema === 'light' ? IC.sun : IC.moon}</button>
         <button class="avatar" id="bt-user" aria-haspopup="menu" aria-expanded="${S.menu}" aria-label="Conta: ${esc(u.nome)}">${esc(u.ini)}</button>
       </div></header>
       ${S.menu ? `<div class="menu" role="menu"><div class="who"><b>${esc(u.nome)}</b><small>${esc(u.rotulo)}</small></div>
-        ${PROD ? '<button role="menuitem" data-senha="1">Trocar minha senha</button>' : '<button role="menuitem" data-act="trocar">Trocar perfil</button>'}<button role="menuitem" data-act="sair">Sair</button></div>` : ''}
+        ${ehAdmin() ? `<button role="menuitem" data-go="senha">Trocar minha senha</button><button role="menuitem" data-go="github">Publicação (GitHub)</button>` : `<a role="menuitem" href="${mailtoSenha(u.email)}">Solicitar nova senha</a>`}<button role="menuitem" data-act="sair">Sair</button></div>` : ''}
       <main class="page" id="main">${conteudo}</main>
       <nav class="nav" aria-label="Navegação principal"><div class="nav-in">
         ${itens.map(([k, t, ic]) => `<button data-go="${k}" ${S.view === k ? 'aria-current="page"' : ''}>${ic}<span>${t}</span></button>`).join('')}
@@ -94,53 +88,137 @@
   };
   const pill = (k, t) => `<span class="pill ${k}">${esc(t)}</span>`;
 
-  // ---------- login (produção) ----------
+  // ---------- e-mails (pedido de acesso e de senha) ----------
+  const SITE = () => location.origin + location.pathname;
+  const mailto = (para, assunto, corpo) => `mailto:${para}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
+  const mailtoSenha = email => mailto(EMAIL, 'Painel de Obras Machine · Redefinição de senha',
+    `Solicito a redefinição da minha senha de acesso ao Painel de Obras Machine.\n\nE-mail de acesso: ${email || ''}\n\nAtenciosamente,`);
+
+  // ---------- telas de acesso ----------
   const cartaoLogin = corpo => `<div class="login"><div class="login-card"><div class="lm"><img src="${LOGO}" alt="Machine · Realizações com base sólida"></div><div class="lgb">${corpo}</div></div></div>`;
+  const avisos = () => `${S.loginErro ? `<div class="note-box err" role="alert">${esc(S.loginErro)}</div>` : ''}${S.loginMsg ? `<div class="note-box" role="status">${esc(S.loginMsg)}</div>` : ''}`;
   function viewLoginProd() {
     return cartaoLogin(`
       <div><div class="kicker">Painel de Obras · Planejamento</div><h1 class="h1" style="font-size:28px">Entrar</h1>
-        <p class="sub" style="margin-top:8px">Use o e-mail e a senha do seu convite.</p></div>
+        <p class="sub" style="margin-top:8px">Acesso restrito. Informe o e-mail cadastrado e a senha recebida do Planejamento.</p></div>
       <form id="f-login" class="steps" novalidate>
         <div class="field"><label for="l-email">E-mail</label><input class="inp" id="l-email" type="email" autocomplete="username" required></div>
         <div class="field"><label for="l-senha">Senha</label><input class="inp" id="l-senha" type="password" autocomplete="current-password" required></div>
-        ${S.loginErro ? `<div class="note-box err" role="alert">${esc(S.loginErro)}</div>` : ''}
-        ${S.loginMsg ? `<div class="note-box" role="status">${esc(S.loginMsg)}</div>` : ''}
-        <div class="bar-actions"><button class="btn" type="submit">Entrar</button><button class="more" type="button" id="l-esqueci">Esqueci a senha</button></div>
+        ${avisos()}
+        <div class="bar-actions"><button class="btn" type="submit">Entrar</button><a class="more" id="l-esqueci" href="${mailtoSenha('')}">Esqueci a senha</a></div>
       </form>
-      <p class="sec-lead" style="margin:0">Acesso só por convite. Para pedir acesso, fale com o planejamento da Machine.</p>`);
+      <div class="pedido-box"><b>Não tem senha?</b><span>O acesso é concedido pelo Planejamento da Machine após avaliação do pedido.</span>
+        <button class="btn sec2" type="button" data-go="pedido">Solicitar acesso</button></div>`);
   }
-  function viewSenha() {
+  function viewPedido() {
     return cartaoLogin(`
-      <div><div class="kicker">Painel de Obras · Planejamento</div><h1 class="h1" style="font-size:28px">${API.tipoLink === 'invite' ? 'Crie sua senha' : 'Nova senha'}</h1>
-        <p class="sub" style="margin-top:8px">Mínimo de 8 caracteres. Use uma senha só sua.</p></div>
-      <form id="f-senha" class="steps" novalidate>
-        <div class="field"><label for="s-nova">Nova senha</label><input class="inp" id="s-nova" type="password" autocomplete="new-password" minlength="8" required></div>
-        <div class="field"><label for="s-conf">Repita a senha</label><input class="inp" id="s-conf" type="password" autocomplete="new-password" minlength="8" required></div>
-        ${S.loginErro ? `<div class="note-box err" role="alert">${esc(S.loginErro)}</div>` : ''}
-        <div class="bar-actions"><button class="btn" type="submit">Salvar senha</button>${S.user ? '<button class="btn sec2" type="button" data-go="obra">Cancelar</button>' : ''}</div>
+      <div><div class="kicker">Painel de Obras · Planejamento</div><h1 class="h1" style="font-size:28px">Solicitar acesso</h1>
+        <p class="sub" style="margin-top:8px">O pedido é enviado para <b>${esc(EMAIL)}</b>. Após avaliação, se aprovado, a senha é enviada ao e-mail informado.</p></div>
+      <form id="f-pedido" class="steps" novalidate>
+        <div class="field"><label for="p-nome">Nome completo</label><input class="inp" id="p-nome" autocomplete="name" required></div>
+        <div class="field"><label for="p-email">E-mail corporativo</label><input class="inp" id="p-email" type="email" autocomplete="email" required></div>
+        <div class="field"><label for="p-empresa">Empresa</label><input class="inp" id="p-empresa" autocomplete="organization" required></div>
+        <div class="field"><label for="p-vinculo">Vínculo</label><select class="inp" id="p-vinculo"><option>Cliente / contratante</option><option>Diretoria Machine</option><option>Equipe Machine</option><option>Outro</option></select></div>
+        <div class="field"><label for="p-obras">Obra(s) de interesse</label><input class="inp" id="p-obras" placeholder="código ou nome da obra"></div>
+        <div class="field"><label for="p-motivo">Justificativa</label><textarea class="inp" id="p-motivo" rows="3"></textarea></div>
+        ${avisos()}
+        <div class="bar-actions"><button class="btn" type="submit">Enviar pedido</button><button class="btn sec2" type="button" data-go="login">Voltar</button></div>
+      </form>
+      <p class="sec-lead" style="margin:0">O botão abre o seu programa de e-mail com o pedido preenchido. Se preferir, escreva diretamente para ${esc(EMAIL)}.</p>`);
+  }
+  function viewConfigurar() {
+    return cartaoLogin(`
+      <div><div class="kicker">Painel de Obras · Configuração inicial</div><h1 class="h1" style="font-size:28px">Proteger o painel</h1>
+        <p class="sub" style="margin-top:8px">Cria o primeiro administrador e cifra os dados das obras. Depois disso, o painel só abre com senha.</p></div>
+      <form id="f-config" class="steps" novalidate>
+        <div class="field"><label for="c-nome">Nome do administrador</label><input class="inp" id="c-nome" autocomplete="name" required></div>
+        <div class="field"><label for="c-email">E-mail</label><input class="inp" id="c-email" type="email" autocomplete="username" value="${esc(EMAIL)}" required></div>
+        <div class="field"><label for="c-senha">Senha (mínimo 12 caracteres)</label><input class="inp" id="c-senha" type="password" autocomplete="new-password" minlength="12" required></div>
+        <div class="field"><label for="c-conf">Repita a senha</label><input class="inp" id="c-conf" type="password" autocomplete="new-password" required></div>
+        <div class="field"><label for="c-token">Token do GitHub</label><input class="inp" id="c-token" type="password" autocomplete="off" spellcheck="false" required>
+          <small class="hint">${dicaToken()}</small></div>
+        <label class="chk"><input type="checkbox" id="c-lembrar" checked> Lembrar o token neste computador</label>
+        <label class="chk"><input type="checkbox" id="c-limpar" checked> Apagar o histórico antigo do repositório (remove as versões sem criptografia)</label>
+        ${avisos()}
+        <div class="bar-actions"><button class="btn" type="submit">Configurar</button></div>
       </form>`);
   }
-  const viewCarregando = () => cartaoLogin(`<div class="kicker">Painel de Obras</div><p class="sub" role="status">Carregando…</p>`);
-
-  // ---------- login (demonstração) ----------
-  function viewLogin() {
-    return `<div class="login"><div class="login-card">
-      <div class="lm"><img src="${LOGO}" alt="Machine · Realizações com base sólida"></div>
-      <div class="lgb">
-        <div><div class="kicker">Painel de Obras · Planejamento</div><h1 class="h1" style="font-size:30px">Entrar</h1>
-        <p class="sub" style="margin-top:8px">Protótipo com os dados reais da Obra 207. Escolha um perfil para ver o que cada acesso enxerga.</p></div>
-        ${USUARIOS.map(u => `<button class="prof" data-login="${u.id}"><span class="av">${u.ini}</span><span><b>${esc(u.nome)}</b><small>${esc(u.rotulo)}</small></span>${IC.right}</button>`).join('')}
-        <div class="note-box">Na versão publicada, cada pessoa entra com <b>e-mail e senha</b> próprios, recebidos por convite. O cliente só enxerga a obra dele e só o que você publicou.</div>
-      </div></div></div>`;
+  const dicaToken = () => `Crie em <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com → Settings → Fine-grained tokens</a>: acesso só ao repositório <b>${esc(API.github.repo())}</b>, permissão <b>Contents: Read and write</b>. O token fica só neste navegador.`;
+  function viewSenha() {
+    return `<div><div class="kicker">Conta</div><h1 class="h1">Trocar minha senha</h1><p class="sub">Mínimo de 12 caracteres. A senha nova vale a partir do próximo acesso.</p></div>
+      <form id="f-senha" class="card card-pad steps" novalidate style="max-width:520px">
+        <div class="field"><label for="s-nova">Nova senha</label><input class="inp" id="s-nova" type="password" autocomplete="new-password" minlength="12" required></div>
+        <div class="field"><label for="s-conf">Repita a senha</label><input class="inp" id="s-conf" type="password" autocomplete="new-password" required></div>
+        <div class="bar-actions"><button class="btn" type="submit">Salvar senha</button><button class="btn sec2" type="button" data-go="portfolio">Cancelar</button></div>
+      </form>`;
   }
+  function viewGithub() {
+    const tem = API.github.temToken();
+    return `<div><div class="kicker">Administração</div><h1 class="h1">Publicação</h1><p class="sub">As alterações feitas no painel (obras, cargas, publicações e acessos) são gravadas no repositório <b>${esc(API.github.repo())}</b> e o site atualiza em cerca de um minuto.</p></div>
+      <div class="card card-pad steps" style="max-width:640px">
+        <div class="meta" style="margin:0"><span>Token <b>${tem ? (API.github.lembrado() ? 'configurado neste computador' : 'configurado até fechar o navegador') : 'não configurado'}</b></span></div>
+        <form id="f-token" class="steps" novalidate>
+          <div class="field"><label for="g-token">${tem ? 'Substituir token' : 'Token do GitHub'}</label><input class="inp" id="g-token" type="password" autocomplete="off" spellcheck="false"><small class="hint">${dicaToken()}</small></div>
+          <label class="chk"><input type="checkbox" id="g-lembrar" checked> Lembrar neste computador</label>
+          <div class="bar-actions"><button class="btn" type="submit">Salvar token</button>${tem ? '<button class="btn sec2" type="button" id="g-limpar">Remover token deste navegador</button>' : ''}</div>
+        </form>
+      </div>
+      <div class="card card-pad steps" style="max-width:640px">
+        <div class="step-t">Manutenção</div>
+        <p class="sub" style="margin:0">Mantém só a versão atual no histórico do repositório. Use depois de remover um acesso, para que versões antigas (cifradas com as chaves anteriores) deixem de existir.</p>
+        <div class="bar-actions"><button class="btn sec2" type="button" id="g-compactar">Compactar histórico</button></div>
+      </div>`;
+  }
+  const viewCarregando = () => cartaoLogin(`<div class="kicker">Painel de Obras</div><p class="sub" role="status">${esc(S.ocupado || 'Carregando…')}</p>`);
+
+  // ---------- janelas ----------
+  function modalHTML() {
+    const m = S.modal; if (!m) return '';
+    if (m.tipo === 'token') return `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="md-t"><div class="modal-card">
+      <h2 id="md-t">Token do GitHub</h2><p class="sub">Para gravar esta alteração no painel, informe o token de publicação.${m.erro ? '' : ''}</p>
+      ${m.erro ? `<div class="note-box err" role="alert">${esc(m.erro)}</div>` : ''}
+      <form id="f-mtoken" class="steps" novalidate>
+        <div class="field"><input class="inp" id="m-token" type="password" autocomplete="off" spellcheck="false" aria-label="Token do GitHub"><small class="hint">${dicaToken()}</small></div>
+        <label class="chk"><input type="checkbox" id="m-lembrar" checked> Lembrar neste computador</label>
+        <div class="bar-actions"><button class="btn" type="submit">Continuar</button><button class="btn sec2" type="button" data-fecha="1">Cancelar</button></div>
+      </form></div></div>`;
+    if (m.tipo === 'senha') {
+      const u = m.usuario;
+      const corpo = `Prezado(a) ${u.nome},\n\nSeu acesso ao Painel de Obras Machine foi aprovado.\n\nEndereço: ${SITE()}\nE-mail: ${u.email}\nSenha: ${m.senha}\n\nPerfil: ${PERFIL[u.perfil]}${u.perfil === 'cliente' ? ` · obra(s) ${(u.obras || []).join(', ')}` : ''}\n\nGuarde esta senha em local seguro. Para redefini-la, escreva para ${EMAIL}.\n\nAtenciosamente,\nPlanejamento · Machine`;
+      return `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="md-t"><div class="modal-card">
+        <h2 id="md-t">${m.nova ? 'Acesso criado' : 'Nova senha emitida'}</h2>
+        <p class="sub">${esc(u.nome)} · ${esc(u.email)} · ${PERFIL[u.perfil]}</p>
+        <div class="senha-box"><code id="m-senha">${esc(m.senha)}</code><button class="btn sec2" type="button" data-copia="${esc(m.senha)}">Copiar</button></div>
+        <div class="note-box">A senha aparece só agora; ela não fica guardada em lugar nenhum. O acesso passa a valer em cerca de um minuto, quando o site atualizar.</div>
+        <div class="bar-actions"><a class="btn" href="${mailto(u.email, 'Acesso ao Painel de Obras Machine', corpo)}">Enviar por e-mail</a><button class="btn sec2" type="button" data-fecha="1">Fechar</button></div>
+      </div></div>`;
+    }
+    if (m.tipo === 'confirma') return `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="md-t"><div class="modal-card">
+      <h2 id="md-t">${esc(m.titulo)}</h2><p class="sub">${m.texto}</p>
+      <div class="bar-actions"><button class="btn ${m.perigo ? 'danger' : ''}" type="button" id="m-ok">${esc(m.ok || 'Confirmar')}</button><button class="btn sec2" type="button" data-fecha="1">Cancelar</button></div>
+    </div></div>`;
+    return '';
+  }
+  // Executa uma gravação; sem token (ou com token inválido) pede o token e tenta de novo.
+  async function gravando(rotulo, fn) {
+    if (S.ocupado) { toast('Aguarde a gravação em andamento.'); return null; }
+    S.ocupado = rotulo; render();
+    try { return await fn(m => { S.ocupado = m; const el = $('.sync'); if (el) el.lastChild.textContent = m; else render(); }); }
+    catch (e) {
+      // a ação continua de onde parou depois que o token for informado (ou termina em null se cancelar)
+      if (e.codigo === 'SEM_TOKEN' || e.codigo === 'TOKEN') return new Promise(fim => { S.modal = { tipo: 'token', erro: e.codigo === 'TOKEN' ? e.message : null, repetir: () => fim(gravando(rotulo, fn)), cancelar: () => fim(null) }; });
+      toast('Não foi possível gravar: ' + e.message); return null;
+    } finally { S.ocupado = null; if (S.user) DB.obras = API.listar(); render(); }
+  }
+  async function recarregar() { DB.obras = API.listar(); render(); }
 
   // ---------- portfólio ----------
   function viewPortfolio() {
     const vazias = obrasDoUsuario().filter(o => !temDados(visaoDaObra(o)));
     const obras = obrasDoUsuario().filter(o => temDados(visaoDaObra(o))).map(o => ({ o, r: Core.calc(visaoDaObra(o)) }));
-    if (!obras.length) return `<div><div class="kicker">Planejamento · Portfólio</div><h1 class="h1">Olá, ${esc(S.user.nome.split(' ')[0])}</h1></div>
-      <div class="card card-pad"><p class="sub" style="margin:0">${ehAdmin() ? 'Nenhuma obra com dados ainda. Cadastre a obra e alimente os arquivos do Prevision.' : 'Ainda não há relatório publicado para você. Assim que o planejamento publicar, ele aparece aqui.'}</p>
-      ${ehAdmin() ? `<div class="bar-actions" style="margin-top:12px">${vazias.length ? '' : '<button class="btn" data-go="nova-obra">Cadastrar obra</button>'}<button class="btn sec2" data-go="alimentar">Alimentar dados</button></div>` : ''}</div>`;
+    if (!obras.length) return `<div><div class="kicker">Planejamento · Portfólio</div><h1 class="h1">Olá</h1></div>
+      <div class="card card-pad"><p class="sub" style="margin:0">${ehAdmin() ? 'Nenhuma obra com dados ainda. Cadastre a obra e alimente os arquivos do Prevision.' : 'Ainda não há relatório publicado. A posição aparece aqui assim que o Planejamento publicar.'}</p>
+      ${ehAdmin() ? `<div class="bar-actions" style="margin-top:12px"><button class="btn" data-go="nova-obra">Cadastrar obra</button>${vazias.length ? '<button class="btn sec2" data-go="alimentar">Alimentar dados</button>' : ''}</div>` : ''}</div>`;
     const atrasadas = obras.filter(x => x.r.sem.k === 'critico').length;
     const paralis = obras.reduce((s, x) => s + (x.r.campo ? x.r.campo.paralisadas.length : 0), 0);
     const corte = obras.map(x => x.r.corte).sort().at(-1);
@@ -148,7 +226,7 @@
     const realMed = obras.reduce((s, x) => s + x.r.real, 0) / (pesoTot || 1);
     const prevMed = obras.reduce((s, x) => s + x.r.prevCorte, 0) / (pesoTot || 1);
     return `
-      <div><div class="kicker">Planejamento · Portfólio</div><h1 class="h1">Olá, ${esc(S.user.nome.split(' ')[0])}</h1>
+      <div><div class="kicker">Planejamento · Portfólio</div><h1 class="h1">Olá</h1>
       <p class="sub">Posição física das obras com dados até ${dBR(corte)}.</p></div>
       <div class="card kpi-strip">
         <div class="kpi"><span>Obras ativas</span><b>${obras.length}</b><small>com cronograma carregado</small></div>
@@ -166,13 +244,13 @@
               <div class="bullet-cap"><span>Realizado <b style="color:var(--ink)">${pct(r.real)}</b></span><span>Previsto ${pct(r.prevCorte)}</span></div>
               ${miniLinha(r)}</div>
             <div class="bot">
-              <div><span>Vs. plano</span><b style="color:${r.desvio <= -Core.TOLERANCIA ? 'var(--crit)' : 'var(--ok)'}">${(c => (c.seta ? c.seta + ' ' : '') + c.curto)(Core.comparaPlano(r.desvio))}</b></div>
+              <div><span>Vs. plano</span><b style="color:${r.sem.k === 'critico' ? 'var(--crit)' : r.sem.k === 'atencao' ? 'var(--warn, #8F6A12)' : r.desvio >= Core.TOLERANCIA ? 'var(--ok)' : 'var(--ink)'}">${Core.comparaPlano(r.desvio).dir === 0 ? 'Em linha' : pp(r.desvio)}</b></div>
               <div><span>Término crono.</span><b>${dCurto(r.prazo.fimCron)}${r.crono && r.crono.slip ? ` <small class="${r.crono.slip > 0 ? 'neg' : 'pos'}">${r.crono.slip > 0 ? '+' : ''}${r.crono.slip}d</small>` : ''}</b></div>
               <div><span>Projeção</span><b>${r.projecao ? Core.mesCurto(r.projecao) : '—'}</b></div>
             </div>
           </button>`).join('')}
-        ${vazias.map(o => `<div class="add-card" style="border-style:solid"><span><b style="font-size:16px;color:var(--ink)">${esc(o.codigo)} · ${esc(o.nome)}</b>${ehAdmin() ? 'Sem dados ainda. Use Alimentar.' : 'Sem relatório publicado.'}</span></div>`).join('')}
-        ${ehAdmin() ? `<button class="add-card" ${PROD ? 'data-go="nova-obra"' : 'data-toast="No protótipo o cadastro fica desativado."'}><span><b>+</b>Cadastrar obra</span></button>` : ''}
+        ${vazias.map(o => `<button class="add-card" style="border-style:solid" data-obra="${o.id}"><span><b style="font-size:16px;color:var(--ink)">${esc(o.codigo)} · ${esc(o.nome)}</b>${ehAdmin() ? 'Sem dados ainda. Use Alimentar.' : 'Sem relatório publicado.'}</span></button>`).join('')}
+        ${ehAdmin() ? `<button class="add-card" data-go="nova-obra"><span><b>+</b>Cadastrar obra</span></button>` : ''}
       </div>`;
   }
 
@@ -194,7 +272,7 @@
     const base = DB.obras.find(x => x.id === S.obraId);
     if (!base) return `<div class="card card-pad">Escolha uma obra no portfólio.</div>`;
     const o = visaoDaObra(base);
-    if (!temDados(o)) return `<div><div class="kicker">Obra ${esc(base.codigo)}</div><h1 class="h1">${esc(base.nome)}</h1></div>
+    if (!temDados(o)) return `<div class="head-row"><div><div class="kicker">Obra ${esc(base.codigo)}${base.cidade ? ' · ' + esc(base.cidade) : ''}</div><h1 class="h1">${esc(base.nome)}</h1>${base.cliente ? `<p class="sub">${esc(base.cliente)}</p>` : ''}</div>${ehAdmin() ? '<div class="bar-actions"><button class="btn sec2" data-go="editar-obra">Editar cadastro</button></div>' : ''}</div>
       <div class="card card-pad"><p class="sub" style="margin:0">${ehAdmin() ? 'Esta obra ainda não tem dados. Vá em Alimentar e envie os arquivos do Prevision e dos RDOs.' : 'Ainda não há relatório publicado desta obra.'}</p>${ehAdmin() ? '<div class="bar-actions" style="margin-top:12px"><button class="btn" data-go="alimentar">Alimentar dados</button></div>' : ''}</div>`;
     const r = Core.calc(o);
     const P = r.prazo;
@@ -233,8 +311,8 @@
           </div>
           <div style="display:grid;gap:18px;align-content:start">
             <div class="kpis">
-              <div class="kpi"><span>Comparado ao plano</span><b class="${r.desvio <= -Core.TOLERANCIA ? 'crit' : 'ok'}">${pp(r.desvio)}</b><small>${Core.comparaPlano(r.desvio).longo}</small></div>
-              <div class="kpi"><span>IDP</span><b class="${r.sem.k === 'critico' ? 'crit' : r.sem.k === 'atencao' ? 'warn' : 'ok'}">${fmtNum(r.idp, 2)}</b><small>realizado ÷ previsto</small></div>
+              <div class="kpi"><span>Comparado ao plano</span><b class="${r.sem.k === 'critico' ? 'crit' : r.sem.k === 'atencao' ? 'warn' : r.desvio >= Core.TOLERANCIA ? 'ok' : ''}">${Core.comparaPlano(r.desvio).dir === 0 ? 'Em linha' : pp(r.desvio)}</b><small>planejado ${pct(r.prevCorte)} na data</small></div>
+              <div class="kpi"><span>IDP</span><b>${fmtNum(r.idp, 2)}</b><small>realizado ÷ previsto</small></div>
               <div class="kpi"><span>Ritmo atual</span><b>${pct(r.ritmo)}</b><small>média/mês · últimos 3 meses</small></div>
               <div class="kpi"><span>Ritmo necessário</span><b class="${r.ritmoCron > r.ritmo * 1.05 ? 'crit' : ''}">${r.ritmoCron ? pct(r.ritmoCron) : '—'}</b><small>para fechar em ${dCurto(P.fimCron)}</small></div>
             </div>
@@ -254,7 +332,10 @@
       <div class="legend"><span><i class="sw sw-prev" style="height:8px;width:8px"></i>Previsto no mês</span><span><i class="sw sw-real" style="height:8px;width:8px"></i>Realizado no mês</span><span class="note">* mês do corte, parcial até ${dCurto(r.corte)}</span></div>
       <div class="chart" id="ch-mensal"></div>`, true);
 
-    const frentes = sec('frentes', 'Avanço por frente', `${r.pacotes.length} frentes da EAP`, `
+    const frentes = !r.pesosOk && r.crono && r.crono.completo ? sec('frentes', 'Avanço por frente', `${Core.atividades(r).length} frentes da EAP`, `
+      <p class="sec-lead">Avanço de cada atividade no cronograma do Prevision: barra = realizado da atividade; traço = planejado na data. Farol = realizado ÷ planejado. Toque numa frente para abrir as etapas.</p>
+      ${ehAdmin() ? `<div class="note-box">O Progresso por tarefas veio filtrado por período (raiz ${pct(r.pesoRaiz, 2)}), então o peso de cada frente na obra não aparece. Exporte sem filtro de datas para ter os pesos.</div>` : ''}
+      <div class="rx-tok">${atividadesHTML(Core.atividades(r), o)}</div>`) : sec('frentes', 'Avanço por frente', `${r.pacotes.length} frentes da EAP`, `
       <p class="sec-lead">Barra azul: realizado. Traço cobre: previsto na data de corte. Fundo: peso da frente na obra. Toque numa frente para abrir as etapas.</p>
       <div class="frentes">${r.pacotes.filter(p => p.peso > 0.0005).map(p => linhaFrente(p, r, 0)).join('')}</div>`);
 
@@ -265,26 +346,26 @@
       <p class="sec-lead">Linhas do cronograma do Prevision${r.crono.dataRef ? `, posição de ${dBR(r.crono.dataRef)}` : ''}. Toque numa frente para abrir as etapas.${r.crono.pendentes.length ? ` <b>${r.crono.pendentes.length} ${r.crono.pendentes.length === 1 ? 'serviço pendente' : 'serviços pendentes'} de contratação.</b>` : ''}</p>
       ${!r.crono.completo && ehAdmin() ? `<div class="note-box">A exportação trouxe ${r.crono.linhas.length} de ${r.crono.total} linhas (árvore recolhida no Prevision). Para ver o cronograma inteiro aqui, exporte com todas as linhas expandidas.</div>` : ''}
       ${ganttHTML(r)}`) : '';
-    const fotosSec = r.fotos.length ? sec('fotos', 'Fotos do diário de obra', `${r.fotos.length} fotos · ${new Set(r.fotos.map(f => f.rdo)).size} RDOs`, blocoFotos(base, r)) : '';
+    const fotosSec = base.fotosPendentes ? sec('fotos', 'Fotos do diário de obra', 'carregando…', '<p class="sub" role="status" style="margin:0">Carregando as fotos…</p>') : r.fotos.length ? sec('fotos', 'Fotos do diário de obra', `${r.fotos.length} fotos · ${new Set(r.fotos.map(f => f.rdo)).size} RDOs`, blocoFotos(base, r)) : '';
     const restr = c ? sec('restricoes', 'Paralisações e restrições', c.paralisadas.length ? `<span class="pill critico">${c.paralisadas.length} abertas</span>` : 'nenhuma', blocoRestricoes(c)) : '';
     const conf = ehAdmin() ? sec('conferencia', 'Conferência dos dados', 'só administrador', blocoConferencia(o, r), false) : '';
 
     return `
-      ${PROD && ehAdmin() && base.cargaId ? barraPublicacao(base) : ''}
+      ${ehAdmin() && base.cargaId ? barraPublicacao(base) : ''}
       <div class="head-row"><div style="min-width:0">
         <div class="kicker">Obra ${esc(o.codigo)} · ${esc(o.cidade)}</div>
         <h1 class="h1">${esc(o.nome)}</h1>
         <p class="sub">${esc(o.cliente)} · contratante ${esc(o.contratante)}</p>
-        <div class="meta"><span>Contrato <b>${esc(o.contrato)}</b></span><span>Prazo contratual <b>${dBR(P.contrIni)} a ${dBR(P.contrFim)}</b> (${P.total} dias)</span><span>Decorridos <b>${P.decorrido}</b> · a vencer <b>${P.aVencer}</b></span><span>Responsável <b>${esc(o.responsavel)}</b></span></div>
-      </div></div>
+        <div class="meta">${o.contrato ? `<span>Contrato <b>${esc(o.contrato)}</b></span>` : ''}<span>Prazo contratual <b>${dBR(P.contrIni)} a ${dBR(P.contrFim)}</b> (${P.total} dias${P.contrFonte ? ' · ' + P.contrFonte : ''})</span><span>Decorridos <b>${P.decorrido}</b> · a vencer <b>${P.aVencer}</b></span>${o.responsavel ? `<span>Responsável <b>${esc(o.responsavel)}</b></span>` : ''}</div>
+      </div>${ehAdmin() ? '<div class="bar-actions no-print"><button class="btn sec2" data-go="editar-obra">Editar cadastro</button></div>' : ''}</div>
       ${situacao}${cronoSec}${curva}${mensal}${frentes}${tarefas}${campo}${fotosSec}${restr}${conf}`;
   }
 
   // Admin: o que o cliente está vendo e o botão de publicar
   function barraPublicacao(o) {
     return o.publicado
-      ? `<div class="pub ok"><span>${pill('ok', 'Publicado')} O cliente vê a posição de <b>${dBR(o.dataCorte)}</b>${o.publicadoEm ? ` (publicada em ${dBR(o.publicadoEm.slice(0, 10))})` : ''}.</span><button class="btn sec2" data-publicar="0">Recolher publicação</button></div>`
-      : `<div class="pub"><span>${pill('atencao', 'Rascunho')} Você está vendo a carga de <b>${dBR(o.dataCorte)}</b>. ${o.publicadoAte ? `O cliente ainda vê a de <b>${dBR(o.publicadoAte)}</b>.` : 'O cliente ainda não vê nada desta obra.'}</span><button class="btn" data-publicar="1">Publicar para o cliente</button></div>`;
+      ? `<div class="pub ok"><span>${pill('ok', 'Publicado')} Posição de <b>${dBR(o.dataCorte)}</b> visível ao cliente${o.publicadoEm ? ` desde ${new Date(o.publicadoEm).toLocaleDateString('pt-BR')}` : ''}.</span><button class="btn sec2" data-publicar="0">Recolher publicação</button></div>`
+      : `<div class="pub"><span>${pill('atencao', 'Rascunho')} Carga de <b>${dBR(o.dataCorte)}</b> ainda não publicada. ${o.publicadoAte ? `O cliente vê a posição de <b>${dBR(o.publicadoAte)}</b>.` : 'Nenhuma posição publicada ao cliente.'}</span><button class="btn" data-publicar="1">Publicar para o cliente</button></div>`;
   }
 
   function linhaFrente(p, r, nivel) {
@@ -302,12 +383,12 @@
   }
 
   function blocoTarefas(r) {
-    const F = [['atrasada', 'Atrasadas', r.cont.atrasada], ['andamento', 'Em andamento', r.cont.andamento], ['proximas', 'Terminam em 30 dias', r.proximas.length], ['a-iniciar', 'A iniciar', r.cont['a-iniciar']], ['concluida', 'Concluídas', r.cont.concluida]];
+    const F = [['atrasada', 'Atrasadas', r.cont.atrasada], ['andamento', 'Em andamento', r.cont.andamento], ['proximas', 'Terminam em 30 dias', r.proximas.length], ['a-iniciar', 'A iniciar', r.cont['a-iniciar']], ['concluida', 'Concluídas', r.cont.concluida], ...(r.cont['sem-data'] ? [['sem-data', 'Sem data no cronograma', r.cont['sem-data']]] : [])];
     let lista = S.filtroTarefas === 'proximas' ? r.proximas : r.lista.filter(t => t.situacao === S.filtroTarefas);
     if (S.filtroTarefas === 'atrasada') lista = r.atrasadas;
     if (S.filtroTarefas === 'andamento' || S.filtroTarefas === 'a-iniciar') lista = [...lista].sort((a, b) => a.fim < b.fim ? -1 : 1);
     const N = 10, mostra = S.verTodas ? lista : lista.slice(0, N);
-    const lead = S.filtroTarefas === 'atrasada' ? `Tarefas com término previsto antes de ${dBR(r.corte)} e ainda incompletas, ordenadas pelo quanto falta. Somam ${pct(r.faltaAtrasadas)} do avanço da obra.` : '';
+    const lead = S.filtroTarefas === 'atrasada' ? `Tarefas com término previsto antes de ${dBR(r.corte)} e ainda incompletas, ordenadas pelo quanto falta. Somam ${pct(r.faltaAtrasadas)} do avanço da obra.` : S.filtroTarefas === 'sem-data' ? 'Linhas que o Prevision ainda não programou (início e término iguais ao início da obra, sem linha de base): escopo condicionado ou data a definir. Não contam como atraso.' : '';
     return `
       <div class="seg" role="group" aria-label="Filtrar tarefas">${F.map(([k, t, n]) => `<button data-filtro="${k}" aria-pressed="${S.filtroTarefas === k}">${t}<b>${n}</b></button>`).join('')}</div>
       ${lead ? `<p class="sec-lead" style="margin:0">${lead}</p>` : ''}
@@ -368,7 +449,7 @@
     const N = 24, mostra = S.fotosTodas ? lista : lista.slice(0, N);
     const dest = new Set(o.destaques || []);
     return `
-      <p class="sec-lead">Fotos extraídas do PDF dos RDOs, separadas por dia. A legenda mostra o serviço quando o RDO traz a descrição da foto.${ehAdmin() ? ' Marque com ★ até 4 fotos para o report; as vagas sem marcação são preenchidas com a primeira foto dos RDOs mais recentes.' : ''}</p>
+      <p class="sec-lead">Fotos extraídas do PDF dos RDOs, separadas por dia. A legenda mostra o serviço quando o RDO traz a descrição da foto.${ehAdmin() ? ' Marque com ★ até 4 fotos para o report; sem marcação, o report usa 1 foto por serviço dos últimos 30 dias, em ordem cronológica (foto 1 = mais antiga, última = mais recente).' : ''}</p>
       <div class="seg" role="group" aria-label="Filtrar fotos por dia">
         ${dias.map(n => `<button data-fotordo="${n}" aria-pressed="${sel === n}">${dCurto(dataDe(n))}<b>${r.fotos.filter(f => f.rdo === n).length}</b></button>`).join('')}
         <button data-fotordo="todos" aria-pressed="${sel === 'todos'}">Todas<b>${r.fotos.length}</b></button>
@@ -377,7 +458,7 @@
         <figure class="foto">
           <button class="foto-abre" data-lb="${lista.indexOf(f)}" aria-label="Ampliar foto ${f.idx} do RDO ${f.rdo}"><img src="${f.src}" alt="${esc(legendaCurta(f) || `Foto ${f.idx} do RDO nº ${f.rdo}, ${dBR(f.data)}`)}" loading="lazy" width="${f.w}" height="${f.h}"></button>
           <figcaption>${legendaCurta(f) ? `<b>${esc(legendaCurta(f))}</b>${legendaDet(f) ? `<span>${esc(legendaDet(f))}</span>` : ''}` : ''}<span class="src">RDO ${f.rdo} · ${dCurto(f.data)} · foto ${f.idx}</span></figcaption>
-          ${ehAdmin() ? `<button class="estrela" data-estrela="${f.src}" aria-pressed="${dest.has(f.src)}" aria-label="${dest.has(f.src) ? 'Tirar do report' : 'Usar no report'}">★</button>` : ''}
+          ${ehAdmin() ? `<button class="estrela" data-estrela="${f.id}" aria-pressed="${dest.has(f.id)}" aria-label="${dest.has(f.id) ? 'Tirar do report' : 'Usar no report'}">★</button>` : ''}
         </figure>`).join('')}</div>
       ${lista.length > N ? `<button class="more" data-fotostodas="1">${S.fotosTodas ? 'Mostrar menos' : `Mostrar as ${lista.length} fotos`}</button>` : ''}`;
   }
@@ -416,17 +497,17 @@
     const cab = `<div class="gt-row gt-head"><div class="gt-nm">${comp ? 'Frente' : 'Linha do cronograma'}</div><div class="gt-tl">${meses.map((m, i) => X(m) > 93 ? '' : `<span style="left:${X(m)}%">${(comp && meses.length > 9 && i % 2) ? '' : Core.mesCurto(m).slice(0, 3)}</span>`).join('')}</div><div class="gt-pc">Real / prev.</div><div class="gt-sl">Término</div></div>`;
     const row = l => {
       const tem = !comp && l.nivel >= 2 && filhos(l).length > 0, ab = !!S.abertos['g' + l.eap];
-      const nome = l.nivel === 1 ? 'Obra completa' : `${esc(l.nomeExib)}${l.area && !comp ? ` <small class="gt-area">${esc(l.area)}</small>` : ''}`;
-      const sub = comp ? '' : `<small>${dCurto(l.inicio)}–${dCurto(l.fim)} · ${l.duracao ?? '—'} d${l.responsaveis ? ' · ' + esc(l.responsaveis.replace(/,?\s*Pendente de contratação/i, '')) : ''}</small>`;
+      const nome = l.nivel === 1 ? esc(String(l.nome || '').replace(/\s+/g, ' ').trim()) : `${esc(l.nomeExib)}${l.area && !comp ? ` <small class="gt-area">${esc(l.area)}</small>` : ''}`;
+      const sub = comp ? (l.nivel > 1 && l.peso ? `<small>${pct(l.peso, 0)} da obra</small>` : '') : `<small>${dCurto(l.inicio)}–${dCurto(l.fim)} · ${l.duracao ?? '—'} d${l.responsaveis ? ' · ' + esc(l.responsaveis.replace(/,?\s*Pendente de contratação/i, '')) : ''}</small>`;
       const flags = `${l.pendente ? '<span class="pill atencao">Pendente de contratação</span>' : ''}${l.situacao === 'atrasada' && !comp ? `<span class="pill critico">Venceu há ${l.diasAtraso} d</span>` : ''}`;
       const gap = l.realizado - l.previsto;
       const pcCls = gap < -0.05 ? 'neg' : gap > 0.05 ? 'pos' : '';
       const sl = l.slip === null ? '—' : l.slip === 0 ? (comp ? '' : 'na base') : `${l.slip > 0 ? '+' : '−'}${Math.abs(l.slip)} d`;
       return `<div class="gt-row n${Math.min(l.nivel, 4)} s-${l.situacao}" title="${esc(l.nome)}">
         <div class="gt-nm" style="padding-left:${comp ? 0 : (l.nivel - 1) * 14}px">${tem ? `<button class="gt-tg" data-abre="g${l.eap}" aria-expanded="${ab}" aria-label="${ab ? 'Recolher' : 'Abrir'} ${esc(l.nomeExib)}">${IC.right}</button>` : '<span class="gt-sp"></span>'}<span class="gt-tx"><b>${nome}</b>${sub}${flags ? `<span class="gt-fl">${flags}</span>` : ''}</span></div>
-        <div class="gt-tl">${l.inicioBase && l.fimBase ? `<i class="gb-base" style="left:${X(l.inicioBase)}%;width:${W(l.inicioBase, l.fimBase)}%"></i>` : ''}<i class="gb-at" style="left:${X(l.inicio)}%;width:${W(l.inicio, l.fim)}%"><i class="gb-fill" style="width:${Math.min(100, l.realizado * 100)}%"></i></i></div>
+        <div class="gt-tl">${l.inicioBase && l.fimBase ? `<i class="gb-base" style="left:${X(l.inicioBase)}%;width:${W(l.inicioBase, l.fimBase)}%"></i>` : ''}${l.situacao === 'sem-data' ? '' : `<i class="gb-at" style="left:${X(l.inicio)}%;width:${W(l.inicio, l.fim)}%"><i class="gb-fill" style="width:${Math.min(100, l.realizado * 100)}%"></i></i>`}</div>
         <div class="gt-pc ${pcCls}"><b>${pct(l.realizado, 0)}</b><small>${pct(l.previsto, 0)}</small></div>
-        <div class="gt-sl ${l.slip > 0 ? 'neg' : l.slip < 0 ? 'pos' : ''}"><b>${dCurto(l.fim)}</b><small>${sl}</small></div>
+        <div class="gt-sl ${l.slip > 0 ? 'neg' : l.slip < 0 ? 'pos' : ''}"><b>${l.situacao === 'sem-data' ? 'a definir' : dCurto(l.fim)}</b><small>${l.situacao === 'sem-data' ? '' : sl}</small></div>
       </div>`;
     };
     const leg = `<div class="legend gt-leg"><span><i class="lg-at"></i>Atual, preenchido pelo realizado</span><span><i class="lg-base"></i>Base</span><span><i class="lg-corte"></i>Corte ${dCurto(r.corte)}</span>${contrX !== null ? `<span><i class="lg-contr"></i>Fim contratual ${dCurto(r.prazo.contrFim)}</span>` : ''}</div>`;
@@ -435,7 +516,7 @@
 
   function blocoRestricoes(c) {
     if (!c.paralisadas.length) return `<p class="sec-lead" style="margin:0">Nenhuma frente paralisada no último RDO.</p>`;
-    return `<p class="sec-lead">Frentes marcadas como paralisadas no RDO. Cada uma vira uma restrição a remover, com responsável e prazo (na fase 2, editáveis aqui).</p>
+    return `<p class="sec-lead">Frentes marcadas como paralisadas no RDO. Cada uma vira uma restrição a remover, com responsável e prazo.</p>
       <div class="restr">${c.paralisadas.map(f => `
         <div class="it ${f.motivo ? '' : 'sem-motivo'}"><h4>${esc(f.servico)}</h4>
           <p>${f.motivo ? esc(f.motivo.replace(/^[^:]{0,60}:\s*/, '').toLowerCase().replace(/^./, m => m.toUpperCase())) : 'Motivo não informado no RDO.'}</p>
@@ -470,13 +551,13 @@
     ['rdos', 'RDOs do período', 'PDF compilado'],
   ];
   function viewAlimentar() {
-    if (!DB.obras.length) return `<div><div class="kicker">Administração</div><h1 class="h1">Alimentar dados</h1></div><div class="card card-pad"><p class="sub" style="margin:0">Cadastre a obra antes de enviar arquivos.</p><div class="bar-actions" style="margin-top:12px"><button class="btn" data-go="nova-obra">Cadastrar obra</button></div></div>`;
+    if (!DB.obras.length) return `<div><div class="kicker">Administração</div><h1 class="h1">Alimentar dados</h1></div><div class="card card-pad"><p class="sub" style="margin:0">Cadastre a obra antes de enviar os arquivos.</p><div class="bar-actions" style="margin-top:12px"><button class="btn" data-go="nova-obra">Cadastrar obra</button></div></div>`;
     const o = DB.obras.find(x => x.id === (S.obraId || DB.obras[0].id)) || DB.obras[0];
     const imp = S.imp || { arquivos: [], dados: {}, avisos: {} };
     const tem = k => imp.dados[k];
     return `
       <div><div class="kicker">Administração</div><h1 class="h1">Alimentar dados</h1>
-      <p class="sub">Solte aqui os relatórios do período. O app reconhece cada arquivo, confere os números e atualiza o painel.</p></div>
+      <p class="sub">Envie as exportações do Prevision (Curva S, Progresso mensal, Progresso por tarefas e Cronograma) e o PDF dos diários de obra dos últimos 30 dias exportado da plataforma RDO. O painel reconhece cada arquivo, confere os números e grava a carga como rascunho.</p></div>
       <div class="card card-pad steps">
         <div class="step-t">1 · Obra</div>
         <div class="field" style="max-width:420px"><select class="inp" id="imp-obra">${DB.obras.map(x => `<option value="${x.id}" ${x.id === o.id ? 'selected' : ''}>${esc(x.codigo)} · ${esc(x.nome)}</option>`).join('')}</select></div>
@@ -484,15 +565,15 @@
         <div class="tipos">${TIPOS.map(([k, t, s]) => `<div class="tipo ${tem(k) ? 'on' : ''}"><b>${t}</b><small>${s}</small><div class="st">${tem(k) ? '✓ ' + resumoTipo(k, imp.dados[k]) : 'aguardando'}</div></div>`).join('')}</div>
         <label class="drop" id="drop" for="imp-file">
           ${IC.up}<b>Toque para escolher ou arraste os arquivos aqui</b>
-          <small>Curva S, Progresso mensal, Progresso por tarefas (.xls/.xlsx) e o PDF dos RDOs. Pode mandar todos de uma vez.</small>
+          <small>Planilhas do Prevision (.xls/.xlsx) e o PDF dos RDOs (últimos 30 dias). Podem ser enviados todos de uma vez.</small>
         </label>
         <input type="file" id="imp-file" multiple accept=".xls,.xlsx,.csv,.pdf" hidden>
         ${imp.arquivos.length ? `<div class="check">${imp.arquivos.map(a => `<div class="${a.erro ? 'er' : 'ok'}"><i>${a.erro ? '×' : '✓'}</i><span><b>${esc(a.nome)}</b> → ${a.erro ? esc(a.erro) : esc(a.tipoNome)}</span></div>`).join('')}</div>` : ''}
         ${Object.keys(imp.dados).length ? `<div class="step-t">3 · Conferência</div><div class="check">${conferenciaImport(o, imp).map(([k, t]) => `<div class="${k}"><i>${k === 'ok' ? '✓' : k === 'av' ? '!' : '×'}</i><span>${t}</span></div>`).join('')}</div>
           <div class="field" style="max-width:260px"><label for="imp-corte">Data de corte</label><input class="inp" type="date" id="imp-corte" value="${imp.corte || o.dataCorte}"></div>
           <div class="step-t">4 · Atualizar</div>
-          <div class="bar-actions"><button class="btn" id="imp-aplicar">${PROD ? 'Salvar rascunho da obra' : 'Atualizar painel da obra'} ${esc(o.codigo)}</button><button class="btn sec2" id="imp-limpar">Descartar</button></div>
-          <div class="note-box">${PROD ? 'A carga é gravada como <b>rascunho</b>: você e a diretoria veem na hora; o cliente só depois de você clicar em <b>Publicar para o cliente</b> na tela da obra.' : 'No protótipo a atualização vale só nesta sessão do navegador.'}</div>` : ''}
+          <div class="bar-actions"><button class="btn" id="imp-aplicar">Salvar rascunho da obra ${esc(o.codigo)}</button><button class="btn sec2" id="imp-limpar">Descartar</button></div>
+          <div class="note-box">A carga é gravada como <b>rascunho</b>: Planejamento e Diretoria veem em seguida; o cliente só depois de <b>Publicar para o cliente</b> na tela da obra.</div>` : ''}
       </div>
       <div class="card card-pad steps">
         <div class="step-t">Último carregamento</div>
@@ -507,8 +588,41 @@
     if (k === 'rdos') return `${d.length} RDOs${S.imp && S.imp.dados.fotos ? ' · ' + S.imp.dados.fotos.length + ' fotos' : ''}`;
     return '';
   }
+  // Código da obra pelo nome do arquivo ("Curva S - 207 - ...", "Cronograma_-_208_-_...") ou pelo nome da raiz ("208 - Fibrasa ...")
+  const codigoEm = s => { const m = String(s || '').replace(/_/g, ' ').match(/(?:^|[\s-])(\d{3,4})\s+-\s/); return m ? m[1] : null; };
+  function identidadeImport(o, imp) {
+    const out = [], d = imp.dados, nomes = imp.nomes || {}, cod = String(o.codigo);
+    const raizObra = norm => { const r = (o.tarefas || []).find(t => t.nivel === 1); return r ? norm(r.tarefa) : null; };
+    const n = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const confere = (rotulo, achado, como) => {
+      if (achado === null || achado === undefined) return;
+      out.push(achado === cod ? ['ok', `${rotulo}: obra ${cod} (${como}).`] : ['er', `${rotulo} é da obra ${achado} (${como}), não da obra ${cod}. Arquivo não aplicado.`]);
+    };
+    Object.entries(nomes).forEach(([tipo, nome]) => confere({ curva: 'Curva S', mensal: 'Progresso mensal', tarefas: 'Progresso por tarefas', cronograma: 'Cronograma', rdos: 'PDF de RDOs' }[tipo] || tipo, codigoEm(nome), 'pelo nome do arquivo'));
+    const raizT = d.tarefas && d.tarefas.find(t => t.nivel === 1), raizC = d.cronograma && d.cronograma.find(l => l.nivel === 1);
+    [['Progresso por tarefas', raizT && raizT.tarefa], ['Cronograma', raizC && raizC.nome]].forEach(([rot, nome]) => {
+      if (!nome) return;
+      const c = codigoEm(nome + ' ');
+      if (c) confere(rot, c, 'pelo nome da tarefa raiz');
+      else if (raizObra(n) && n(nome) !== raizObra(n)) out.push(['er', `${rot}: a tarefa raiz "${nome}" não é a da obra ${cod} ("${(o.tarefas || []).find(t => t.nivel === 1).tarefa}"). Arquivo não aplicado.`]);
+    });
+    if (raizT && raizC && n(raizT.tarefa) !== n(raizC.nome)) out.push(['er', 'Cronograma e Progresso por tarefas têm tarefas raiz diferentes: são de obras ou versões diferentes.']);
+    if (d.rdos && d.rdos.length) { const c = codigoEm((d.rdos.at(-1).obra || '').replace(/^(\d{3,4})\s+(?!-)/, '$1 - ')); if (c) confere('PDF de RDOs', c, 'pelo cabeçalho do RDO'); }
+    // Progresso mensal não traz identificação: confere com a Curva S (base acumulada mês a mês)
+    const curva = d.curva || o.curva || [];
+    if (d.mensal && curva.length) {
+      let acc = 0, ruins = 0, comp = 0;
+      d.mensal.forEach(m => { acc += m.base || 0; const p = curva.find(x => x.data.slice(0, 7) === m.mes); if (p) { comp++; if (Math.abs((p.base || 0) - acc) > 0.002) ruins++; } });
+      out.push(comp && !ruins ? ['ok', `Progresso mensal confere com a Curva S (base acumulada igual em ${comp} meses).`] : ['er', `Progresso mensal não confere com a Curva S${d.curva ? ' enviada' : ' da obra'} (${ruins} de ${comp} meses com base diferente): pode ser de outra obra ou de outra linha de base.`]);
+    }
+    if (d.cronograma && d.tarefas) {
+      const rc = raizC, rt = raizT;
+      if (rc && rt && Math.abs(rc.realizado - rt.realizado) > 0.001) out.push(['av', `Cronograma (${pct(rc.realizado, 2)}) e Progresso por tarefas (${pct(rt.realizado, 2)}) mostram realizados diferentes: exporte os dois no mesmo dia.`]);
+    }
+    return out;
+  }
   function conferenciaImport(o, imp) {
-    const out = [], d = imp.dados;
+    const out = identidadeImport(o, imp), d = imp.dados;
     if (d.curva) {
       const ult = [...d.curva].reverse().find(p => p.realizado > 0);
       const fim = d.curva.at(-1);
@@ -559,7 +673,7 @@
   function carregaLibs() {
     if (libs) return libs;
     const js = src => new Promise((ok, err) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => err(new Error('Não consegui carregar ' + src)); document.head.appendChild(s); });
-    // no site publicado as bibliotecas ficam no próprio servidor (js/vendor); no protótipo vêm do cdnjs
+    // bibliotecas: servidor próprio (js/vendor) quando configurado; senão, cdnjs
     const local = window.MP_CONFIG && window.MP_CONFIG.libsLocais;
     const u = { xlsx: local ? 'js/vendor/xlsx.full.min.js' : 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
       pdf: local ? 'js/vendor/pdf.min.js' : 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
@@ -585,12 +699,14 @@
           toast('Lendo as fotos do PDF…');
           const fotos = await Parsers.pdfFotos(window.pdfjsLib, pags, { larguraMax: 720, qualidade: 0.68 });
           S.imp.dados.rdos = rdos; S.imp.dados.fotos = fotos; reg.tipoNome = `RDOs (${rdos.length}) e ${fotos.length} fotos`;
+          S.imp.nomes = { ...(S.imp.nomes || {}), rdos: f.name };
         } else {
           const linhas = Parsers.lerLinhas(window.XLSX, buf);
           const tipo = Parsers.tipoPlanilha(linhas);
           if (!tipo) throw new Error('não reconheci as colunas (esperado: Curva S, Progresso mensal ou Progresso por tarefas do Prevision)');
           S.imp.dados[tipo] = tipo === 'curva' ? Parsers.parseCurva(linhas) : tipo === 'mensal' ? Parsers.parseMensal(linhas) : tipo === 'cronograma' ? Parsers.parseCronograma(linhas) : Parsers.parseTarefas(linhas);
           if (tipo === 'cronograma') S.imp.arqCrono = f.name;
+          S.imp.nomes = { ...(S.imp.nomes || {}), [tipo]: f.name };
           reg.tipoNome = TIPOS.find(t => t[0] === tipo)[1];
         }
       } catch (e) { reg.erro = e.message; }
@@ -610,70 +726,73 @@
     render();
     toast('Arquivos lidos. Confira e atualize o painel.');
   }
-  async function aplicarImportProd() {
+  async function aplicarImport() {
     const obraId = $('#imp-obra').value;
+    const oSel = DB.obras.find(x => x.id === obraId);
+    const erros = oSel ? conferenciaImport(oSel, S.imp).filter(x => x[0] === 'er') : [];
+    if (erros.length) { toast('Há arquivos que não conferem com a obra selecionada. Corrija antes de salvar.'); return; }
     const d = S.imp.dados;
     const corte = ($('#imp-corte') && $('#imp-corte').value) || S.imp.corte;
     if (!corte) { toast('Informe a data de corte.'); return; }
     const pacote = { ...d, cronograma: d.cronograma ? { arquivo: S.imp.arqCrono, linhas: d.cronograma, dataRef: corte } : undefined };
     const fontes = Object.fromEntries(S.imp.arquivos.filter(a => !a.erro).map(a => [a.tipoNome, a.nome]));
-    const bt = $('#imp-aplicar'); if (bt) { bt.disabled = true; bt.textContent = 'Gravando…'; }
-    try {
-      await API.salvarCarga(obraId, pacote, corte, fontes, m => toast(m));
-      S.imp = null; S.obraId = obraId; S.view = 'obra';
-      await recarregar();
-      toast('Rascunho salvo. Confira e publique para o cliente.');
-    } catch (e) { toast('Não consegui gravar: ' + e.message); if (bt) { bt.disabled = false; bt.textContent = 'Tentar de novo'; } }
-  }
-  function aplicarImport() {
-    if (PROD) return aplicarImportProd();
-    const o = DB.obras.find(x => x.id === $('#imp-obra').value);
-    const d = S.imp.dados;
-    if (d.curva) o.curva = d.curva;
-    if (d.mensal) o.mensal = d.mensal;
-    if (d.cronograma) o.cronograma = { arquivo: S.imp.arqCrono, linhas: d.cronograma, dataRef: ($('#imp-corte') && $('#imp-corte').value) || S.imp.corte };
-    if (d.tarefas) o.tarefas = d.tarefas;
-    if (d.rdos) o.rdos = d.rdos;
-    if (d.fotos) { o.fotos = d.fotos; o.destaques = []; }
-    const c = $('#imp-corte'); if (c && c.value) o.dataCorte = c.value;
-    o.fontes = { ...(o.fontes || {}), ...Object.fromEntries(S.imp.arquivos.filter(a => !a.erro).map(a => [a.tipoNome, a.nome])) };
-    S.imp = null; S.obraId = o.id; S.view = 'obra';
-    render(); toast(`Painel da obra ${o.codigo} atualizado.`);
+    const ok = await gravando('Gravando a carga…', prog => API.salvarCarga(obraId, pacote, corte, fontes, prog));
+    if (!ok) return;
+    S.imp = null; S.obraId = obraId; S.view = 'obra';
+    await recarregar();
+    toast('Rascunho salvo. Confira e publique para o cliente.');
   }
 
-  // ---------- acessos (produção, administrador) ----------
+  // ---------- acessos (administrador) ----------
   function viewAcessos() {
-    const lista = S.acessos;
-    if (!lista) { carregarAcessos(); return `<div><div class="kicker">Administração</div><h1 class="h1">Acessos</h1></div><div class="card card-pad"><p class="sub" style="margin:0">Carregando…</p></div>`; }
+    const lista = API.listarAcessos();
+    const obras = DB.obras;
+    const ed = S.editAcesso;
+    const chkObras = (pref, sel) => obras.length ? `<div class="chips">${obras.map(o => `<label class="chk"><input type="checkbox" name="${pref}" value="${esc(o.id)}" ${sel.includes(o.id) ? 'checked' : ''}> ${esc(o.codigo)} · ${esc(o.nome)}</label>`).join('')}</div>` : '<small>Nenhuma obra cadastrada.</small>';
+    const form = (id, u) => `
+      <form class="card card-pad steps" id="${id}" novalidate>
+        <div class="step-t">${u ? 'Editar acesso' : 'Novo acesso'}</div>
+        <div class="two"><div class="field"><label for="${id}-nome">Nome</label><input class="inp" id="${id}-nome" value="${esc(u ? u.nome : '')}" required></div>
+          <div class="field"><label for="${id}-email">E-mail</label><input class="inp" id="${id}-email" type="email" value="${esc(u ? u.email : '')}" ${u ? 'disabled' : 'required'}></div></div>
+        <div class="field" style="max-width:320px"><label for="${id}-perfil">Perfil</label><select class="inp" id="${id}-perfil" ${u && u.eu ? 'disabled' : ''}>
+          ${['cliente', 'diretoria', 'admin'].map(k => `<option value="${k}" ${(u ? u.perfil : 'cliente') === k ? 'selected' : ''}>${PERFIL[k]}</option>`).join('')}</select>
+          <small class="hint">Cliente vê só as obras marcadas e só o que foi publicado. Diretoria vê todas as obras, inclusive rascunhos. Administrador também grava.</small></div>
+        <div class="field" data-obras-de="${id}"><label>Obras liberadas (cliente)</label>${chkObras(id + '-obra', u ? u.obras || [] : [])}</div>
+        <div class="bar-actions"><button class="btn" type="submit">${u ? 'Salvar alterações' : 'Criar acesso e gerar senha'}</button>${u ? '<button class="btn sec2" type="button" data-editacesso="">Cancelar</button>' : ''}</div>
+      </form>`;
+    const uEd = ed ? lista.find(u => u.id === ed) : null;
     return `
       <div><div class="kicker">Administração</div><h1 class="h1">Acessos</h1>
-      <p class="sub">Quem entra no painel e o que cada um vê. As mudanças valem no próximo login da pessoa.</p></div>
-      <div class="note-box"><b>Para convidar alguém:</b> no Supabase, abra <b>Authentication → Users → Invite user</b> e informe o e-mail. A pessoa recebe o convite, cria a senha e aparece aqui como <b>cliente sem obras</b>. Depois escolha o papel e marque as obras.</div>
-      <div class="tw"><table class="t"><thead><tr><th>Pessoa</th><th>Papel</th><th>Obras (cliente)</th><th>Ativo</th></tr></thead><tbody>
+      <p class="sub">Pedidos chegam em <b>${esc(EMAIL)}</b>. Aprovado o pedido, crie o acesso aqui: o painel gera a senha e prepara o e-mail de envio.</p></div>
+      <div class="tw"><table class="t"><thead><tr><th>Pessoa</th><th>Perfil</th><th>Obras</th><th>Senha emitida</th><th></th></tr></thead><tbody>
       ${lista.map(p => `<tr>
-        <td><b style="font-weight:600">${esc(p.nome)}</b><small>${esc(p.email || '')}</small></td>
-        <td><select class="inp" data-papel="${p.id}" ${p.id === S.user.id ? 'disabled title="Você não pode mudar o próprio papel"' : ''} aria-label="Papel de ${esc(p.nome)}">
-          ${['cliente', 'diretoria', 'admin'].map(k => `<option value="${k}" ${p.papel === k ? 'selected' : ''}>${k === 'admin' ? 'Administrador' : k === 'diretoria' ? 'Diretoria' : 'Cliente'}</option>`).join('')}</select></td>
-        <td>${p.papel === 'cliente' ? `<div class="chips">${DB.obras.map(o => `<label class="chk"><input type="checkbox" data-acesso="${p.id}|${o.id}" ${p.obras.includes(o.id) ? 'checked' : ''}> ${esc(o.codigo)}</label>`).join('')}</div>` : '<small>todas</small>'}</td>
-        <td><input type="checkbox" data-ativo="${p.id}" ${p.ativo ? 'checked' : ''} ${p.id === S.user.id ? 'disabled' : ''} aria-label="Acesso ativo de ${esc(p.nome)}"></td>
+        <td><b style="font-weight:600">${esc(p.nome)}</b>${p.eu ? ' <small>(você)</small>' : ''}<small>${esc(p.email || '')}</small></td>
+        <td>${PERFIL[p.perfil]}</td>
+        <td>${p.perfil === 'cliente' ? ((p.obras || []).length ? esc(p.obras.join(', ')) : '<small>nenhuma</small>') : '<small>todas</small>'}</td>
+        <td>${p.senhaEm ? new Date(p.senhaEm).toLocaleDateString('pt-BR') : '—'}</td>
+        <td class="acoes"><button class="more" data-editacesso="${p.id}">Editar</button>${p.eu ? '' : `<button class="more" data-novasenha="${p.id}">Nova senha</button><button class="more neg" data-remover="${p.id}">Remover</button>`}</td>
       </tr>`).join('')}
-      </tbody></table></div>`;
+      </tbody></table></div>
+      ${uEd ? form('f-edacesso', uEd) : form('f-acesso', null)}`;
   }
-  async function carregarAcessos() {
-    try { S.acessos = await API.listarAcessos(); } catch (e) { S.acessos = []; toast(e.message); }
-    if (S.view === 'acessos') render();
+  function lerFormAcesso(id) {
+    return { nome: $(`#${id}-nome`).value, email: $(`#${id}-email`).value, perfil: $(`#${id}-perfil`).value,
+      obras: $$(`input[name="${id}-obra"]:checked`).map(i => i.value) };
   }
-  function viewNovaObra() {
-    const f = (id, rot, tipo = 'text', extra = '') => `<div class="field"><label for="${id}">${rot}</label><input class="inp" id="${id}" type="${tipo}" ${extra}></div>`;
+
+  // ---------- cadastro de obra ----------
+  function viewNovaObra(o) {
+    const f = (id, rot, v, tipo = 'text', extra = '') => `<div class="field"><label for="${id}">${rot}</label><input class="inp" id="${id}" type="${tipo}" value="${esc(v || '')}" ${extra}></div>`;
+    const pz = (o && o.prazoContratual) || {};
     return `
-      <div><div class="kicker">Administração</div><h1 class="h1">Nova obra</h1><p class="sub">Depois de salvar, envie os arquivos em Alimentar.</p></div>
-      <form class="card card-pad steps" id="f-obra" novalidate>
-        <div class="two">${f('o-codigo', 'Código da obra', 'text', 'required placeholder="ex.: 211"')}${f('o-nome', 'Nome', 'text', 'required')}</div>
-        <div class="two">${f('o-cliente', 'Cliente')}${f('o-contratante', 'Contratante')}</div>
-        <div class="two">${f('o-cidade', 'Cidade/UF')}${f('o-contrato', 'Contrato')}</div>
-        ${f('o-local', 'Endereço')}
-        <div class="two">${f('o-resp', 'Responsável em campo')}<div class="two">${f('o-ini', 'Início contratual', 'date')}${f('o-fim', 'Fim contratual', 'date')}</div></div>
-        <div class="bar-actions"><button class="btn" type="submit">Salvar obra</button><button class="btn sec2" type="button" data-go="portfolio">Cancelar</button></div>
+      <div><div class="kicker">Administração</div><h1 class="h1">${o ? 'Cadastro da obra ' + esc(o.codigo) : 'Nova obra'}</h1><p class="sub">${o ? 'Os dados de cadastro aparecem no painel e no report.' : 'Depois de salvar, envie os arquivos do Prevision e o PDF dos RDOs em Alimentar.'}</p></div>
+      <form class="card card-pad steps" id="f-obra" data-novo="${o ? '0' : '1'}" novalidate>
+        <div class="two">${f('o-codigo', 'Código da obra', o && o.codigo, 'text', o ? 'disabled' : 'required placeholder="ex.: 212" inputmode="numeric"')}${f('o-nome', 'Nome da obra', o && o.nome, 'text', 'required')}</div>
+        <div class="two">${f('o-cliente', 'Cliente', o && o.cliente)}${f('o-contratante', 'Contratante', o && o.contratante)}</div>
+        <div class="two">${f('o-cidade', 'Cidade/UF', o && o.cidade)}${f('o-contrato', 'Contrato', o && o.contrato)}</div>
+        ${f('o-local', 'Endereço', o && o.local)}
+        <div class="two">${f('o-resp', 'Responsável em campo', o && o.responsavel)}<div class="two">${f('o-ini', 'Início contratual', pz.inicio, 'date')}${f('o-fim', 'Fim contratual', pz.fim, 'date')}</div></div>
+        <div class="bar-actions"><button class="btn" type="submit">Salvar obra</button><button class="btn sec2" type="button" data-go="${o ? 'obra' : 'portfolio'}">Cancelar</button></div>
       </form>`;
   }
 
@@ -685,6 +804,101 @@
     return `Em ${mes} (até ${dCurto(r.corte)}), a obra avançou <b>${pct(Math.max(0, P.real))}</b>; o plano previa ${pct(P.prev)}${ader}.`;
   }
 
+  // ---------- PDF do report ----------
+  // Fora do visualizador: impressão do navegador (CSS @media print). Dentro do claude.ai: gera o PDF
+  // na página (html2canvas + jsPDF), em A4, quebrando entre blocos, e entrega pelo recurso de download.
+  let libsPdf = null;
+  function carregaLibsPdf() {
+    if (libsPdf) return libsPdf;
+    const js = src => new Promise((ok, err) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => err(new Error('Não consegui carregar ' + src)); document.head.appendChild(s); });
+    libsPdf = Promise.all([
+      window.html2canvas ? null : js('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
+      window.jspdf ? null : js('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'),
+    ]).catch(e => { libsPdf = null; throw e; });
+    return libsPdf;
+  }
+  async function baixarPdf(btn) {
+    // dentro do claude.ai usa o recurso de download; no site, baixa direto pelo navegador
+    let dl = null;
+    if (window.self !== window.top) { try { dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) { dl = null; } }
+    const salvar = dl ? a => dl.save(a) : async ({ filename, data }) => {
+      const u = URL.createObjectURL(data), a = document.createElement('a'); a.href = u; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
+    };
+    const rotulo = btn.textContent; btn.disabled = true; btn.textContent = 'Gerando PDF…';
+    try {
+      await carregaLibsPdf();
+      try { await document.fonts.ready; } catch (e) {}
+      const paper = $('#paper'), LARG = 860; let quebras = [];
+      const canvas = await window.html2canvas(paper, { scale: 2, backgroundColor: '#FFFFFF', useCORS: true, logging: false, windowWidth: 1100,
+        onclone: doc => {
+          const p = doc.getElementById('paper');
+          Object.assign(p.style, { width: LARG + 'px', maxWidth: LARG + 'px', borderRadius: '0', boxShadow: 'none', border: '0', margin: '0' });
+          // html2canvas desenha o conteúdo de <details> fechado: tira antes de capturar
+          p.querySelectorAll('details:not([open]) > :not(summary)').forEach(e => e.remove());
+          const t = p.getBoundingClientRect().top;
+          quebras = [...p.querySelectorAll(':scope > .rx-hd, :scope > .pb > *, :scope > .rx-notas, :scope > .rx-pf')].map(e => e.getBoundingClientRect().top - t);
+        } });
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      const M = 8, LW = 210 - 2 * M, LH = 297 - 2 * M;
+      const pxMm = canvas.width / LW, pagPx = Math.floor(LH * pxMm), k = canvas.width / LARG;
+      const brks = quebras.map(q => q * k).filter(q => q > 0).sort((a, b) => a - b);
+      let y = 0, pag = 0;
+      // o report foi desenhado para uma página: se couber reduzido (até ~50%), vai inteiro numa A4
+      const altMm = canvas.height / pxMm;
+      if (altMm <= LH * 2) {
+        const f = Math.min(1, LH / altMm), w = LW * f;
+        pdf.setFillColor(255, 255, 255); pdf.rect(0, 0, 210, 297, 'F');
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', M + (LW - w) / 2, M, w, altMm * f);
+        y = canvas.height;
+      }
+      while (y < canvas.height - 4) {
+        let fim = Math.min(canvas.height, y + pagPx);
+        if (fim < canvas.height) { const b = brks.filter(q => q > y + pagPx * 0.25 && q <= fim).pop(); if (b) fim = Math.floor(b); }
+        const h = fim - y, c = document.createElement('canvas'); c.width = canvas.width; c.height = h;
+        const g = c.getContext('2d'); g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, c.width, h); g.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
+        if (pag++) pdf.addPage();
+        pdf.setFillColor(255, 255, 255); pdf.rect(0, 0, 210, 297, 'F');
+        pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', M, M, LW, h / pxMm);
+        y = fim;
+      }
+      const o = DB.obras.find(x => x.id === S.obraId) || obrasDoUsuario()[0];
+      const corte = (paper.dataset.corte || new Date().toISOString().slice(0, 10));
+      await salvar({ filename: `Report-Obra-${o ? o.codigo : ''}-${corte}.pdf`, data: pdf.output('blob') });
+    } catch (e) {
+      const c = e && e.code;
+      if (c !== 'declined') toast(c === 'rate_limited' ? 'Já existe um download aguardando confirmação.' : 'Não consegui gerar o PDF. Tente de novo.');
+    } finally { btn.disabled = false; btn.textContent = rotulo; }
+  }
+
+  // Avanço por atividade (report e aba Obra): farol (realizado ÷ planejado da própria atividade, faixas da obra)
+  // e barra de % com a marca do planejado na data. Coluna de peso só quando os pesos são válidos.
+  const legFarol = '<em class="rx-fa-lg"><span><i class="rx-fa ok"></i>No prazo</span><span><i class="rx-fa atencao"></i>Atenção</span><span><i class="rx-fa critico"></i>Crítico</span><span><i class="rx-fa neutro"></i>A iniciar</span></em>';
+  function atividadesHTML(ativ, o) {
+    const lim = v => Math.max(0, Math.min(100, (v || 0) * 100));
+    const comPeso = ativ.every(a => a.peso !== null && a.peso !== undefined);
+    const farol = a => {
+      if (a.feito >= 0.9995) return { k: 'ok', t: 'Concluída' };
+      if (a.plan < 0.005) return a.feito < 0.005 ? { k: 'neutro', t: 'A iniciar' } : { k: 'ok', t: 'Adiantada' };
+      const s = Core.semaforo(a.feito / a.plan, o.faixas);
+      return { k: s.k, t: `${s.k === 'critico' ? 'Crítico' : s.t} · ${pct(a.feito, 0)} feito de ${pct(a.plan, 0)} planejado` };
+    };
+    const linha = (a, nv) => {
+      const f = farol(a), fs = a.temFilhos ? a.filhos() : [], id = 'rx' + a.eap;
+      const cel = `<span class="rx-av-nm" style="--nv:${nv}"><i class="rx-av-cv">${fs.length ? IC.right : ''}</i><span>${esc(a.nome)}</span></span>
+        ${comPeso ? `<span class="rx-av-ps">${a.peso === null || a.peso === undefined ? '—' : pct(a.peso, 1)}</span>` : ''}
+        <span class="rx-av-fa"><i class="rx-fa ${f.k}" title="${esc(f.t)}"></i></span>
+        <span class="rx-av-br"><span class="rx-pb"><i style="width:${lim(a.feito)}%"></i><em style="left:${lim(a.plan)}%"></em></span><b>${fmtNum(lim(a.feito), 0)}%</b></span>`;
+      return fs.length
+        ? `<details class="rx-av-n" data-k="${id}"${S.abertos[id] ? ' open' : ''}><summary class="rx-av-r n${nv}">${cel}</summary><div class="rx-av-k">${fs.map(c => linha(c, nv + 1)).join('')}</div></details>`
+        : `<div class="rx-av-r n${nv}">${cel}</div>`;
+    };
+    return `<div class="rx-av${comPeso ? '' : ' sem-peso'}">
+      <div class="rx-av-r rx-av-h"><span>Atividade</span>${comPeso ? '<span class="rx-av-ps">Peso</span>' : ''}<span class="rx-av-fa">Farol</span><span class="rx-av-br">Realizado <i class="rx-av-tk"></i> planejado na data</span></div>
+      ${ativ.map(a => linha(a, 0)).join('')}</div>`;
+  }
+
   function viewReport() {
     const base = DB.obras.find(x => x.id === S.obraId) || obrasDoUsuario()[0];
     if (!base || !temDados(visaoDaObra(base))) return `<div class="card card-pad"><p class="sub" style="margin:0">Ainda não há dados para o report desta obra.</p></div>`;
@@ -692,72 +906,103 @@
     const r = Core.calc(o);
     const X = Core.resumoExecutivo(o, r, base.destaques || []);
     const P = r.prazo;
-    const podeImprimir = window.self === window.top;
-    const barra = (real, prev, peso) => { const w = v => Math.max(0, Math.min(100, v / peso * 100)); return `<span class="xb"><i class="xb-r" style="width:${w(real)}%"></i><i class="xb-p" style="left:${w(prev)}%"></i></span>`; };
+    const cp = Core.comparaPlano(r.desvio);
+    const slipFim = P.contrFim && P.fimCron ? diff(P.contrFim, P.fimCron) : null;
+    const dias = n => `${n > 0 ? '+' : '−'}${Math.abs(n)} d`;
+    const lim01 = v => Math.max(0, Math.min(100, (v || 0) * 100));
+    // Cartões (padrão de cartão de indicador do Power BI): rótulo · valor · referência. Uma cor de série por cartão,
+    // a mesma do gráfico (realizado = navy, planejado = azul, base = azul claro); vermelho/verde só no desvio.
+    // cor do desvio segue o farol da obra (dentro da faixa "em dia" o desvio não é pintado de alerta)
+    const dsv = r.sem.k === 'critico' ? 'crit' : r.sem.k === 'atencao' ? 'warn' : cp.dir > 0 ? 'ok' : '';
+    const cards = [
+      { k: 'Realizado', ac: 'real', v: pct(r.real),
+        x: `<span class="rx-pb rx-pb-k" aria-hidden="true"><i style="width:${lim01(r.real)}%"></i><em style="left:${lim01(r.prevCorte)}%"></em></span>`,
+        s: `posição de ${dBR(r.corte)}` },
+      { k: 'Planejado', ac: 'plan', v: pct(r.prevCorte), s: r.baseCorte !== null && r.baseCorte !== undefined ? `base ${pct(r.baseCorte)}` : 'cronograma atual' },
+      { k: 'Desvio físico', ac: dsv || 'real', cls: dsv,
+        v: cp.dir === 0 ? 'Em linha' : pp(r.desvio), s: r.idp ? `IDP ${fmtNum(r.idp, 2)}` : 'IDP indisponível' },
+      { k: P.contrFim ? 'Término previsto (base)' : 'Término previsto', ac: 'base', v: P.contrFim ? dBR(P.contrFim) : P.fimCron ? dBR(P.fimCron) : '—',
+        s: P.contrFim ? `cronograma atual ${dBR(P.fimCron)}${slipFim ? ` · <b class="${slipFim > 0 ? 'warn' : 'ok'}">${dias(slipFim)}</b>` : ''}` : 'cronograma atual (sem linha de base)', html: true },
+    ];
+
+    const ativ = Core.atividades(r);
+    const fimMs = `<li class="fim"><span class="rx-ms-d">${P.fimCron ? dCurto(P.fimCron) : '—'}</span><span class="rx-ms-n">Término da obra</span><span class="rx-ms-v ${slipFim > 0 ? 'neg' : ''}">${slipFim ? dias(slipFim) : 'na base'}</span></li>`;
+    const marcosSec = `<section class="rx-s"><h2>Próximos marcos</h2>
+              <ul class="rx-ms">${X.marcos.lista.slice(0, 4).map(m => `<li class="${m.situacao}"><span class="rx-ms-d">${m.data ? dCurto(m.data) : 'a definir'}</span><span class="rx-ms-n">${m.codigo ? `<em>${esc(m.codigo)}</em> ` : ''}${esc(m.nome)}${m.interface ? ' <i title="Interface com o cliente">cliente</i>' : ''}</span><span class="rx-ms-v ${m.slip > 0 ? 'neg' : ''}">${m.situacao === 'vencido' ? 'vencido' : m.slip ? dias(m.slip) : ''}</span></li>`).join('')}${fimMs}</ul>
+            </section>`;
+    const corta = (t, n) => (t || '').length > n ? t.slice(0, n - 3).replace(/\s+\S*$/, '') + '…' : (t || '');
+    const atencaoSec = X.atencao.length ? `<section class="rx-s"><h2>Atenção${X.atencaoMais ? `<em>+${X.atencaoMais} na aba Obra</em>` : ''}</h2>
+              <ul class="rx-at">${X.atencao.map(a => `<li><span class="rx-dot ${/paralis|atras/i.test(a.tag) ? 'crit' : 'warn'}">${a.tag}</span><span class="rx-at-t"><b>${esc(a.titulo)}</b><small>${esc(corta(a.det, 96))}</small></span></li>`).join('')}</ul>
+            </section>` : '';
     return `
       <div class="head-row no-print"><div><div class="kicker">Report</div><h1 class="h1">Obra ${esc(o.codigo)} · ${dBR(r.corte)}</h1>
-        <p class="sub">Formato fixo de uma página: os mesmos blocos, na mesma ordem e com os mesmos limites a cada atualização. O detalhe completo fica na aba Obra.</p></div>
-        <div class="bar-actions">${podeImprimir ? `<button class="btn" id="bt-pdf">Baixar PDF</button>` : ''}<button class="btn sec2" data-toast="Envio por e-mail para cliente e diretoria entra na fase 2, com agendamento semanal ou mensal.">Enviar por e-mail</button></div></div>
-      ${podeImprimir ? '' : `<div class="note-box no-print">Nesta prévia o PDF não pode ser gerado. No site publicado, o botão <b>Baixar PDF</b> aparece aqui.</div>`}
-      <article class="paper exec" id="paper">
-        <div class="pm"><img src="${LOGO}" alt="Machine · Realizações com base sólida"><span>Report · ${dBR(r.corte)}</span></div>
+        <p class="sub">Uma página, sempre os mesmos blocos na mesma ordem. O detalhe completo fica na aba Obra.</p></div>
+        <div class="bar-actions"><button class="btn" id="bt-pdf">Baixar PDF</button><a class="btn sec2" href="${mailto('', `Report de planejamento · Obra ${o.codigo} · ${dBR(r.corte)}`, `Prezados,\n\nSegue o report de planejamento da obra ${o.codigo} · ${o.nome}, com posição de ${dBR(r.corte)}.\n\nO painel completo está disponível em ${SITE()} (acesso com e-mail e senha).\n\nAtenciosamente,\nPlanejamento · Machine`)}">Enviar por e-mail</a></div></div>
+      <article class="paper exec" id="paper" data-corte="${r.corte}">
+        <header class="rx-hd">
+          <div class="rx-brand"><img src="${LOGO}" alt="Machine"><i></i><span>Report</span><i></i><span>Obra ${esc(o.codigo)}</span></div>
+          <div class="rx-hd-main">
+            <div class="rx-hd-id">
+              <h1>${esc(o.nome)}</h1>
+              <div class="rx-hd-sub"><span>${esc(o.cliente)}</span><i></i><span>${esc(o.cidade)}</span><span class="rx-st ${r.sem.k}">${esc(r.sem.t)}</span></div>
+            </div>
+            <dl class="rx-hd-meta">
+              <dt>Data de corte</dt><dd>${dBR(r.corte)}</dd>
+              <dt>Prazo contratual</dt><dd>${P.contrFim ? `${dBR(P.contrIni)} – ${dBR(P.contrFim)}` : '—'}</dd>
+            </dl>
+          </div>
+        </header>
         <div class="pb">
-          <div class="pt"><div class="kicker">Obra ${esc(o.codigo)} · ${esc(o.cliente)} · ${esc(o.cidade)}</div>
-            <div class="pt-row"><h1>${esc(o.nome)}</h1>${pill(r.sem.k, r.sem.t)}</div></div>
-
-          <p class="manchete">${esc(X.manchete)}</p>
-
-          <div class="pk">${X.kpis.map(k => `<div class="kpi"><span>${k.k}</span><b class="${k.cls || ''}">${k.v}</b><small>${esc(k.s)}</small></div>`).join('')}</div>
-
-          <div class="x2">
-            <section class="ps"><div class="ps-h"><i>1</i><h2>Curva S física</h2></div>
-              <div class="legend"><span><i class="sw sw-real"></i>Realizado</span><span><i class="sw sw-prev"></i>Previsto</span><span><i class="sw sw-base"></i>Base</span></div>
-              <div class="chart" id="ch-curva-r"></div>
-              <p class="per">${periodoTexto(r)}</p>
-            </section>
-            <section class="ps"><div class="ps-h"><i>2</i><h2>Pontos-chave</h2></div>
-              <ul class="pontos">${X.pontos.map(p => `<li><b>${p.t}</b> ${p.x}</li>`).join('')}</ul>
-            </section>
+          <div class="rx-top">
+            ${X.manchete ? `<p class="rx-lead">${esc(X.manchete)}</p>` : ''}
+            <div class="rx-cards">${cards.map(k => `<div class="rx-card ac-${k.ac}"><small>${k.k}</small><b class="rx-card-v ${k.cls || ''}">${k.v}</b>${k.x || ''}<span class="rx-card-s">${k.html ? k.s : esc(k.s)}</span></div>`).join('')}</div>
           </div>
 
-          <section class="ps"><div class="ps-h"><i>3</i><h2>${r.crono ? 'Cronograma por frente' : 'Frentes com desvio'}</h2></div>
-            ${r.crono ? ganttHTML(r, { compacto: true }) : `<div class="xf">${X.frentes.top.map(p => `<div class="xf-r"><span class="xf-n">${esc(p.nome)}<small>${pct(p.realizado, 1)} de ${pct(p.peso, 1)} · prev. ${pct(p.prevCorte, 1)}</small></span>${barra(p.realizado, p.prevCorte, p.peso)}<b class="neg">${pp(p.desvio, 1)}</b></div>`).join('') || '<p class="per">Nenhuma frente abaixo do previsto.</p>'}
-                ${X.frentes.demais.n ? `<div class="xf-r xf-d"><span class="xf-n">Demais ${X.frentes.demais.n} frentes<small>${pct(X.frentes.demais.peso, 1)} do peso da obra</small></span><span class="xf-ok">em dia</span><b>${pp(X.frentes.demais.desvio, 1)}</b></div>` : ''}
-              </div>`}
+          <section class="rx-s"><h2>Curva S física e avanço mensal<em>% do total da obra</em></h2>
+            <div class="legend rx-leg"><span class="rx-leg-g">Acumulado</span><span><i class="sw sw-real"></i>Realizado</span><span><i class="sw sw-prev"></i>Planejado</span><span><i class="sw sw-base"></i>Base</span>
+              <span class="rx-leg-g">No mês</span><span><i class="sw sw-breal"></i>Realizado</span><span><i class="sw sw-bplan"></i>Planejado</span><span class="note">${Core.mesCurto(r.corte)} parcial até ${dCurto(r.corte)}</span></div>
+            <div class="chart" id="ch-combo-r"></div>
           </section>
 
-          <div class="x2">
-            <section class="ps"><div class="ps-h"><i>4</i><h2>Atenção</h2></div>
-              <div class="xa">${X.atencao.map(a => `<div class="xa-r"><span class="tag ${a.tag === 'Paralisada' ? 't-crit' : 't-warn'}">${a.tag}</span><div><b>${esc(a.titulo)}</b><small>${esc(a.det)}</small></div></div>`).join('') || '<p class="per">Sem pontos de atenção.</p>'}
-                ${X.atencaoMais ? `<p class="per">e mais ${X.atencaoMais} ${X.atencaoMais === 1 ? 'item' : 'itens'} no painel da obra.</p>` : ''}</div>
-            </section>
-            <section class="ps"><div class="ps-h"><i>5</i><h2>Próximos 30 dias</h2></div>
-            <div class="xp"><div class="xp-n"><b>${X.proximas.n}</b><small>tarefas terminam até ${dCurto(Core.addDias(r.corte, 30))}</small></div>
-              <div class="xp-l">${X.proximas.top.map(t => `<div><span class="tn">${dCurto(t.fim)}</span><span>${esc(t.nome)}<small>${esc(t.caminho.slice(0, 2).join(' › '))}</small></span><span class="tn">${pct(t.pctTarefa, 0)} feito</span></div>`).join('')}</div></div>
-          </section>
-          </div>
+          <div class="rx-row half">${marcosSec}${atencaoSec}</div>
 
-          ${X.fotos.length ? `<section class="ps"><div class="ps-h"><i>6</i><h2>Registro fotográfico</h2></div>
-            <div class="xfotos">${X.fotos.map(f => `<figure><img src="${f.src}" alt="${esc(legendaCurta(f) || `Foto do RDO nº ${f.rdo}, ${dBR(f.data)}`)}"><figcaption>${legendaCurta(f) ? `<b>${esc(legendaCurta(f))}</b>` : ''}<span>RDO ${f.rdo} · ${dBR(f.data)}</span></figcaption></figure>`).join('')}</div>
+          ${ativ.length ? `<section class="rx-s"><h2>Avanço por atividade${legFarol}</h2>${atividadesHTML(ativ, o)}</section>` : ''}
+
+          ${X.fotos.length ? `<section class="rx-s"><h2>Registro fotográfico<em>${dCurto(X.fotos[0].data)} a ${dCurto(X.fotos[X.fotos.length - 1].data)}</em></h2>
+            <div class="rx-fotos">${X.fotos.map(f => `<figure><img src="${f.src}" alt="${esc(legendaCurta(f) || `Foto do RDO nº ${f.rdo}, ${dBR(f.data)}`)}"><figcaption><small>${dCurto(f.data)} · RDO ${f.rdo}</small>${legendaCurta(f) ? `<span>${esc(legendaCurta(f))}</span>` : ''}</figcaption></figure>`).join('')}</div>
           </section>` : ''}
         </div>
-        <p class="glos"><b>Como ler.</b> <i>Avanço da obra</i>: quanto já foi executado, pesando cada serviço pelo seu valor no orçamento. <i>Planejado</i>: quanto o cronograma previa até esta data. <i>Comparado ao plano</i>: a diferença entre os dois, em pontos do total da obra; ▲ acima, ▼ abaixo, “em linha” até 0,5 ponto. <i>Índice de prazo</i>: executado ÷ planejado; 1,00 é o ritmo do plano, acima de 1,00 a obra está à frente.</p>
-        <div class="pf"><span><b>MACHINE</b> | Realizações com base sólida</span><span>Obra ${esc(o.codigo)} · dados até ${dBR(r.corte)} · Prevision e RDO · gerado em ${dBR(new Date().toISOString().slice(0, 10))}</span></div>
       </article>`;
   }
 
   // ---------- render ----------
   function render() {
     const app = $('#app');
-    if (PROD && S.carregando) { app.innerHTML = viewCarregando(); return; }
-    if (PROD && S.view === 'senha') { app.innerHTML = viewSenha(); bind(); return; }
-    if (!S.user) { app.innerHTML = PROD ? viewLoginProd() : viewLogin(); bind(); return; }
+    if (S.carregando) { app.innerHTML = viewCarregando(); return; }
+    if (!S.user) {
+      app.innerHTML = (S.view === 'configurar' ? viewConfigurar() : S.view === 'pedido' ? viewPedido() : viewLoginProd()) + modalHTML();
+      bind(); return;
+    }
     if (!S.obraId || !DB.obras.some(o => o.id === S.obraId)) S.obraId = obrasDoUsuario()[0]?.id;
-    if (!ehAdmin() && ['alimentar', 'acessos', 'nova-obra'].includes(S.view)) S.view = 'obra';
+    if (!ehAdmin() && ['alimentar', 'acessos', 'nova-obra', 'editar-obra', 'senha', 'github'].includes(S.view)) S.view = 'obra';
+    const base = DB.obras.find(x => x.id === S.obraId);
+    if (base && base.fotosPendentes && ['obra', 'report'].includes(S.view)) carregarFotos(base);
     const v = S.view === 'portfolio' ? viewPortfolio() : S.view === 'obra' ? viewObra() : S.view === 'alimentar' ? viewAlimentar()
-      : S.view === 'acessos' ? viewAcessos() : S.view === 'nova-obra' ? viewNovaObra() : viewReport();
-    app.innerHTML = shell(v) + lightbox();
+      : S.view === 'acessos' ? viewAcessos() : S.view === 'nova-obra' ? viewNovaObra() : S.view === 'editar-obra' ? viewNovaObra(base)
+      : S.view === 'senha' ? viewSenha() : S.view === 'github' ? viewGithub() : viewReport();
+    app.innerHTML = shell(v) + lightbox() + modalHTML();
     bind(); desenha();
+  }
+  const carregandoFotos = {};
+  async function carregarFotos(base) {
+    if (carregandoFotos[base.id]) return;
+    carregandoFotos[base.id] = true;
+    try {
+      const fotos = await API.carregarFotos(base.id);
+      const o = DB.obras.find(x => x.id === base.id); if (o) { o.fotos = fotos; o.fotosPendentes = false; }
+    } catch (e) { toast('Não consegui carregar as fotos: ' + e.message); const o = DB.obras.find(x => x.id === base.id); if (o) o.fotosPendentes = false; }
+    carregandoFotos[base.id] = false;
+    render();
   }
   function desenha() {
     const base = DB.obras.find(x => x.id === S.obraId);
@@ -766,7 +1011,7 @@
     const el1 = $('#ch-curva'); if (el1 && el1.closest('details').open) Core.chartCurvaS(el1, o, r);
     const el2 = $('#ch-mensal'); if (el2 && el2.closest('details').open) Core.chartMensal(el2, o, r);
     const el3 = $('#ch-efetivo'); if (el3 && r.campo && el3.closest('details').open) Core.chartEfetivo(el3, r.campo);
-    const el4 = $('#ch-curva-r'); if (el4) Core.chartCurvaS(el4, o, r, { altura: 190, compacto: true });
+    const el4 = $('#ch-combo-r'); if (el4) Core.chartCombo(el4, o, r);
   }
 
   let tt;
@@ -776,66 +1021,132 @@
   }
 
   function bind() {
-    $$('[data-login]').forEach(b => b.onclick = () => {
-      S.user = USUARIOS.find(u => u.id === b.dataset.login);
-      S.obraId = obrasDoUsuario()[0]?.id;
-      S.view = ehCliente() && obrasDoUsuario().length === 1 ? 'obra' : 'portfolio';
-      S.menu = false; lsSet('mp_user', S.user.id); render(); window.scrollTo(0, 0);
-    });
-    $$('[data-go]').forEach(b => b.onclick = () => { S.view = b.dataset.go; S.menu = false; render(); window.scrollTo(0, 0); });
-    $$('[data-obra]').forEach(b => b.onclick = () => { S.obraId = b.dataset.obra; S.view = 'obra'; render(); window.scrollTo(0, 0); });
+    const atualiza = () => { if (S.user) DB.obras = API.listar(); };
+    $$('[data-go]').forEach(b => b.onclick = () => { atualiza(); S.view = b.dataset.go; S.menu = false; S.loginErro = null; S.loginMsg = null; S.editAcesso = null; render(); window.scrollTo(0, 0); });
+    $$('[data-obra]').forEach(b => b.onclick = () => { atualiza(); S.obraId = b.dataset.obra; S.view = 'obra'; render(); window.scrollTo(0, 0); });
     $$('[data-toast]').forEach(b => b.onclick = () => toast(b.dataset.toast));
     const bt = $('#bt-tema'); if (bt) bt.onclick = () => { tema = TEMAS[(TEMAS.indexOf(tema) + 1) % 3]; lsSet('mp_tema', tema); aplicaTema(tema); render(); };
     const bu = $('#bt-user'); if (bu) bu.onclick = e => { e.stopPropagation(); S.menu = !S.menu; render(); };
-    $$('[data-act]').forEach(b => b.onclick = async () => {
-      S.menu = false;
-      if (PROD && b.dataset.act === 'sair') { await API.sair(); return; } // onAuthStateChange cuida do resto
-      S.user = null; S.view = 'login'; lsSet('mp_user', ''); render();
-    });
-    $$('[data-senha]').forEach(b => b.onclick = () => { S.menu = false; S.loginErro = null; S.view = 'senha'; render(); });
+    $$('[data-act="sair"]').forEach(b => b.onclick = () => { API.sair(); S.user = null; DB.obras = []; S.menu = false; S.view = 'login'; S.imp = null; render(); });
+
+    // ----- entrar -----
     const fl = $('#f-login'); if (fl) fl.onsubmit = async e => {
       e.preventDefault(); S.loginErro = null; S.loginMsg = null;
-      const em = $('#l-email').value, se = $('#l-senha').value;
-      if (!em || !se) { S.loginErro = 'Informe e-mail e senha.'; render(); return; }
-      const bt = fl.querySelector('button[type=submit]'); bt.disabled = true; bt.textContent = 'Entrando…';
-      try { await API.entrar(em, se); } catch (er) { S.loginErro = er.message; render(); $('#l-email').value = em; }
+      const em = $('#l-email').value.trim(), se = $('#l-senha').value;
+      if (!em || !se) { S.loginErro = 'Informe e-mail e senha.'; render(); $('#l-email').value = em; return; }
+      const b = fl.querySelector('button[type=submit]'); b.disabled = true; b.textContent = 'Entrando…';
+      try { const u = await API.entrar(em, se); await abrirSessao(u); }
+      catch (er) { S.loginErro = er.message; render(); $('#l-email').value = em; }
     };
-    const fe = $('#l-esqueci'); if (fe) fe.onclick = async () => {
-      const em = $('#l-email').value; S.loginErro = null; S.loginMsg = null;
-      if (!em) { S.loginErro = 'Digite seu e-mail acima e toque de novo em "Esqueci a senha".'; render(); return; }
-      try { await API.esqueci(em); S.loginMsg = 'Se este e-mail tiver acesso, chega em instantes um link para criar uma nova senha.'; } catch (er) { S.loginErro = er.message; }
-      render(); $('#l-email').value = em;
-    };
-    const fs = $('#f-senha'); if (fs) fs.onsubmit = async e => {
+    const fe = $('#l-esqueci'); if (fe) fe.onclick = () => { const em = $('#l-email') && $('#l-email').value.trim(); fe.href = mailtoSenha(em); };
+    const fp = $('#f-pedido'); if (fp) fp.onsubmit = e => {
       e.preventDefault(); S.loginErro = null;
-      const a = $('#s-nova').value, b = $('#s-conf').value;
-      if (a.length < 8) { S.loginErro = 'A senha precisa ter pelo menos 8 caracteres.'; render(); return; }
-      if (a !== b) { S.loginErro = 'As duas senhas não são iguais.'; render(); return; }
-      try { await API.definirSenha(a); history.replaceState(null, '', location.pathname); S.view = 'obra'; toast('Senha salva.'); await iniciarSessao(); }
-      catch (er) { S.loginErro = er.message; render(); }
+      const v = id => ($('#' + id).value || '').trim();
+      if (!v('p-nome') || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('p-email')) || !v('p-empresa')) { S.loginErro = 'Informe nome, e-mail válido e empresa.'; const keep = ['p-nome', 'p-email', 'p-empresa', 'p-vinculo', 'p-obras', 'p-motivo'].map(id => [id, $('#' + id).value]); render(); keep.forEach(([id, x]) => { $('#' + id).value = x; }); return; }
+      const corpo = `Solicito acesso ao Painel de Obras Machine.\n\nNome: ${v('p-nome')}\nE-mail: ${v('p-email')}\nEmpresa: ${v('p-empresa')}\nVínculo: ${v('p-vinculo')}\nObra(s): ${v('p-obras') || '—'}\nJustificativa: ${v('p-motivo') || '—'}\n\nAtenciosamente,\n${v('p-nome')}`;
+      location.href = mailto(EMAIL, `Painel de Obras Machine · Solicitação de acesso · ${v('p-nome')}`, corpo);
+      S.loginMsg = 'Pedido preparado no seu programa de e-mail. Após o envio, o Planejamento avalia e responde no e-mail informado.'; render();
     };
-    $$('[data-publicar]').forEach(b => b.onclick = async () => {
-      const o = DB.obras.find(x => x.id === S.obraId); const sim = b.dataset.publicar === '1';
-      b.disabled = true;
-      try { await API.publicar(o.cargaId, sim); await recarregar(); toast(sim ? 'Publicado. O cliente já vê esta posição.' : 'Publicação recolhida.'); }
-      catch (er) { toast(er.message); b.disabled = false; }
+
+    // ----- configuração inicial -----
+    const fc = $('#f-config'); if (fc) fc.onsubmit = async e => {
+      e.preventDefault(); S.loginErro = null;
+      const v = id => $('#' + id).value;
+      const vals = ['c-nome', 'c-email', 'c-senha', 'c-conf', 'c-token'].map(id => [id, v(id)]);
+      const volta = msg => { S.loginErro = msg; render(); vals.forEach(([id, x]) => { $('#' + id).value = x; }); };
+      if (!v('c-nome').trim() || !v('c-email').trim()) return volta('Informe nome e e-mail.');
+      if (v('c-senha').length < 12) return volta('A senha precisa ter pelo menos 12 caracteres.');
+      if (v('c-senha') !== v('c-conf')) return volta('As duas senhas não são iguais.');
+      if (!v('c-token').trim()) return volta('Informe o token do GitHub.');
+      const lembrar = $('#c-lembrar').checked, limpar = $('#c-limpar').checked, V = Object.fromEntries(vals);
+      S.carregando = true; S.ocupado = 'Validando o token…'; render();
+      try {
+        await API.github.definir(V['c-token'], lembrar);
+        const u = await API.configurar({ nome: V['c-nome'], email: V['c-email'], senha: V['c-senha'], limparHistorico: limpar }, m => { S.ocupado = m; render(); });
+        S.ocupado = null; await abrirSessao(u);
+        toast('Painel protegido. O site publicado atualiza em cerca de um minuto.');
+      } catch (er) { S.carregando = false; S.ocupado = null; volta(er.message); }
+    };
+
+    // ----- conta e publicação -----
+    const fs = $('#f-senha'); if (fs) fs.onsubmit = async e => {
+      e.preventDefault();
+      const a = $('#s-nova').value, b = $('#s-conf').value;
+      if (a.length < 12) { toast('A senha precisa ter pelo menos 12 caracteres.'); return; }
+      if (a !== b) { toast('As duas senhas não são iguais.'); return; }
+      const ok = await gravando('Gravando a senha…', () => API.trocarMinhaSenha(a).then(() => true));
+      if (ok) { S.view = 'portfolio'; render(); toast('Senha alterada. Use a nova senha no próximo acesso.'); }
+    };
+    const ft = $('#f-token'); if (ft) ft.onsubmit = async e => {
+      e.preventDefault(); const t = $('#g-token').value.trim(); if (!t) { toast('Cole o token.'); return; }
+      try { const r = await API.github.definir(t, $('#g-lembrar').checked); toast(`Token válido: ${r.repo} (${r.branch}).`); render(); } catch (er) { toast(er.message); }
+    };
+    const gl = $('#g-limpar'); if (gl) gl.onclick = () => { API.github.limpar(); toast('Token removido deste navegador.'); render(); };
+    const gc = $('#g-compactar'); if (gc) gc.onclick = () => confirma({ titulo: 'Compactar histórico', texto: 'O repositório passa a ter só a versão atual. Não afeta os dados do painel.', ok: 'Compactar' },
+      async () => { const ok = await gravando('Compactando o histórico…', prog => API.compactarHistorico(prog).then(() => true)); if (ok) toast('Histórico compactado.'); });
+    const fm = $('#f-mtoken'); if (fm) fm.onsubmit = async e => {
+      e.preventDefault(); const t = $('#m-token').value.trim(); if (!t) return;
+      const m = S.modal;
+      try { await API.github.definir(t, $('#m-lembrar').checked); S.modal = null; render(); if (m && m.repetir) m.repetir(); }
+      catch (er) { S.modal = { ...m, erro: er.message }; render(); }
+    };
+    $$('[data-fecha]').forEach(b => b.onclick = () => { const m = S.modal; S.modal = null; render(); if (m && m.cancelar) m.cancelar(); });
+    $$('[data-copia]').forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.copia); toast('Senha copiada.'); } catch (e) { toast('Selecione a senha e copie manualmente.'); } });
+    const mok = $('#m-ok'); if (mok) mok.onclick = () => { const f = S.modal && S.modal.acao; S.modal = null; render(); if (f) f(); };
+
+    // ----- publicação da obra -----
+    $$('[data-publicar]').forEach(b => b.onclick = () => {
+      const sim = b.dataset.publicar === '1'; const id = S.obraId;
+      const o = DB.obras.find(x => x.id === id);
+      confirma(sim ? { titulo: 'Publicar para o cliente', texto: `O cliente da obra ${esc(o.codigo)} passa a ver a posição de <b>${dBR(o.dataCorte)}</b>.`, ok: 'Publicar' }
+        : { titulo: 'Recolher publicação', texto: `O cliente deixa de ver a obra ${esc(o.codigo)} até uma nova publicação.`, ok: 'Recolher', perigo: true },
+        async () => { const ok = await gravando(sim ? 'Publicando…' : 'Recolhendo…', () => API.publicar(id, sim)); if (ok) { await recarregar(); toast(sim ? 'Publicado. O cliente verá esta posição em cerca de um minuto.' : 'Publicação recolhida.'); } });
     });
-    $$('[data-papel]').forEach(el => el.onchange = async () => { try { await API.salvarPerfil(el.dataset.papel, { papel: el.value }); toast('Papel atualizado.'); S.acessos = null; render(); } catch (er) { toast(er.message); } });
-    $$('[data-ativo]').forEach(el => el.onchange = async () => { try { await API.salvarPerfil(el.dataset.ativo, { ativo: el.checked }); toast(el.checked ? 'Acesso reativado.' : 'Acesso desativado.'); } catch (er) { toast(er.message); el.checked = !el.checked; } });
-    $$('[data-acesso]').forEach(el => el.onchange = async () => { const [u, ob] = el.dataset.acesso.split('|'); try { await API.definirAcesso(u, ob, el.checked); toast(el.checked ? `Obra ${ob} liberada.` : `Obra ${ob} retirada.`); } catch (er) { toast(er.message); el.checked = !el.checked; } });
+
+    // ----- acessos -----
+    $$('[data-editacesso]').forEach(b => b.onclick = () => { S.editAcesso = b.dataset.editacesso || null; render(); const f = $('#f-edacesso') || $('#f-acesso'); if (f) f.scrollIntoView({ block: 'center' }); });
+    const syncObras = id => { const sel = $(`#${id}-perfil`), box = $(`[data-obras-de="${id}"]`); if (sel && box) { box.hidden = sel.value !== 'cliente'; sel.onchange = () => { box.hidden = sel.value !== 'cliente'; }; } };
+    syncObras('f-acesso'); syncObras('f-edacesso');
+    const fa = $('#f-acesso'); if (fa) fa.onsubmit = async e => {
+      e.preventDefault(); const d = lerFormAcesso('f-acesso');
+      if (d.perfil === 'cliente' && !d.obras.length) { toast('Marque ao menos uma obra para o cliente.'); return; }
+      const r = await gravando('Criando o acesso…', () => API.criarAcesso(d));
+      if (r) { S.modal = { tipo: 'senha', nova: true, ...r }; render(); }
+    };
+    const fd = $('#f-edacesso'); if (fd) fd.onsubmit = async e => {
+      e.preventDefault(); const d = lerFormAcesso('f-edacesso'); const id = S.editAcesso;
+      if (d.perfil === 'cliente' && !d.obras.length) { toast('Marque ao menos uma obra para o cliente.'); return; }
+      const ok = await gravando('Salvando o acesso…', prog => API.atualizarAcesso(id, d, prog).then(() => true));
+      if (ok) { S.editAcesso = null; await recarregar(); toast('Acesso atualizado.'); }
+    };
+    $$('[data-novasenha]').forEach(b => b.onclick = () => {
+      const u = API.listarAcessos().find(x => x.id === b.dataset.novasenha);
+      confirma({ titulo: 'Emitir nova senha', texto: `A senha atual de <b>${esc(u.nome)}</b> deixa de valer.`, ok: 'Emitir nova senha' },
+        async () => { const r = await gravando('Emitindo nova senha…', () => API.redefinirSenha(u.id)); if (r) { S.modal = { tipo: 'senha', nova: false, ...r }; render(); } });
+    });
+    $$('[data-remover]').forEach(b => b.onclick = () => {
+      const u = API.listarAcessos().find(x => x.id === b.dataset.remover);
+      confirma({ titulo: 'Remover acesso', texto: `<b>${esc(u.nome)}</b> perde o acesso. As chaves de todas as obras são trocadas e os dados recifrados (pode levar alguns minutos).`, ok: 'Remover acesso', perigo: true },
+        async () => { const ok = await gravando('Removendo o acesso…', prog => API.removerAcesso(u.id, prog).then(() => true)); if (ok) { await recarregar(); toast('Acesso removido e chaves trocadas.'); } });
+    });
+
+    // ----- cadastro de obra -----
     const fo = $('#f-obra'); if (fo) fo.onsubmit = async e => {
       e.preventDefault();
+      const novo = fo.dataset.novo === '1';
       const v = id => ($('#' + id).value || '').trim();
       if (!v('o-codigo') || !v('o-nome')) { toast('Informe código e nome da obra.'); return; }
       const ini = v('o-ini') || null, fim = v('o-fim') || null;
-      try {
-        await API.salvarObra({ id: v('o-codigo'), codigo: v('o-codigo'), nome: v('o-nome'), cliente: v('o-cliente'), contratante: v('o-contratante'), cidade: v('o-cidade'),
-          contrato: v('o-contrato'), local: v('o-local'), responsavel: v('o-resp'), prazo_inicio: ini, prazo_fim: fim,
-          prazo_dias: ini && fim ? Core.diff(ini, fim) + 1 : null });
-        S.obraId = v('o-codigo'); S.view = 'alimentar'; await recarregar(); toast('Obra cadastrada. Agora envie os arquivos.');
-      } catch (er) { toast(er.message); }
+      if (ini && fim && fim < ini) { toast('O fim contratual é anterior ao início.'); return; }
+      const dados = { novo, id: novo ? v('o-codigo') : S.obraId, codigo: v('o-codigo'), nome: v('o-nome'), cliente: v('o-cliente'), contratante: v('o-contratante'), cidade: v('o-cidade'),
+        contrato: v('o-contrato'), local: v('o-local'), responsavel: v('o-resp'), prazo_inicio: ini, prazo_fim: fim, prazo_dias: ini && fim ? Core.diff(ini, fim) + 1 : null };
+      const o = await gravando(novo ? 'Cadastrando a obra…' : 'Salvando o cadastro…', () => API.salvarObra(dados));
+      if (!o) return;
+      S.obraId = o.id; S.view = novo ? 'alimentar' : 'obra'; await recarregar();
+      toast(novo ? 'Obra cadastrada. Agora envie os arquivos do período.' : 'Cadastro atualizado.');
     };
     $$('details.sec').forEach(d => d.addEventListener('toggle', () => { S.abertos[d.dataset.sec] = d.open; if (d.open) desenha(); }));
+    $$('details.rx-av-n').forEach(d => d.addEventListener('toggle', () => { S.abertos[d.dataset.k] = d.open; }));
     $$('[data-abre]').forEach(b => b.onclick = () => { const id = b.dataset.abre; S.abertos[id] = !S.abertos[id]; render(); });
     $$('[data-filtro]').forEach(b => b.onclick = () => { S.filtroTarefas = b.dataset.filtro; S.verTodas = false; render(); });
     $$('[data-vertodas]').forEach(b => b.onclick = () => { S.verTodas = !S.verTodas; render(); });
@@ -849,25 +1160,24 @@
     const so = $('#imp-obra'); if (so) so.onchange = () => { S.obraId = so.value; };
     const ap = $('#imp-aplicar'); if (ap) ap.onclick = aplicarImport;
     const li = $('#imp-limpar'); if (li) li.onclick = () => { S.imp = null; render(); };
-    const pdf = $('#bt-pdf'); if (pdf) pdf.onclick = () => window.print();
+    const pdf = $('#bt-pdf'); if (pdf) pdf.onclick = () => baixarPdf(pdf);
     $$('[data-fotordo]').forEach(b => b.onclick = () => { const v = b.dataset.fotordo; S.fotoRdo = v === 'todos' ? 'todos' : +v; S.fotosTodas = false; render(); });
     $$('[data-fotostodas]').forEach(b => b.onclick = () => { S.fotosTodas = !S.fotosTodas; render(); });
     $$('[data-lb]').forEach(b => b.onclick = () => { S.lb = +b.dataset.lb; render(); });
     $$('[data-lbx]').forEach(b => b.onclick = () => { S.lb = null; render(); });
     $$('[data-lbnav]').forEach(b => b.onclick = () => { S.lb += +b.dataset.lbnav; render(); });
     $$('[data-estrela]').forEach(b => b.onclick = async () => {
-      const o = DB.obras.find(x => x.id === S.obraId); o.destaques = o.destaques || [];
-      const src = b.dataset.estrela, i = o.destaques.indexOf(src);
-      if (i < 0 && o.destaques.length >= 4) { toast('O report usa até 4 fotos. Tire uma estrela antes.'); return; }
-      if (PROD) {
-        const f = (o.fotos || []).find(x => x.src === src);
-        try { await API.destacar(f.path, i < 0); f.destaque = i < 0; } catch (er) { toast(er.message); return; }
-      }
-      if (i >= 0) { o.destaques.splice(i, 1); toast('Foto retirada do report.'); }
-      else { o.destaques.push(src); toast(`Foto marcada para o report (${o.destaques.length} de 4).`); }
-      render();
+      const o = DB.obras.find(x => x.id === S.obraId); const atual = [...(o.destaques || [])];
+      const id = b.dataset.estrela, i = atual.indexOf(id);
+      if (i < 0 && atual.length >= 4) { toast('O report usa até 4 fotos. Tire uma estrela antes.'); return; }
+      const novo = i >= 0 ? atual.filter(x => x !== id) : atual.concat(id);
+      const ok = await gravando('Salvando a seleção de fotos…', () => API.destacar(o.id, novo).then(() => true));
+      if (!ok) return;
+      o.destaques = novo; render();
+      toast(i >= 0 ? 'Foto retirada do report.' : `Foto marcada para o report (${novo.length} de 4).`);
     });
   }
+  function confirma(m, acao) { S.modal = { tipo: 'confirma', ...m, acao }; render(); }
   document.addEventListener('click', e => { if (S.menu && !e.target.closest('.menu') && !e.target.closest('#bt-user')) { S.menu = false; render(); } });
   document.addEventListener('keydown', e => {
     if (S.lb === null) return;
@@ -877,48 +1187,27 @@
   let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(desenha, 150); });
 
   // ---------- início ----------
-  async function recarregar() {
-    DB.obras = await API.carregarObras(S.user);
-    render();
-  }
-  async function iniciarSessao() {
-    S.carregando = true; render();
-    try {
-      const u = await API.sessao();
-      if (!u) { S.user = null; S.carregando = false; render(); return; }
-      S.user = { ...u, ini: iniciais(u.nome), rotulo: ROTULO[u.perfil] || u.perfil };
-      if (API.tipoLink === 'invite' || API.tipoLink === 'recovery') { S.view = 'senha'; S.carregando = false; render(); return; }
-      DB.obras = await API.carregarObras(S.user);
-      if (!['portfolio', 'obra', 'report', 'alimentar', 'acessos', 'nova-obra'].includes(S.view)) S.view = DB.obras.length > 1 ? 'portfolio' : 'obra';
-    } catch (e) { S.user = null; S.loginErro = e.message; }
-    S.carregando = false; render();
-  }
-
-  if (PROD) {
-    if (API.erroLink) S.loginErro = /expired|invalid/i.test(API.erroLink) ? 'Este link expirou ou já foi usado. Peça um novo em "Esqueci a senha".' : API.erroLink;
-    let ultimo = null;
-    API.aoMudarSessao((ev, sess) => {
-      const id = sess && sess.user ? sess.user.id : null;
-      if (ev === 'PASSWORD_RECOVERY') { S.view = 'senha'; S.carregando = false; render(); return; }
-      if (ev === 'SIGNED_OUT') { ultimo = null; S.user = null; DB.obras = []; S.view = 'login'; S.acessos = null; S.carregando = false; render(); return; }
-      if (ev === 'INITIAL_SESSION' && !id) { S.carregando = false; render(); return; }
-      if (id && id !== ultimo) { ultimo = id; iniciarSessao(); }
-    });
-    // garantia para versões do cliente que não emitem INITIAL_SESSION
-    setTimeout(() => { if (S.carregando && !ultimo) iniciarSessao(); }, 2500);
-  } else {
-    // Gerador de PDF (tools/gerar.cjs): lê o estado atualizado para regravar js/seed.js
-    window.MP_EXPORT = () => JSON.parse(JSON.stringify(DB));
-    // abre direto no perfil lembrado
-    // (no protótipo, quem chega pela primeira vez entra como administrador; "Trocar perfil" volta ao login)
-    const salvo = lsGet('mp_user');
-    const lembrado = salvo === '' ? null : (USUARIOS.find(u => u.id === salvo) || USUARIOS[0]);
-    if (lembrado) { S.user = lembrado; S.obraId = obrasDoUsuario()[0]?.id; S.view = 'obra'; }
-    // atalhos pelo endereço: #report, #obra-207 (usados pelo gerador de PDF)
+  async function abrirSessao(u) {
+    S.user = { ...u, ini: iniciais(u.nome), rotulo: ROTULO[u.perfil] || u.perfil };
+    S.carregando = true; S.ocupado = 'Abrindo os dados das obras…'; S.loginErro = null; render();
+    try { DB.obras = await API.carregarObras(); }
+    catch (e) { API.sair(); S.user = null; S.loginErro = e.message; S.view = 'login'; S.carregando = false; S.ocupado = null; render(); return; }
+    S.carregando = false; S.ocupado = null;
     const h = location.hash || '';
     const mo = h.match(/obra-([\w-]+)/); if (mo && DB.obras.some(o => o.id === mo[1])) S.obraId = mo[1];
-    if (/report/.test(h)) S.view = 'report';
-    if (/alimentar/.test(h)) S.view = 'alimentar';
-    render();
+    if (!S.obraId || !DB.obras.some(o => o.id === S.obraId)) S.obraId = DB.obras[0]?.id;
+    S.view = /report/.test(h) ? 'report' : /alimentar/.test(h) && ehAdmin() ? 'alimentar' : DB.obras.length > 1 || ehAdmin() ? 'portfolio' : 'obra';
+    render(); window.scrollTo(0, 0);
   }
+  (async () => {
+    render();
+    try {
+      const est = await API.estado();
+      if (est === 'configurar') { S.view = 'configurar'; S.carregando = false; render(); return; }
+      const u = await API.sessao();
+      if (u) { await abrirSessao(u); return; }
+    } catch (e) { S.loginErro = 'Não consegui abrir o painel: ' + e.message; }
+    S.view = 'login'; S.carregando = false; render();
+  })();
 })();
+

@@ -1,6 +1,6 @@
 {
   "name": "painel-obras-machine-gerador",
   "private": true,
-  "description": "Atualiza os dados do Painel de Obras Machine e exporta o report em PDF (node tools/gerar.cjs)",
-  "dependencies": { "playwright": "1.56.0", "xlsx": "0.18.5", "pdfjs-dist": "3.11.174" }
+  "description": "Exporta o report de uma obra do Painel de Obras Machine em PDF (MP_EMAIL=... MP_SENHA=... node tools/gerar.cjs --obra 207)",
+  "dependencies": { "playwright": "1.56.0" }
 }

@@ -1,7 +1,8 @@
+
 // ============================================================
 // Machine · Painel de Obras — motor de cálculo e gráficos SVG.
 // Sem DOM fora das funções de gráfico: o mesmo arquivo serve o app,
-// o report e (na fase 2) a geração no servidor.
+// o report e a geração no servidor.
 // Percentuais internos sempre em fração (0–1).
 // ============================================================
 (function (root) {
@@ -75,7 +76,10 @@
   // Pontos de fim de mês + ponto zero no início do cronograma.
   function serieCurva(obra) {
     const ini = inicioCronograma(obra);
-    const pts = [{ data: ini, base: 0, previsto: 0, realizado: 0 }, ...obra.curva.filter(p => p.data > ini)];
+    // realizado registrado antes do início do cronograma (ex.: mobilização antecipada) não é descartado:
+    // o ponto inicial parte do acumulado até essa data
+    const realAntes = obra.curva.filter(p => p.data <= ini).reduce((m, p) => Math.max(m, p.realizado || 0), 0);
+    const pts = [{ data: ini, base: 0, previsto: 0, realizado: realAntes }, ...obra.curva.filter(p => p.data > ini)];
     return pts;
   }
   function inicioCronograma(obra) {
@@ -165,7 +169,13 @@
     const sem = semaforo(idp, obra.faixas);
 
     // Prazo
-    const pc = obra.prazoContratual || {};
+    // Regra: o prazo contratual é SEMPRE a linha de base do Prevision (linha nível 1 do cronograma:
+    // início base → fim base). O cadastro da obra (prazoContratual) só vale se não houver cronograma com base.
+    const pcCad = obra.prazoContratual || {};
+    const pc = cRaiz && cRaiz.fimBase
+      ? { inicio: cRaiz.inicioBase || pcCad.inicio, fim: cRaiz.fimBase, fonte: 'base Prevision' }
+      : { ...pcCad, fonte: pcCad.fim ? 'cadastro da obra' : null };
+    if (pc.inicio && pc.fim) pc.dias = diff(pc.inicio, pc.fim) + 1;
     const decorrido = pc.inicio ? diff(pc.inicio, corte) + 1 : null;
     const aVencer = pc.fim ? diff(corte, pc.fim) : null;
     const fimCron = usaCron ? cRaiz.fim : fimCronograma(obra);
@@ -178,7 +188,14 @@
     const ritmo = ult3.length ? ult3.reduce((s, m) => s + m.realizado, 0) / ult3.length : null; // por mês
     const restante = Math.max(0, 1 - real);
     const DIAS_MES = 30.44;
-    const projecao = ritmo > 0 ? addDias(corte, Math.round(restante / ritmo * DIAS_MES)) : null;
+    // projeção só com histórico suficiente: 3 meses fechados com realizado e obra acima de 10% (no começo da obra
+    // a média dos primeiros meses não representa o ritmo de produção e jogaria a conclusão para anos depois)
+    const histOk = ult3.length >= 3 && ult3.every(m => (m.realizado || 0) > 0) && real >= 0.10;
+    const projecao = ritmo > 0 && histOk ? addDias(corte, Math.round(restante / ritmo * DIAS_MES)) : null;
+    // pesos do Progresso por tarefas: só valem se a raiz fecha ~100% (exportação filtrada por período traz o planejado
+    // acumulado do período no lugar do peso, ex.: raiz 12,84%)
+    const pesoRaiz = raiz ? (raiz.base ?? raiz.previsto ?? 0) : 0;
+    const pesosOk = pesoRaiz >= 0.95;
     const mesesAteCron = Math.max(0.01, diff(corte, fimCron) / DIAS_MES);
     const mesesAteContr = pc.fim ? Math.max(0.01, diff(corte, pc.fim) / DIAS_MES) : null;
     const ritmoCron = diff(corte, fimCron) > 0 ? restante / mesesAteCron : null;
@@ -216,14 +233,19 @@
     // Tarefas (folhas) com situação e caminho
     const nomePorEap = Object.fromEntries(tarefas.map(t => [t.eap, nomeBonito(t.tarefa).nome]));
     const caminho = eap => { const p = eap.split('.'); const out = []; for (let i = 2; i < p.length; i++) out.push(nomePorEap[p.slice(0, i).join('.')]); return out.filter(Boolean); };
+    // Linha sem data no Prevision: início = término = início da obra e sem linha de base (escopo condicionado,
+    // marco "a definir"). Não é tarefa vencida: fica fora de atrasos, próximos 30 dias e faróis de prazo.
+    const tRaizObra = tarefas.find(t => t.nivel === 1) || {};
+    const iniObra = [cRaiz && cRaiz.inicio, cRaiz && cRaiz.inicioBase, tRaizObra.inicio].filter(Boolean).sort()[0] || null;
+    const semData = (fim, ini, fimBase) => !fimBase && !!fim && !!iniObra && fim <= iniObra && (!ini || ini >= fim);
     const lista = folhas.filter(t => !foraT(t)).map(t => {
       const peso = t.previsto ?? t.base ?? 0;
-      const sit = situacaoTarefa(t, corte);
+      const sit = (t.realizado || 0) < peso - 1e-9 && semData(t.fim, t.inicio, t.crono && t.crono.fimBase) ? 'sem-data' : situacaoTarefa(t, corte);
       return { eap: t.eap, nome: nomeBonito(t.tarefa).nome, caminho: caminho(t.eap), inicio: t.inicio, fim: t.fim, peso,
         realizado: t.realizado || 0, falta: Math.max(0, peso - (t.realizado || 0)), pctTarefa: peso > 0 ? (t.realizado || 0) / peso : 0,
         situacao: sit, diasAtraso: sit === 'atrasada' ? diff(t.fim, corte) : 0, atrasoPrevision: t.atrasoPrevision };
     });
-    const cont = { concluida: 0, atrasada: 0, andamento: 0, 'a-iniciar': 0, 'sem-peso': 0 };
+    const cont = { concluida: 0, atrasada: 0, andamento: 0, 'a-iniciar': 0, 'sem-peso': 0, 'sem-data': 0 };
     lista.forEach(t => cont[t.situacao]++);
     const atrasadas = lista.filter(t => t.situacao === 'atrasada').sort((a, b) => b.falta - a.falta || b.diasAtraso - a.diasAtraso);
     const proximas = lista.filter(t => t.situacao !== 'concluida' && t.fim >= corte && t.fim <= addDias(corte, 30)).sort((a, b) => a.fim < b.fim ? -1 : 1);
@@ -241,7 +263,7 @@
       const raizL = cRaiz || cron.linhas[0];
       const prefExclC = cron.linhas.filter(l => l.nivel > 1 && ehExcl(l.nome)).map(l => l.eap);
       const linhas = cron.linhas.filter(l => !prefExclC.some(e => l.eap === e || l.eap.startsWith(e + '.'))).map(l => {
-        const sit = l.realizado >= 0.9995 ? 'concluida' : (l.fim && l.fim < corte) ? 'atrasada' : (l.inicio && l.inicio <= corte) ? 'andamento' : 'a-iniciar';
+        const sit = l.realizado >= 0.9995 ? 'concluida' : semData(l.fim, l.inicio, l.fimBase) ? 'sem-data' : (l.fim && l.fim < corte) ? 'atrasada' : (l.inicio && l.inicio <= corte) ? 'andamento' : 'a-iniciar';
         const t = tarefas.find(x => x.crono === l);
         return { ...l, nomeExib: nomeCurto(l.nome), area: nomeBonito(l.nome).area, situacao: sit,
           slip: l.fimBase && l.fim ? diff(l.fimBase, l.fim) : null, diasAtraso: sit === 'atrasada' ? diff(l.fim, corte) : 0,
@@ -254,6 +276,10 @@
         fimAtual: raizL.fim, fimBase: raizL.fimBase, slip: raizL.fimBase ? diff(raizL.fimBase, raizL.fim) : null,
         pendentes: linhas.filter(l => l.pendente), vencidas: linhas.filter(l => l.situacao === 'atrasada' && l.nivel >= 3),
         completo: (obra.tarefas || []).length ? linhas.length >= (obra.tarefas || []).length * 0.9 : true, total: (obra.tarefas || []).length };
+      // peso de cada linha do cronograma (só quando os pesos do Progresso por tarefas são válidos)
+      const porLinhaPeso = new Map(tarefas.filter(t => t.crono).map(t => [t.crono.linha, t.previsto ?? t.base]));
+      const porEapPeso = new Map(tarefas.map(t => [t.eap + '|' + normNome(t.tarefa), t.previsto ?? t.base]));
+      crono.peso = l => !pesosOk ? null : (porLinhaPeso.get(l.linha) ?? porEapPeso.get(l.eap + '|' + normNome(l.nome)) ?? null);
     }
 
     // Período do report: do último fechamento de mês até o corte
@@ -267,9 +293,9 @@
     const fotos = (obra.fotos || []).filter(f => rdosVis.has(f.rdo)).sort((a, b) => b.rdo - a.rdo || a.idx - b.idx);
 
     return { corte, real, prevCorte, baseCorte, desvio: real - prevCorte, idp, sem, pts,
-      prazo: { decorrido, total: pc.dias, aVencer, fracTempo: pc.dias ? decorrido / pc.dias : null, iniCron, fimCron, contrIni: pc.inicio, contrFim: pc.fim },
+      prazo: { decorrido, total: pc.dias, aVencer, fracTempo: pc.dias ? decorrido / pc.dias : null, iniCron, fimCron, contrIni: pc.inicio, contrFim: pc.fim, contrFonte: pc.fonte },
       ritmo, ult3, restante, projecao, ritmoCron, ritmoContr,
-      pacotes, subpacotes, lista, cont, atrasadas, proximas, faltaAtrasadas, piorPacote, piorSub, campo, periodo, fotos, crono };
+      pacotes, subpacotes, lista, cont, atrasadas, proximas, faltaAtrasadas, piorPacote, piorSub, campo, periodo, fotos, crono, pesosOk, pesoRaiz };
   }
 
   // ---------- campo (RDO) ----------
@@ -303,7 +329,7 @@
           if (m && /paralis/i.test(m.situacao)) desde = ate[i].data; else break;
         }
       }
-      return { ...a, pctIni, avancoPeriodo: pctIni !== null ? a.pct - pctIni : null, paralisadaDesde: desde };
+      return { ...a, pctIni, avancoPeriodo: pctIni !== null && a.pct !== null && a.pct !== undefined ? a.pct - pctIni : null, paralisadaDesde: desde };
     });
     const paralisadas = frentes.filter(f => /paralis/i.test(f.situacao));
     const efetivoMedio = serie.reduce((s, x) => s + x.propria + x.terceiros, 0) / serie.length;
@@ -315,26 +341,24 @@
   function narrativa(obra, r) {
     const out = [];
     const cp = comparaPlano(r.desvio);
-    out.push(`Avanço físico de <b>${pct(r.real)}</b> contra <b>${pct(r.prevCorte)}</b> planejados para ${dBR(r.corte)}: <b>${cp.longo}</b> (índice de prazo ${fmtNum(r.idp, 2)}).`);
-    if (r.piorPacote && r.piorPacote.desvio < -0.005) {
-      let t = `O atraso se concentra em <b>${esc(r.piorPacote.nome)}</b> (${pp(r.piorPacote.desvio)}): ${pct(r.piorPacote.realizado)} realizados de ${pct(r.piorPacote.peso)} do peso total`;
+    // os números do avanço e do desvio já estão nos indicadores logo acima: a leitura começa onde eles param
+    if (cp.dir >= 0) out.push(`Avanço ${cp.longo} na data de corte (${dBR(r.corte)}).`);
+    if (!r.pesosOk) {
+      // pesos inválidos (Progresso por tarefas filtrado por período): diferença lida no avanço da própria atividade
+      const m = atividades(r).filter(a => a.plan - a.feito >= 0.05).sort((a, b) => (b.plan - b.feito) - (a.plan - a.feito))[0];
+      if (m) out.push(`A maior diferença para o plano está em <b>${esc(m.nome)}</b>: ${pct(m.feito, 0)} feito de ${pct(m.plan, 0)} planejado na data.`);
+    } else if (r.piorPacote && r.piorPacote.desvio < -0.005) {
+      let t = `A maior diferença para o plano está em <b>${esc(r.piorPacote.nome)}</b> (${pp(r.piorPacote.desvio)}): ${pct(r.piorPacote.realizado)} realizados de ${pct(r.piorPacote.peso)} do peso total`;
       if (r.piorSub && r.piorSub.desvio < -0.005) t += `, puxado por ${esc(r.piorSub.nome)} (${pct(r.piorSub.realizado)} de ${pct(r.piorSub.peso)})`;
       out.push(t + '.');
     }
-    if (r.ritmo) {
-      let t = `No ritmo dos últimos 3 meses (<b>${pct(r.ritmo)} ao mês</b>), a conclusão fica por volta de <b>${mesLongo(r.projecao)}</b>`;
-      if (r.projecao > r.prazo.fimCron) t += `, depois do fim do cronograma (${dBR(r.prazo.fimCron)})`;
-      if (r.prazo.contrFim) t += r.projecao <= r.prazo.contrFim ? ` e antes do prazo contratual (${dBR(r.prazo.contrFim)})` : ` e <b>depois do prazo contratual</b> (${dBR(r.prazo.contrFim)})`;
-      out.push(t + '.');
-      if (r.ritmoCron && r.ritmoCron > r.ritmo * 1.05) out.push(`Para terminar no cronograma seriam necessários ${pct(r.ritmoCron)} ao mês, ${fmtNum(r.ritmoCron / r.ritmo, 1)} vezes o ritmo atual.`);
+    // prazos (cronograma, base e contrato) e ritmo necessário já estão nos indicadores e na linha do tempo: aqui só a projeção
+    if (r.ritmo && r.projecao) out.push(`No ritmo dos últimos 3 meses (<b>${pct(r.ritmo)} ao mês</b>), a conclusão fica por volta de <b>${mesLongo(r.projecao)}</b>.`);
+    if (r.crono && r.crono.usado && r.crono.pendentes.length) {
+      const k = r.crono.pendentes;
+      out.push(`${k.length === 1 ? '1 serviço segue' : k.length + ' serviços seguem'} <b>pendente${k.length > 1 ? 's' : ''} de contratação</b>: ${k.map(l => esc(l.nomeExib)).join('; ')}.`);
     }
-    if (r.crono && r.crono.usado) {
-      const k = r.crono;
-      let t = `O cronograma atual termina em <b>${dBR(k.fimAtual)}</b>${k.slip ? `, ${Math.abs(k.slip)} dias ${k.slip > 0 ? 'depois' : 'antes'} da base (${dBR(k.fimBase)})` : ', igual à base'}`;
-      if (k.pendentes.length) t += `; ${k.pendentes.length === 1 ? '1 serviço segue' : k.pendentes.length + ' serviços seguem'} <b>pendente${k.pendentes.length > 1 ? 's' : ''} de contratação</b> (${k.pendentes.map(l => esc(l.nomeExib)).join('; ')})`;
-      out.push(t + '.');
-    }
-    if (r.atrasadas.length) out.push(`${r.atrasadas.length} tarefas passaram da data de término sem concluir; juntas, somam ${pct(r.faltaAtrasadas)} do avanço da obra.`);
+    if (r.atrasadas.length && r.pesosOk) out.push(`${r.atrasadas.length} tarefas com término vencido somam ${pct(r.faltaAtrasadas)} do avanço da obra.`);
     if (r.campo) {
       const c = r.campo, u = c.ultimo;
       const ef = u.maoDeObra.reduce((s, m) => s + m.qtd, 0);
@@ -349,7 +373,7 @@
   // Mesmos blocos e os mesmos limites a cada atualização, para o leitor achar tudo no mesmo lugar:
   // manchete (1 frase) · 4 indicadores · período · 3 pontos-chave · até 5 frentes · até 3 atenções ·
   // próximos 30 dias (3) · 4 fotos.
-  const LIM = { frentes: 5, atencao: 3, proximas: 3, fotos: 4 };
+  const LIM = { frentes: 5, atencao: 3, proximas: 3, fotos: 4, marcos: 5 };
   const capital = t => t.charAt(0).toUpperCase() + t.slice(1);
   function motivoCurto(m) {
     if (!m) return null;
@@ -357,13 +381,130 @@
     t = t.replace(/^servi[cç]o paralisado\s*(devido (ao|à|a)\s*)?/, '').replace(/^para dar continuidade ao servi[cç]o\s*/, '');
     return capital(t.length > 140 ? t.slice(0, 137).replace(/\s\S*$/, '') + '…' : t);
   }
+  // ---------- auditoria das fontes ----------
+  // Fontes, períodos de referência e conflitos de conciliação. Nada aqui altera os dados: só informa.
+  // k: 'av' = conflito que afeta a leitura; 'info' = regra de cálculo aplicada.
+  function auditoria(obra, r) {
+    const al = [], fontes = [], corte = r.corte;
+    const cron = obra.cronograma && obra.cronograma.linhas && obra.cronograma.linhas.length ? obra.cronograma : null;
+    const cR = cron ? cron.linhas.find(l => l.nivel === 1) : null;
+    const tar = obra.tarefas || [], tR = tar.find(t => t.nivel === 1);
+    const curva = obra.curva || [], mm = obra.mensal || [], mc = corte.slice(0, 7);
+    if (cR) fontes.push({ t: 'Cronograma (Prevision)', p: `posição de ${dBR(cron.dataRef || corte)}${r.crono && !r.crono.completo ? ' · exportado com a árvore recolhida' : ''}${r.crono && !r.crono.usado ? ' · anterior ao corte, não usado' : ''}` });
+    if (tR) fontes.push({ t: 'Progresso por tarefas', p: `${tar.length} linhas · realizado ${pct(tR.realizado, 2)}` });
+    if (tR && !r.pesosOk) al.push({ k: 'av', t: `Progresso por tarefas exportado com filtro de período: a linha raiz soma ${pct(r.pesoRaiz, 2)} em vez de 100%, então os pesos das frentes não valem. O painel mostra o avanço de cada atividade pelo cronograma (sem coluna de peso). Para ter os pesos, exporte o Progresso por tarefas sem filtro de datas e com a árvore toda aberta.` });
+    if (curva.length) fontes.push({ t: 'Curva S', p: `${mesCurto(curva[0].data)} a ${mesCurto(curva.at(-1).data)} · realizado exibido até ${dCurto(corte)}` });
+    const fech = mm.filter(m => m.mes < mc);
+    if (mm.length) fontes.push({ t: 'Progresso mensal', p: `${fech.length ? 'fechado até ' + mesCurto(fech.at(-1).mes + '-01') : 'sem mês fechado'}${mm.some(m => m.mes === mc) ? ` · ${MES_L[+mc.slice(5, 7) - 1]} parcial até ${dCurto(corte)}` : ''}` });
+    const rd = (obra.rdos || []).filter(x => x.data <= corte).sort((a, b) => a.data < b.data ? -1 : 1);
+    if (rd.length) {
+      const a = rd[0], b = rd.at(-1), np = rd.filter(x => x.status !== 'aprovado').length, nums = rd.map(x => x.numero);
+      fontes.push({ t: 'Relatórios diários (RDO)', p: `${rd.length} relatórios, nº ${Math.min(...nums)} a ${Math.max(...nums)} · ${dCurto(a.data)} a ${dCurto(b.data)}${np ? ` · ${np} em preenchimento` : ''}` });
+      const porNum = [...rd].sort((x, y) => x.numero - y.numero);
+      const fora = porNum.filter((x, i) => i && x.data < porNum[i - 1].data);
+      if (fora.length) al.push({ k: 'info', t: `A numeração dos RDOs não segue a ordem das datas (ex.: nº ${porNum[porNum.indexOf(fora[0]) - 1].numero} de ${dCurto(porNum[porNum.indexOf(fora[0]) - 1].data)} e nº ${fora[0].numero} de ${dCurto(fora[0].data)}). O painel ordena pela data do relatório.` });
+      if (rd.length && rd.every(x => !(x.atividades || []).length)) al.push({ k: 'av', t: 'Os RDOs foram lidos sem a lista de atividades; a leitura de campo não está disponível.' });
+      const lag = diff(b.data, corte);
+      if (lag > 3) al.push({ k: 'av', t: `O último RDO é de ${dBR(b.data)}, ${lag} dias antes da data de corte: o registro de campo não cobre todo o período.` });
+    }
+    // mesma posição em todas as fontes de avanço?
+    const ultCurva = (() => { const p = curva.find(x => x.data >= corte && x.realizado > 0) || [...curva].reverse().find(x => x.realizado > 0); return p ? p.realizado : null; })();
+    const vals = [['Cronograma', cR && r.crono && r.crono.usado ? cR.realizado : null], ['Progresso por tarefas', tR ? tR.realizado : null], ['Curva S', ultCurva]].filter(v => v[1] !== null && v[1] !== undefined);
+    if (vals.length > 1) {
+      const nums = vals.map(v => v[1]);
+      if (Math.max(...nums) - Math.min(...nums) > 0.001) al.push({ k: 'av', t: `O realizado difere entre as fontes (${vals.map(v => `${v[0]} ${pct(v[1], 2)}`).join(', ')}): exportações de datas diferentes. O painel usa ${r.crono && r.crono.usado ? 'o Cronograma' : 'o Progresso por tarefas'}.` });
+    }
+    if (tR && tR.base !== null && tR.base !== undefined && Math.abs(tR.base - 1) > 0.002) al.push({ k: 'av', t: `No Progresso por tarefas, a linha de base da raiz soma ${pct(tR.base, 2)} (esperado 100%): os pesos de base não fecham o total da obra.` });
+    const ini = r.prazo.iniCron;
+    const pre = curva.filter(p => ini && p.data < ini && p.realizado > 0);
+    if (pre.length) al.push({ k: 'info', t: `A Curva S registra ${pct(Math.max(...pre.map(p => p.realizado)), 2)} de realizado antes do início do cronograma (${dBR(ini)}); a curva parte desse valor.` });
+    if (mm.length && mm.every(m => !m.idpm)) al.push({ k: 'info', t: 'O IDPM do Progresso mensal veio zerado e não é usado. O índice de prazo é calculado pelo painel (realizado ÷ planejado na data).' });
+    const mAtual = mm.find(m => m.mes === mc);
+    if (mAtual && r.periodo) al.push({ k: 'info', t: `${MES_L[+mc.slice(5, 7) - 1].replace(/^./, c => c.toUpperCase())} está em andamento: o realizado do mês (${pct(r.periodo.real)}) vai até ${dCurto(corte)} e é comparado com o planejado até a mesma data (${pct(r.periodo.prev)}), não com o mês inteiro (${pct(mAtual.previsto)}). Zeros de meses futuros não são exibidos como medição.` });
+    if (cron && tar.length) {
+      const porLinha = new Map(tar.map(t => [t.linha, t]));
+      let lig = 0, eapDif = 0;
+      cron.linhas.forEach(l => { const t = porLinha.get(l.linha); if (t && normNome(t.tarefa) === normNome(l.nome)) { lig++; if (t.eap !== l.eap) eapDif++; } });
+      const sem = cron.linhas.length - lig;
+      if (sem) al.push({ k: 'av', t: `${sem} de ${cron.linhas.length} linhas do Cronograma não foram ligadas ao Progresso por tarefas (posição na árvore ou nome diferentes); essas linhas ficam fora da leitura por pacote.` });
+      if (eapDif) al.push({ k: 'info', t: `${eapDif} linhas têm código EAP diferente entre o Cronograma e o Progresso por tarefas (o Prevision renumera a EAP). A ligação é feita pela posição na árvore e pelo nome, nunca só pelo código.` });
+    }
+    return { fontes, alertas: al.sort((a, b) => (a.k === 'av' ? 0 : 1) - (b.k === 'av' ? 0 : 1)) };
+  }
+
+  // ---------- marcos ----------
+  // Marcos explícitos do cronograma ("MARCO ...") ou, na falta deles, entregas de 1 dia (entrega, aceite, vistoria,
+  // liberação, comissionamento, testes). Variação só quando a linha tem data de base.
+  const RE_MARCO = /^\s*marco\b/i;
+  const RE_ENTREGA = /\b(entrega|aceite|vistoria|libera[cç](ao|ão|oes|ões)|comissionamento|habite|avcb|inaugura|teste hidrost|testes el[eé]tricos)/i;
+  function marcos(r) {
+    if (!r.crono) return [];
+    const L = r.crono.linhas;
+    const temFilho = l => L.some(x => x.eap.startsWith(l.eap + '.'));
+    const grupos = L.filter(l => /^\s*marcos\b/i.test(l.nome));
+    const doGrupo = l => grupos.find(g => l.eap.startsWith(g.eap + '.'));
+    const expl = L.filter(l => !temFilho(l) && (RE_MARCO.test(l.nome) || doGrupo(l)));
+    const cand = expl.length ? expl : L.filter(l => l.nivel > 1 && !temFilho(l) && (l.duracao ?? 99) <= 1 && RE_ENTREGA.test(l.nome));
+    // data igual ao início da obra e sem base = linha ainda sem data definida no cronograma
+    const semData = l => !l.fimBase && l.fim && l.fim <= r.prazo.iniCron;
+    return cand.map(l => {
+      const g = doGrupo(l);
+      const m = l.nome.match(/^\s*marco\s*(de\s+interface)?\s*(M\d+)?\s*[-–—:]\s*/i);
+      return { nome: m ? l.nome.slice(m[0].length) : l.nomeExib, codigo: m && m[2] ? m[2].toUpperCase() : null,
+        data: l.fim, base: l.fimBase, slip: l.fimBase && l.fim ? diff(l.fimBase, l.fim) : null,
+        situacao: l.realizado >= 0.9995 ? 'concluido' : semData(l) ? 'a-definir' : (l.fim && l.fim < r.corte ? 'vencido' : 'previsto'),
+        interface: /interface|contratante|\bcliente\b/i.test(l.nome + ' ' + (l.responsaveis || '') + ' ' + (g ? g.nome : '')), realizado: l.realizado, explicito: true && !!(RE_MARCO.test(l.nome) || g) };
+    }).map(m => m.situacao === 'a-definir' ? { ...m, data: null, slip: null } : m)
+      .sort((a, b) => (a.data === null) - (b.data === null) || ((a.data || '') < (b.data || '') ? -1 : 1));
+  }
+
+  // Atividades do report: frentes da EAP (nível 2/3) abrindo até o pacote executável. Fonte: o cronograma do Prevision,
+  // quando veio completo (avanço da própria linha); senão, os pacotes do Progresso por tarefas. Se o nível 2 tem
+  // menos de 4 itens (ex.: Fase 1 / Fase 2), desce um nível para as frentes ficarem comparáveis.
+  function atividades(r) {
+    const k = r.crono;
+    if (k && k.usado && k.completo) {
+      // grupos de marcos ficam no bloco "Próximos marcos", não aqui
+      const L = k.linhas.filter(l => !/^\s*marcos?\b/i.test(l.nome));
+      const filhos = l => L.filter(x => x.nivel === l.nivel + 1 && x.eap.startsWith(l.eap + '.'));
+      const nomeAt = n => { const b = n.length > 50 ? n.replace(/\s*\([^)]*\)\s*$/, '') : n; return nomeBonito(b).nome; };
+      const peso = l => k.peso ? k.peso(l) : null;
+      const no = l => { const fs = filhos(l); return { eap: l.eap, nome: nomeAt(l.nome), peso: peso(l), feito: l.realizado || 0, plan: l.previsto || 0, temFilhos: fs.length > 0, filhos: () => fs.map(no) }; };
+      const raiz = k.linhas.find(l => l.nivel === 1) || k.linhas[0];
+      let nos = filhos(raiz);
+      // um item com mais da metade do peso (ex.: "Execução de Obra"): abre nos filhos, como nas frentes da aba Obra
+      for (let i = 0; i < 3; i++) {
+        const tot = nos.reduce((s, l) => s + (peso(l) || 0), 0);
+        const dom = tot > 0 && nos.find(l => (peso(l) || 0) / tot > 0.5 && filhos(l).length > 1);
+        if (!dom) break;
+        const j = nos.indexOf(dom); nos = [...nos.slice(0, j), ...filhos(dom), ...nos.slice(j + 1)];
+      }
+      // poucos itens no nível 2 (ex.: Fase 1 / Fase 2): desce um nível
+      for (let i = 0; i < 3 && nos.length < 4 && nos.some(l => filhos(l).length); i++) nos = nos.flatMap(l => filhos(l).length ? filhos(l) : [l]);
+      return nos.map(no);
+    }
+    const no = p => ({ eap: p.eap, nome: p.nome, peso: p.peso, feito: p.pctPacote || 0, plan: p.peso > 0 ? Math.min(1, p.prevCorte / p.peso) : 0, temFilhos: p.temFilhos,
+      filhos: () => r.subpacotes(p.eap).filter(x => x.peso > 0.00005).map(no) });
+    return r.pacotes.filter(p => p.peso > 0.0005).map(no);
+  }
+
   function resumoExecutivo(obra, r, destaques = []) {
     const P = r.prazo, c = r.campo;
     const relProj = !r.projecao ? '' : r.projecao <= P.fimCron ? 'dentro do cronograma' : (P.contrFim && r.projecao <= P.contrFim) ? 'após o cronograma e dentro do prazo contratual' : 'após o prazo contratual';
     const cp = comparaPlano(r.desvio);
-    const estado = { adiantada: 'Obra adiantada', 'em-dia': 'Obra em dia', atencao: 'Obra pede atenção', atrasada: 'Obra atrasada' }[r.sem.e] || 'Obra';
-    const manchete = `${estado}: ${pct(r.real)} executado, ${cp.dir === 0 ? `em linha com os ${pct(r.prevCorte)} planejados para a data` : `${cp.longo} para a data (${pct(r.prevCorte)})`}.` +
-      (r.projecao ? ` No ritmo atual, termina em ${mesLongo(r.projecao)}, ${relProj}.` : '');
+    // Manchete (regra 18/10/2026): o farol do cabeçalho já diz a situação e os cartões já mostram realizado × planejado.
+    // A frase só acrescenta o que não está à vista (projeção e onde está a maior diferença), sem repetir o juízo da obra.
+    const frases = [];
+    if (r.projecao) frases.push(`No ritmo médio dos últimos 3 meses (${pct(r.ritmo)} ao mês), a conclusão projetada é ${mesLongo(r.projecao)}`);
+    if (r.pesosOk) {
+      const maior = r.piorPacote && r.piorPacote.desvio <= -TOLERANCIA ? r.piorPacote : null;
+      frases.push(maior ? `a maior diferença para o plano está em ${maior.nome} (${pp(maior.desvio)})` : 'todas as frentes em linha com o plano ou acima dele');
+    } else {
+      // sem pesos válidos, a diferença é lida no avanço da própria atividade (feito × planejado na data)
+      const m = atividades(r).filter(a => a.plan - a.feito >= 0.05).sort((a, b) => (b.plan - b.feito) - (a.plan - a.feito))[0];
+      if (m) frases.push(`a maior diferença para o plano está em ${m.nome} (${pct(m.feito, 0)} feito de ${pct(m.plan, 0)} planejado na data)`);
+    }
+    const manchete = frases.length ? capital(frases.join('; ')) + '.' : '';
 
     const kpis = [
       { k: 'Avanço da obra', v: pct(r.real), s: `planejado para a data: ${pct(r.prevCorte)}` },
@@ -376,8 +517,12 @@
     if (r.piorPacote && r.piorPacote.desvio <= -TOLERANCIA) pontos.push({ t: 'Onde está o atraso', x: `${esc(r.piorPacote.nome)}, ${comparaPlano(r.piorPacote.desvio).longo}${r.piorSub && r.piorSub.desvio <= -TOLERANCIA ? `; o item que mais pesa é ${esc(r.piorSub.nome)} (${pct(r.piorSub.pctPacote, 0)} executado)` : ''}.` });
     else if (melhor && melhor.desvio >= TOLERANCIA) pontos.push({ t: 'Destaque', x: `${esc(melhor.nome)} está ${comparaPlano(melhor.desvio).longo}; nenhuma frente abaixo do plano.` });
     else pontos.push({ t: 'Avanço', x: 'todas as frentes em linha com o planejado.' });
-    if (r.ritmo) pontos.push({ t: 'Prazo', x: r.ritmoCron && r.ritmoCron > r.ritmo * 1.05 ? `para terminar em ${dBR(P.fimCron)}, a obra precisa avançar ${pct(r.ritmoCron)} por mês; hoje avança ${pct(r.ritmo)} (precisa de ${fmtNum(r.ritmoCron / r.ritmo, 1)} vezes o ritmo atual).` : `a obra avança ${pct(r.ritmo)} por mês, o suficiente para terminar até ${dBR(P.fimCron)}.` });
-    if (c) pontos.push({ t: 'Campo', x: c.paralisadas.length ? `${c.paralisadas.length} de ${c.frentes.length} frentes paralisadas no RDO nº ${c.ultimo.numero} (${dCurto(c.ultimo.data)}).` : `${c.frentes.length} frentes ativas, nenhuma paralisada no RDO nº ${c.ultimo.numero}.` });
+    if (r.ritmo) pontos.push({ t: 'Prazo', x: !r.ritmoCron ? `a obra avança ${pct(r.ritmo)} por mês; o término do cronograma (${dBR(P.fimCron)}) já passou.`
+      : r.ritmoCron > r.ritmo * 1.05 ? `para terminar em ${dBR(P.fimCron)}, a obra precisa avançar ${pct(r.ritmoCron)} por mês; hoje avança ${pct(r.ritmo)} (precisa de ${fmtNum(r.ritmoCron / r.ritmo, 1)} vezes o ritmo atual).`
+      : r.ritmoCron > r.ritmo ? `para terminar em ${dBR(P.fimCron)}, a obra precisa avançar ${pct(r.ritmoCron)} por mês; hoje avança ${pct(r.ritmo)}, no limite do necessário.`
+      : `a obra avança ${pct(r.ritmo)} por mês, acima dos ${pct(r.ritmoCron)} necessários para terminar até ${dBR(P.fimCron)}.` });
+    if (c) { const emP = c.ultimo.status && c.ultimo.status !== 'aprovado' ? ' (relatório em preenchimento)' : '';
+      pontos.push({ t: 'Registro de campo', x: !c.frentes.length ? `o RDO nº ${c.ultimo.numero} (${dCurto(c.ultimo.data)}) não registra atividades${emP}.` : c.paralisadas.length ? `o RDO nº ${c.ultimo.numero} (${dCurto(c.ultimo.data)}) registra ${c.paralisadas.length} de ${c.frentes.length} frentes como paralisadas${emP}.` : `o RDO nº ${c.ultimo.numero} (${dCurto(c.ultimo.data)}) registra ${c.frentes.length} frentes ativas, nenhuma paralisada${emP}.` }); }
 
     const neg = r.pacotes.filter(p => p.peso > 0.0005 && p.desvio < -0.0005).sort((a, b) => a.desvio - b.desvio);
     const top = neg.slice(0, LIM.frentes);
@@ -386,23 +531,60 @@
 
     // Ordem fixa: uma de cada tipo primeiro (paralisada com motivo, pendente de contratação, atrasada),
     // depois completa com as demais paralisadas
-    const par = c ? [...c.paralisadas].sort((a, b) => (b.motivo ? 1 : 0) - (a.motivo ? 1 : 0)).map(f => ({ tag: 'Paralisada', titulo: `${f.servico}${f.empresa ? ' · ' + f.empresa : ''}`, det: motivoCurto(f.motivo) || `Motivo não informado no RDO. Parada desde ${dCurto(f.paralisadaDesde)}.` })) : [];
-    const pen = r.crono ? r.crono.pendentes.map(l => ({ tag: 'Contratação', titulo: l.nomeExib, det: `${(l.responsaveis || '').replace(/,?\s*Pendente de contratação/i, '')} · término ${dBR(l.fim)} · ${pct(l.realizado, 0)} feito` })) : [];
+    const par = c ? [...c.paralisadas].sort((a, b) => (b.motivo ? 1 : 0) - (a.motivo ? 1 : 0)).map(f => ({ tag: 'Paralisada', titulo: `${f.servico}${f.empresa ? ' · ' + f.empresa : ''}`, det: motivoCurto(f.motivo) || `Motivo não informado no RDO. Parada desde ${dCurto(f.paralisadaDesde)}.`, fonte: `RDO nº ${c.ultimo.numero}${c.ultimo.status && c.ultimo.status !== 'aprovado' ? ' · em preenchimento' : ''}` })) : [];
+    const pen = r.crono ? r.crono.pendentes.map(l => ({ tag: 'Contratação', titulo: l.nomeExib, det: `${(l.responsaveis || '').replace(/,?\s*Pendente de contratação/i, '')} · término ${dBR(l.fim)} · ${pct(l.realizado, 0)} feito`, fonte: 'Cronograma · responsável pendente de contratação' })) : [];
     const jaCitadas = new Set(pen.map(x => normNome(x.titulo)));
     const ta = r.atrasadas.find(t => !jaCitadas.has(normNome(t.nome)));
-    const atr = ta ? [{ tag: 'Atrasada', titulo: ta.nome, det: `${ta.caminho[0] || ''} · venceu em ${dBR(ta.fim)} (${ta.diasAtraso} dias) · ${pct(ta.pctTarefa, 0)} feito` }] : [];
+    const atr = ta ? [{ tag: 'Atrasada', titulo: ta.nome, det: `${ta.caminho[0] || ''} · venceu em ${dBR(ta.fim)} (${ta.diasAtraso} dias) · ${pct(ta.pctTarefa, 0)} feito`, fonte: 'Cronograma · término vencido sem 100%' }] : [];
     const atencao = [par[0], pen[0], atr[0], ...par.slice(1), ...pen.slice(1)].filter(Boolean);
     const atencaoMais = Math.max(0, atencao.length - LIM.atencao);
 
     const proximas = { n: r.proximas.length, top: [...r.proximas].sort((a, b) => b.falta - a.falta).slice(0, LIM.proximas).sort((a, b) => a.fim < b.fim ? -1 : 1) };
 
-    // Fotos: as escolhidas pelo planejamento; sem escolha, 1 foto por dia dos últimos RDOs
-    // (as vagas que sobram são completadas com a 1ª foto de cada RDO mais recente)
-    const fotos = destaques.map(src => r.fotos.find(f => f.src === src)).filter(Boolean).slice(0, LIM.fotos);
-    const vistos = new Set(fotos.map(f => f.rdo));
-    for (const f of r.fotos) { if (fotos.length >= LIM.fotos) break; if (!vistos.has(f.rdo) && !fotos.includes(f)) { fotos.push(f); vistos.add(f.rdo); } }
+    // Fotos do report (regra 17/10/2026), janela = últimos 30 dias até o corte:
+    // · 1 foto por serviço em execução; as 4 do mesmo serviço só quando ele é o único citado nos RDOs da janela;
+    // · linha do tempo: foto 1 = a mais antiga do período, última foto = a mais recente (pela data do RDO).
+    // Serviço da foto = EAP/legenda do RDO; sem legenda, cada RDO conta como um registro distinto.
+    const fotos = (() => {
+      const n = LIM.fotos, ord = (a, b) => a.data < b.data ? -1 : a.data > b.data ? 1 : (a.rdo - b.rdo || a.idx - b.idx);
+      const marcadas = destaques.map(k => r.fotos.find(f => f.id === k || f.src === k)).filter(Boolean).slice(0, n);
+      if (marcadas.length >= n) return marcadas.sort(ord);
+      const ini = addDias(r.corte, -30);
+      const naoServ = /precipita|chuva|chuvoso|clima|tempo bom|nublado/i;
+      const chave = f => {
+        const L = f.legenda;
+        if (L && L.eap) return 'eap:' + L.eap;
+        const s = L && L.servico ? L.servico.replace(/\s+Anexos\s*\(.*$/i, '').replace(/\s+\d+([.,]\d+)?\s*[KM]B\s*$/i, '').trim() : '';
+        if (s && !naoServ.test(s)) return 's:' + normNome(s);
+        return L && L.servico ? null : 'rdo:' + f.rdo;
+      };
+      let cand = r.fotos.filter(f => f.data > ini && f.data <= r.corte && chave(f)).sort(ord);
+      if (!cand.length) cand = r.fotos.filter(f => chave(f)).sort(ord).slice(-24);
+      if (!cand.length) return marcadas.sort(ord);
+      // serviços em execução citados nos RDOs da janela
+      const servRdo = new Set((obra.rdos || []).filter(x => x.data > ini && x.data <= r.corte)
+        .flatMap(x => x.atividades.filter(a => !/paralis|conclu/i.test(a.situacao || '')).map(a => normNome(a.servico || a.descricao || ''))).filter(Boolean));
+      const servFotos = new Set(cand.map(chave));
+      const unico = servRdo.size <= 1 && servFotos.size === 1;
+      const escolhidas = [...marcadas];
+      const usadas = new Set(unico ? [] : escolhidas.map(chave));
+      const livre = f => !escolhidas.includes(f) && (unico ? !escolhidas.some(e => e.rdo === f.rdo) || cand.every(c => escolhidas.includes(c) || escolhidas.some(e => e.rdo === c.rdo)) : !usadas.has(chave(f)));
+      const pega = f => { if (f && escolhidas.length < n) { escolhidas.push(f); usadas.add(chave(f)); } };
+      const t0 = dia(cand[0].data).getTime(), t1 = dia(cand.at(-1).data).getTime();
+      const alvo = i => t0 + (t1 - t0) * i / (n - 1);
+      // extremos primeiro (mais antiga e mais recente), depois o meio da linha do tempo
+      pega(cand.find(livre)); pega([...cand].reverse().find(livre));
+      for (let i = 1; i < n - 1 && escolhidas.length < n; i++) {
+        const t = alvo(i);
+        pega(cand.filter(livre).sort((a, b) => Math.abs(dia(a.data) - t) - Math.abs(dia(b.data) - t))[0]);
+      }
+      return escolhidas.sort(ord);
+    })();
 
-    return { manchete, kpis, pontos, frentes, atencao: atencao.slice(0, LIM.atencao), atencaoMais, proximas, fotos, fotosEscolhidas: destaques.length > 0, LIM };
+    const ms = marcos(r);
+    const msAbertos = ms.filter(m => m.situacao !== 'concluido');
+    const marcosSel = { lista: msAbertos.slice(0, LIM.marcos), mais: Math.max(0, msAbertos.length - LIM.marcos), concluidos: ms.length - msAbertos.length, explicitos: ms.some(m => m.explicito), semData: msAbertos.filter(m => m.situacao === 'a-definir').length };
+    return { manchete, kpis, pontos, frentes, atencao: atencao.slice(0, LIM.atencao), atencaoMais, proximas, fotos, fotosEscolhidas: destaques.length > 0, LIM, marcos: marcosSel, auditoria: auditoria(obra, r) };
   }
 
   // ============================================================
@@ -415,7 +597,7 @@
   function chartCurvaS(el, obra, r, opts = {}) {
     const W = Math.max(300, el.clientWidth || 640), estreito = W < 520 || !!opts.compacto;
     const H = opts.altura || (estreito ? 230 : 290);
-    const m = { t: 16, r: estreito ? 14 : 92, b: 30, l: 40 };
+    const m = { t: 16, r: opts.rotulos ? 52 : (estreito ? 14 : 92), b: 30, l: 40 };
     const pts = r.pts;
     const x0 = dia(pts[0].data).getTime(), x1 = dia(pts.at(-1).data).getTime();
     const X = d => m.l + (dia(d).getTime() - x0) / (x1 - x0) * (W - m.l - m.r);
@@ -443,9 +625,11 @@
     const fim = realXY.at(-1);
     g += `<circle cx="${fim[0]}" cy="${fim[1]}" r="5" class="dot-real"/>`;
     g += `<circle cx="${X(r.corte)}" cy="${Y(r.prevCorte)}" r="4" class="dot-prev"/>`;
-    if (!estreito) {
+    if (!estreito || opts.rotulos) {
       g += `<text x="${fim[0] + 9}" y="${fim[1] + 4}" class="lbl lbl-real">${pct(r.real)}</text>`;
       g += `<text x="${X(r.corte) + 9}" y="${Y(r.prevCorte) - 6}" class="lbl">${pct(r.prevCorte)}</text>`;
+    }
+    if (!estreito) {
       const ul = pts.at(-1);
       g += `<text x="${X(ul.data) + 8}" y="${Y(ul.previsto) + 4}" class="lbl-s">Previsto</text>`;
     }
@@ -511,6 +695,79 @@
     });
   }
 
+  // Avanço físico (report): curva S acumulada (eixo esquerdo) sobreposta ao avanço de cada mês em barras (eixo direito).
+  // Notação no padrão IBCS: realizado = cheio escuro · planejado = contorno · base = tracejado claro.
+  function chartCombo(el, obra, r, opts = {}) {
+    const W = Math.max(300, el.clientWidth || 760), estreito = W < 560;
+    const H = opts.altura || (estreito ? 240 : 280);
+    const m = { t: 22, r: 44, b: 28, l: 44 };
+    const pts = r.pts, mesCorte = r.corte.slice(0, 7);
+    // meses do eixo: do início ao fim do cronograma
+    const ini = pts[0].data.slice(0, 7), fim = [pts.at(-1).data, r.prazo.fimCron].sort().at(-1).slice(0, 7);
+    const meses = []; for (let k = ini; k <= fim;) { meses.push(k); const [y, mo] = k.split('-').map(Number); k = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`; }
+    const porMes = Object.fromEntries((obra.mensal || []).map(d => [d.mes, d]));
+    const n = meses.length, slot = (W - m.l - m.r) / n;
+    const X = d => { const i = Math.max(0, Math.min(n - 1, meses.indexOf(d.slice(0, 7)))); const dim = +fimDoMes(d.slice(0, 7)).slice(8, 10); return m.l + slot * (i + Math.min(1, +d.slice(8, 10) / dim)); };
+    const Y = v => H - m.b - v * (H - m.t - m.b);
+    const realMes = d => d.mes > mesCorte ? null : d.mes === mesCorte ? Math.max(0, r.periodo.real) : d.realizado;
+    const maxBar = Math.max(0.01, ...meses.map(k => porMes[k]).filter(Boolean).map(d => Math.max(d.previsto || 0, realMes(d) || 0)));
+    const passo = niceMax(maxBar * 1.4 / 4), maxR = passo * 4;
+    const YR = v => H - m.b - v / maxR * (H - m.t - m.b);
+    let g = '';
+    [0, 0.25, 0.5, 0.75, 1].forEach((v, i) => {
+      g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" class="grid"/>`;
+      g += `<text x="${m.l - 8}" y="${Y(v) + 4}" class="ax" text-anchor="end">${v * 100}%</text>`;
+      g += `<text x="${W - m.r + 8}" y="${Y(v) + 4}" class="ax ax-r" text-anchor="start">${fmtNum(passo * i * 100, Number.isInteger(Math.round(passo * i * 1000) / 10) ? 0 : 1)}%</text>`;
+    });
+    g += `<text x="${m.l - 8}" y="${m.t - 10}" class="ax ax-t" text-anchor="end">acum.</text><text x="${W - m.r + 8}" y="${m.t - 10}" class="ax ax-t" text-anchor="start">no mês</text>`;
+    // barras do mês: planejado (contorno) e realizado (cheio); mês do corte parcial
+    const bw = Math.max(4, Math.min(13, slot * 0.27));
+    const bar = (x, v, cls) => { if (!v || v <= 0) return ''; const y = YR(v), h = H - m.b - y; return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw}" height="${Math.max(0.5, h).toFixed(1)}" rx="1.5" class="${cls}"/>`; };
+    meses.forEach((k, i) => {
+      const d = porMes[k], cx = m.l + slot * i + slot / 2;
+      if (d) { g += bar(cx - bw - 1.5, d.previsto, 'cb-plan'); g += bar(cx + 1.5, realMes(d), 'cb-real' + (k === mesCorte ? ' parcial' : '')); }
+      const ano = i === 0 || k.slice(5) === '01';
+      if (!estreito || i % 2 === 0) g += `<text x="${cx}" y="${H - 9}" class="ax${k === mesCorte ? ' ax-strong' : ''}" text-anchor="middle">${MES[+k.slice(5, 7) - 1]}${ano ? '/' + k.slice(2, 4) : ''}</text>`;
+    });
+    // curvas acumuladas
+    const realPts = pts.filter(p => p.data <= r.corte).map(p => [p.data, p.realizado]);
+    if (!realPts.length || realPts.at(-1)[0] !== r.corte) realPts.push([r.corte, r.real]);
+    const realXY = realPts.map(p => [X(p[0]), Y(p[1])]);
+    const prevAte = pts.filter(p => p.data <= r.corte).map(p => [X(p.data), Y(p.previsto)]).concat([[X(r.corte), Y(r.prevCorte)]]);
+    g += `<path d="${linhaPath(prevAte)} ${realXY.slice().reverse().map(p => 'L' + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')}Z" class="gap-area${r.desvio >= 0 ? ' pos' : ''}"/>`;
+    g += `<line x1="${X(r.corte)}" x2="${X(r.corte)}" y1="${m.t}" y2="${H - m.b}" class="corte"/>`;
+    g += `<path d="${linhaPath(pts.map(p => [X(p.data), Y(p.base)]))}" class="ln ln-base"/>`;
+    g += `<path d="${linhaPath(pts.map(p => [X(p.data), Y(p.previsto)]))}" class="ln ln-prev"/>`;
+    g += `<path d="${linhaPath(realXY)}" class="ln ln-real"/>`;
+    const f = realXY.at(-1);
+    g += `<circle cx="${f[0]}" cy="${f[1]}" r="4.5" class="dot-real"/><circle cx="${X(r.corte)}" cy="${Y(r.prevCorte)}" r="3.5" class="dot-prev"/>`;
+    const sep = Math.abs(f[1] - Y(r.prevCorte)) < 16;
+    const dir = f[0] + 56 < W - m.r, baixo = f[1] > H - m.b - 22; g += `<text x="${f[0] + (dir ? 8 : -8)}" y="${baixo ? f[1] - 9 : f[1] + (sep ? 18 : 16)}" class="lbl lbl-real" text-anchor="${dir ? 'start' : 'end'}">${pct(r.real)}</text>`;
+    g += `<text x="${X(r.corte) - 8}" y="${Y(r.prevCorte) - 6}" class="lbl" text-anchor="end">${pct(r.prevCorte)}</text>`;
+    g += `<text x="${X(r.corte) + 4}" y="${m.t - 10}" class="ax" text-anchor="middle">corte ${dCurto(r.corte)}</text>`;
+    meses.forEach((k, i) => { g += `<rect x="${m.l + slot * i}" y="${m.t}" width="${slot}" height="${H - m.t - m.b}" fill="transparent" class="hit" data-i="${i}"/>`; });
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Avanço físico: acumulado realizado ${pct(r.real)} contra planejado ${pct(r.prevCorte)} em ${dBR(r.corte)}, e avanço de cada mês">${g}</svg><div class="tip" hidden></div>`;
+    const svg = el.querySelector('svg'), tip = el.querySelector('.tip');
+    svg.querySelectorAll('.hit').forEach(h => {
+      h.addEventListener('pointerenter', () => {
+        const k = meses[+h.dataset.i], d = porMes[k] || {}, fimM = fimDoMes(k);
+        const ate = k === mesCorte ? r.corte : fimM, fut = k > mesCorte;
+        tip.innerHTML = `<b>${mesLongo(k)}${k === mesCorte ? ' · parcial até ' + dCurto(r.corte) : ''}</b>
+          <span class="tip-g">Acumulado</span>
+          <span><i class="sw sw-base"></i>Base <em>${pct(interp(pts, 'base', ate))}</em></span>
+          <span><i class="sw sw-prev"></i>Planejado <em>${pct(k === mesCorte ? r.prevCorte : interp(pts, 'previsto', ate))}</em></span>
+          <span><i class="sw sw-real"></i>Realizado <em>${fut ? '—' : pct(k === mesCorte ? r.real : interp(pts, 'realizado', ate))}</em></span>
+          <span class="tip-g">No mês</span>
+          <span><i class="sw sw-bplan"></i>Planejado <em>${pct(d.previsto)}</em></span>
+          <span><i class="sw sw-breal"></i>Realizado <em>${fut ? '—' : pct(realMes(d.mes ? d : { mes: k, realizado: null }))}</em></span>`;
+        tip.hidden = false;
+        const bb = svg.getBoundingClientRect(), px = (+h.getAttribute('x') + slot / 2) / W * bb.width;
+        tip.style.left = (px > bb.width - 190 ? px - 182 : px + 12) + 'px'; tip.style.top = '8px';
+      });
+      h.addEventListener('pointerleave', () => { tip.hidden = true; });
+    });
+  }
+
   // Efetivo diário (empilhado: próprio + terceiros)
   function chartEfetivo(el, campo) {
     const W = Math.max(260, el.clientWidth || 400), H = 120, m = { t: 10, r: 4, b: 22, l: 26 };
@@ -540,5 +797,6 @@
   }
 
   root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, diaSemana, diff, addDias, nomeBonito, semaforo, FAIXAS,
-    calc, comparaPlano, TOLERANCIA, estimaDataRef, nomeCurto, narrativa, resumoExecutivo, motivoCurto, chartCurvaS, chartMensal, chartEfetivo, interp, fracTempo };
+    calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, nomeCurto, narrativa, resumoExecutivo, auditoria, marcos, motivoCurto, chartCurvaS, chartMensal, chartCombo, chartEfetivo, interp, fracTempo };
 })(typeof window !== 'undefined' ? window : globalThis);
+
