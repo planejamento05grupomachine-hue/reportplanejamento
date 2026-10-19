@@ -1,0 +1,6 @@
+{
+  "name": "painel-obras-machine-gerador",
+  "private": true,
+  "description": "Exporta o report de uma obra do Painel de Obras Machine em PDF (MP_EMAIL=... MP_SENHA=... node tools/gerar.cjs --obra 207)",
+  "dependencies": { "playwright": "1.56.0" }
+}
