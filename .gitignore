@@ -1,0 +1,23 @@
+# Dependências
+node_modules/
+
+# Dados de origem (contratos, planilhas financeiras, relatórios por obra)
+# Entrada bruta usada para gerar os dados cifrados em data/ via tools/gerar.cjs
+tipos e arquivos/
+
+# Segredos e configuração local
+.env
+.env.*
+
+# Logs
+*.log
+npm-debug.log*
+
+# Build/artefatos temporários
+dist/
+build/
+
+# Sistema operacional / editor
+.DS_Store
+Thumbs.db
+.vscode/
