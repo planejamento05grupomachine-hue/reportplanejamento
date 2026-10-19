@@ -54,18 +54,18 @@ const srv = http.createServer((req, res) => {
     await p.evaluate(() => document.fonts.ready);
     const corte = await p.getAttribute('#paper', 'data-corte');
     await p.emulateMedia({ media: 'print' });
-    // escala automática: o report cabe em uma página A4 (área útil ~733 x 1060 px a 96 dpi).
+    // escala automática: o report cabe em uma página A4 (área útil ~718 x 1047 px a 96 dpi, margens de 10 mm).
     // Largura fixa de 860 px e escala de impressão do Chrome (o zoom de CSS quebra a paginação).
     const escala = await p.evaluate(() => {
       const el = document.getElementById('paper');
       Object.assign(el.style, { zoom: '1', width: '860px', maxWidth: '860px', margin: '0' });
       const r = el.getBoundingClientRect();
-      return Math.floor(Math.min(733 / r.width, 1040 / r.height, 1) * 1000) / 1000;
+      return Math.floor(Math.min(718 / r.width, 1047 / r.height, 1) * 1000) / 1000;
     });
     console.log('Escala do PDF: ' + Math.round(escala * 100) + '%');
     fs.mkdirSync(opt.saida, { recursive: true });
     const arq = path.join(opt.saida, `Report-Obra-${opt.obra}-${corte || new Date().toISOString().slice(0, 10)}.pdf`);
-    await p.pdf({ path: arq, format: 'A4', printBackground: true, scale: escala, margin: { top: '8mm', bottom: '8mm', left: '8mm', right: '8mm' } });
+    await p.pdf({ path: arq, format: 'A4', printBackground: true, scale: escala, margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' } });
     if (erros.length) console.log('Avisos da página:\n' + erros.join('\n'));
     console.log('PDF: ' + arq);
   } catch (e) {
