@@ -372,8 +372,8 @@
   // ---------- report executivo: formato fixo ----------
   // Mesmos blocos e os mesmos limites a cada atualização, para o leitor achar tudo no mesmo lugar:
   // manchete (1 frase) · 4 indicadores · período · 3 pontos-chave · até 5 frentes · até 3 atenções ·
-  // próximos 30 dias (3) · 4 fotos.
-  const LIM = { frentes: 5, atencao: 3, proximas: 3, fotos: 4, marcos: 5 };
+  // próximos 30 dias (3) · 12 fotos.
+  const LIM = { frentes: 5, atencao: 3, proximas: 3, fotos: 12, marcos: 5 };
   const capital = t => t.charAt(0).toUpperCase() + t.slice(1);
   function motivoCurto(m) {
     if (!m) return null;
@@ -542,7 +542,7 @@
     const proximas = { n: r.proximas.length, top: [...r.proximas].sort((a, b) => b.falta - a.falta).slice(0, LIM.proximas).sort((a, b) => a.fim < b.fim ? -1 : 1) };
 
     // Fotos do report (regra 17/10/2026), janela = últimos 30 dias até o corte:
-    // · 1 foto por serviço em execução; as 4 do mesmo serviço só quando ele é o único citado nos RDOs da janela;
+    // · 1 foto por serviço em execução; as LIM.fotos do mesmo serviço só quando ele é o único citado nos RDOs da janela;
     // · linha do tempo: foto 1 = a mais antiga do período, última foto = a mais recente (pela data do RDO).
     // Serviço da foto = EAP/legenda do RDO; sem legenda, cada RDO conta como um registro distinto.
     const fotos = (() => {

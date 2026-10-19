@@ -1,5 +1,5 @@
 
-/* ===== Report — sistema visual (rev. 18/10/2026) =====
+/* ===== Report — sistema visual (rev. 19/10/2026: quadros com fundo na Curva S/Marcos/Atenção, ícones de seção, até 12 fotos) =====
    Tipografia: escala modular 1,25 (terça maior) sobre 12 px → 12 · 15 · 19 · 24 · 30 (+13 px para texto de tabela, +11 px para eixos).
    Espaçamento: grade de 8 pt (4 · 8 · 16 · 24 · 32 · 40). Alinhamento: texto à esquerda, números à direita e tabulares.
    Notação dos gráficos no padrão IBCS: realizado = cheio escuro · planejado = contorno/linha azul · base = tracejado claro;
@@ -29,9 +29,11 @@
 
 /* Nível 1 — identificação */
 .rx-hd { padding: var(--sp-5) var(--sp-6) var(--sp-4); border-bottom: 1px solid var(--rx-line); display: grid; gap: var(--sp-4); }
+.rx-hd-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); }
 .rx-brand { display: flex; align-items: center; gap: var(--sp-3); color: var(--rx-muted); font-size: var(--fs-12); font-weight: 500; line-height: 1; }
 .rx-brand img { height: 18px; display: block; }
 .rx-brand i { width: 1px; height: 14px; background: var(--rx-line); }
+.rx-hd-label { flex: none; font-size: var(--fs-11); line-height: 1.45; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--rx-faint); text-align: right; white-space: nowrap; }
 .rx-hd-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-4); align-items: end; }
 .rx-hd-id { display: grid; gap: var(--sp-2); min-width: 0; }
 .rx-hd h1 { margin: 0; font-size: var(--fs-30); line-height: 1.15; font-weight: 600; color: var(--rx-navy); letter-spacing: -.015em; text-transform: none; }
@@ -50,7 +52,10 @@
 
 /* Nível 2 — síntese: frase + cartões */
 .rx-top { display: grid; gap: var(--sp-4); }
-.rx-lead { margin: 0; font-size: var(--fs-15); line-height: 1.6; color: var(--rx-ink); max-width: 80ch; }
+.rx-lead { margin: 0; display: flex; align-items: flex-start; gap: 10px; padding: 12px var(--sp-3); background: var(--rx-bg); border: 1px solid var(--rx-line); border-radius: 8px; }
+.rx-lead p { margin: 0; font-size: var(--fs-12); line-height: 1.6; color: var(--rx-ink); }
+.rx-lead-ic { flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px; margin-top: 1px; color: var(--rx-blue); }
+.rx-lead-ic svg { width: 16px; height: 16px; }
 .rx-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-3); }
 .rx-card { position: relative; overflow: hidden; display: grid; grid-template-rows: auto auto 1fr; gap: var(--sp-2); align-content: start; min-width: 0;
   padding: 20px 20px var(--sp-3); background: #FFFFFF; border: 1px solid var(--rx-line); border-radius: 8px; box-shadow: 0 1px 2px rgba(16, 24, 40, .05); }
@@ -68,10 +73,18 @@
 .rx-pb-k { margin: 2px 0; }
 
 /* seções */
-.rx-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-6); align-items: start; }
+.rx-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
 .rx-s { display: grid; gap: var(--sp-3); align-content: start; min-width: 0; }
 .rx-s > h2 { margin: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); font-size: var(--fs-15); line-height: 1.3; font-weight: 600; color: var(--rx-navy); letter-spacing: 0; text-transform: none; padding-bottom: 10px; border-bottom: 1px solid var(--rx-line); }
 .rx-s > h2 em { margin-left: auto; font-style: normal; font-weight: 400; font-size: var(--fs-12); color: var(--rx-muted); }
+.rx-s > h2 .rx-see { appearance: none; background: none; border: 0; padding: 0; margin: 0; font: inherit; font-size: var(--fs-12); font-weight: 500; color: var(--rx-blue); cursor: pointer; }
+.rx-s > h2 .rx-see:hover { text-decoration: underline; }
+.rx-s > h2 .rx-ic { flex: none; display: inline-grid; place-items: center; width: 17px; height: 17px; color: var(--rx-blue); align-self: center; }
+.rx-s > h2 .rx-ic svg { width: 15px; height: 15px; }
+/* quadros com fundo: Curva S, Próximos marcos, Pontos de atenção */
+.rx-box { background: var(--rx-bg); border: 1px solid var(--rx-line); border-radius: 8px; padding: var(--sp-3) var(--sp-4) var(--sp-4); }
+.rx-box > h2 { border-bottom-color: var(--rx-line); }
+.rx-box.rx-alert { background: rgba(199, 115, 115, .07); border-color: rgba(199, 115, 115, .3); }
 
 /* gráfico combinado */
 .paper.exec .legend { font-size: var(--fs-12); color: var(--rx-ink); gap: 6px var(--sp-3); }
@@ -82,7 +95,7 @@
 .paper.exec .sw-base { background: repeating-linear-gradient(90deg, var(--rx-blue-2) 0 4px, transparent 4px 7px); height: 2px; }
 .sw-breal, .sw-bplan { display: inline-block; width: 9px; height: 10px; border-radius: 1.5px; }
 .sw-breal { background: var(--rx-navy, #1F3045); } .sw-bplan { background: #fff; box-shadow: inset 0 0 0 1.25px var(--rx-blue, #547CA5); }
-.paper.exec .chart .grid { stroke: var(--rx-line-2); }
+.paper.exec .chart .grid { stroke: var(--rx-line); }
 .paper.exec .chart .ax { fill: var(--rx-muted); font-size: var(--fs-11); }
 .paper.exec .chart .ax-t { fill: var(--rx-faint); }
 .paper.exec .chart .ax-strong { fill: var(--rx-navy); font-weight: 600; }
@@ -95,7 +108,7 @@
 .paper.exec .chart .cb-real.parcial { opacity: .35; }
 .paper.exec .chart .lbl { fill: var(--rx-blue); font-size: var(--fs-12); font-weight: 600; }
 .paper.exec .chart .lbl-real { fill: var(--rx-navy); font-size: var(--fs-13); }
-.paper.exec .chart .lbl, .paper.exec .chart .ax { paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; }
+.paper.exec .chart .lbl, .paper.exec .chart .ax { paint-order: stroke; stroke: var(--rx-bg); stroke-width: 3px; stroke-linejoin: round; }
 .chart .tip[hidden] { display: none; }
 .chart .tip .tip-g { margin-top: 4px; font-size: 11px; color: var(--muted); font-weight: 600; }
 
@@ -186,7 +199,7 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
   .rx-cards { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
   .rx-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; }
   .rx-fotos { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
-  .rx-s, .rx-card, .rx-av-r { break-inside: avoid; }
+  .rx-s, .rx-card, .rx-av-r, .rx-lead { break-inside: avoid; }
   .rx-card { box-shadow: none; }
-  .paper.exec, .rx-card::before, .rx-fa, .cb-real { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .paper.exec, .rx-card::before, .rx-fa, .cb-real, .rx-box, .rx-lead { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
