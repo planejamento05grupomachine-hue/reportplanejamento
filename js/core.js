@@ -20,6 +20,7 @@
     return (neg ? '−' : '') + i + (f ? ',' + f : '');
   }
   const pct = (v, d = 1) => v === null || v === undefined ? '—' : fmtNum(v * 100, d) + '%';
+  const moeda = (v, d = 0) => v === null || v === undefined ? '—' : 'R$ ' + fmtNum(v, d);
   const pp = (v, d = 1) => v === null || v === undefined ? '—' : (v > 0.00005 ? '+' : '') + fmtNum(v * 100, d) + ' p.p.';
   const dia = iso => new Date(iso + 'T12:00:00');
   const iso = d => d.toISOString().slice(0, 10);
@@ -51,6 +52,8 @@
   // ---------- semáforo ----------
   // IDP = realizado ÷ previsto na data de corte. Faixas configuráveis por obra.
   const FAIXAS = { ok: 0.95, atencao: 0.85 };
+  // Governança (ver GOVERNANCA.md): cadência semanal para dados físicos, mensal para financeiro.
+  const LIMIAR_DIAS_FISICO = 10, LIMIAR_DIAS_FINANCEIRO = 35;
   // Situação de prazo (gestão de projetos: índice de desempenho de prazo, IDP = realizado ÷ planejado).
   // Simétrica: a obra pode estar adiantada, em dia, em atenção ou atrasada. Faixas configuráveis por obra.
   function semaforo(idp, faixas = FAIXAS) {
@@ -337,6 +340,50 @@
       diasImpraticaveis: serie.filter(s => s.impraticavel).length, rdosPendentes: ate.filter(r => r.status !== 'aprovado').length };
   }
 
+  // ---------- financeiro / valor agregado ----------
+  // Motor paralelo ao físico (não altera calc()). Nomenclatura fixa de gestão de valor agregado
+  // — PV (valor planejado), EV (valor agregado/realizado), AC (custo real), BAC (valor do
+  // contrato), SPI = EV/PV, CPI = EV/AC, EAC = AC + (BAC−EV)/CPI. De onde vem cada termo: ver
+  // GOVERNANCA.md. CPI/EAC só existem quando há dado de custo (obra.custo); SPI não depende
+  // disso, porque PV/EV já vêm da Curva S financeira (Financeiro VA) do Prevision.
+  function serieFinanceira(obra) {
+    const fin = obra.financeiro && obra.financeiro.curva;
+    if (!fin || !fin.length) return null;
+    const ini = inicioCronograma(obra);
+    const antes = fin.filter(p => p.data <= ini).reduce((m, p) => Math.max(m, p.realizado || 0), 0);
+    return [{ data: ini, base: 0, previsto: 0, realizado: antes }, ...fin.filter(p => p.data > ini)];
+  }
+  // obra.custo: mesma forma de obra.curva ({ data, realizado } em R$ acumulado) — ainda sem
+  // fonte definida (pasta "custo" vazia); fica pronto para quando o arquivo existir.
+  function serieCusto(obra) {
+    const ini = inicioCronograma(obra);
+    const pts = (obra.custo || []).filter(p => p.data >= ini);
+    return pts.length ? pts : (obra.custo || []);
+  }
+  function calcFinanceiro(obra, corte) {
+    const pts = serieFinanceira(obra);
+    const resumo = obra.medicao && obra.medicao.resumo;
+    if (!pts && !resumo) return null;
+    const bac = resumo ? resumo.totalContrato : null;
+    const pv = pts ? interp(pts, 'previsto', corte) : null;
+    const baseVA = pts ? interp(pts, 'base', corte) : null;
+    const ev = pts ? interp(pts, 'realizado', corte) : null;
+    const custo = serieCusto(obra);
+    const ac = custo.length ? interp(custo, 'realizado', corte) : null;
+    const spi = pv > 0 ? ev / pv : null;
+    const cpi = ac > 0 ? ev / ac : null;
+    const eac = cpi && bac !== null ? ac + (bac - ev) / cpi : null;
+    const vac = eac !== null ? bac - eac : null;
+    const sem = spi !== null ? semaforo(spi, obra.faixas) : { k: 'neutro', t: 'Sem dados', e: 'sem-dados' };
+    // normaliza PV/EV/base para fração do contrato (BAC), ou do próprio total planejado da curva
+    // sem BAC, para reaproveitar os gráficos da Curva S física (eixo 0–100%)
+    const base100 = bac || (pts ? pts.at(-1).previsto : null) || 1;
+    const ptsFrac = pts ? pts.map(p => ({ data: p.data, base: (p.base || 0) / base100, previsto: (p.previsto || 0) / base100, realizado: (p.realizado || 0) / base100 })) : null;
+    return { pv, ev, baseVA, bac, ac, spi, cpi, eac, vac, sem, pts: ptsFrac, pontos$: pts,
+      pvFrac: pv !== null ? pv / base100 : null, evFrac: ev !== null ? ev / base100 : null, baseFrac: baseVA !== null ? baseVA / base100 : null,
+      faturamento: resumo ? { contratual: resumo.totalContrato, medido: resumo.medidoAcumulado, saldo: resumo.saldo, ultimaMedicao: resumo.ultimaMedicao } : null };
+  }
+
   // ---------- narrativa automática (painel e report) ----------
   function narrativa(obra, r) {
     const out = [];
@@ -428,6 +475,16 @@
       const sem = cron.linhas.length - lig;
       if (sem) al.push({ k: 'av', t: `${sem} de ${cron.linhas.length} linhas do Cronograma não foram ligadas ao Progresso por tarefas (posição na árvore ou nome diferentes); essas linhas ficam fora da leitura por pacote.` });
       if (eapDif) al.push({ k: 'info', t: `${eapDif} linhas têm código EAP diferente entre o Cronograma e o Progresso por tarefas (o Prevision renumera a EAP). A ligação é feita pela posição na árvore e pelo nome, nunca só pelo código.` });
+    }
+    // governança (GOVERNANCA.md): cadência semanal para dados físicos, mensal para financeiro
+    const hojeIso = iso(new Date());
+    if (obra.dataCorte) {
+      const atraso = diff(obra.dataCorte, hojeIso);
+      if (atraso > LIMIAR_DIAS_FISICO) al.push({ k: 'av', t: `Dados físicos desatualizados: a última carga é de ${dBR(obra.dataCorte)}, ${atraso} dias atrás (governança: atualização semanal).` });
+    }
+    if (obra.dataCorteFinanceiro) {
+      const atrasoFin = diff(obra.dataCorteFinanceiro, hojeIso);
+      if (atrasoFin > LIMIAR_DIAS_FINANCEIRO) al.push({ k: 'av', t: `Dados financeiros desatualizados: a última carga é de ${dBR(obra.dataCorteFinanceiro)}, ${atrasoFin} dias atrás (governança: atualização mensal).` });
     }
     return { fontes, alertas: al.sort((a, b) => (a.k === 'av' ? 0 : 1) - (b.k === 'av' ? 0 : 1)) };
   }
@@ -797,6 +854,7 @@
   }
 
   root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, diaSemana, diff, addDias, nomeBonito, semaforo, FAIXAS,
-    calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, nomeCurto, narrativa, resumoExecutivo, auditoria, marcos, motivoCurto, chartCurvaS, chartMensal, chartCombo, chartEfetivo, interp, fracTempo };
+    calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, nomeCurto, narrativa, resumoExecutivo, auditoria, marcos, motivoCurto, chartCurvaS, chartMensal, chartCombo, chartEfetivo, interp, fracTempo,
+    calcFinanceiro, moeda };
 })(typeof window !== 'undefined' ? window : globalThis);
 

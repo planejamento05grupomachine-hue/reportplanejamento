@@ -5,7 +5,7 @@
 // ============================================================
 (function () {
   'use strict';
-  const { esc, fmtNum, pct, pp, dBR, dCurto, mesLongo, diaSemana, diff, nomeBonito } = Core;
+  const { esc, fmtNum, pct, pp, dBR, dCurto, mesLongo, diaSemana, diff, nomeBonito, moeda } = Core;
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
@@ -16,7 +16,7 @@
   const EMAIL = API.emailAcesso || 'planejamento05@grupomachine.com.br';
   const iniciais = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
   const temDados = o => !!(o && !o.semDados && o.curva && o.curva.length && o.tarefas && o.tarefas.length);
-  const S = { user: null, view: 'login', carregando: true, loginMsg: null, loginErro: null, obraId: null, filtroTarefas: 'atrasada', verTodas: false, abertos: {}, menu: false, imp: null, fotoRdo: null, fotosTodas: false, lb: null, modal: null, ocupado: null, editAcesso: null };
+  const S = { user: null, view: 'login', carregando: true, loginMsg: null, loginErro: null, obraId: null, filtroTarefas: 'atrasada', verTodas: false, abertos: {}, menu: false, imp: null, impModo: 'fisico', fotoRdo: null, fotosTodas: false, lb: null, modal: null, ocupado: null, editAcesso: null };
   const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* sem armazenamento: segue sem lembrar */ } };
 
@@ -338,6 +338,19 @@
       <div class="legend"><span><i class="sw sw-prev" style="height:8px;width:8px"></i>Previsto no mês</span><span><i class="sw sw-real" style="height:8px;width:8px"></i>Realizado no mês</span><span class="note">* mês do corte, parcial até ${dCurto(r.corte)}</span></div>
       <div class="chart" id="ch-mensal"></div>`, true);
 
+    const rf = Core.calcFinanceiro(o, r.corte);
+    const financeiro = rf ? sec('financeiro', 'Financeiro — Valor Agregado', rf.spi !== null ? `SPI ${fmtNum(rf.spi, 2)}` : (rf.faturamento ? moeda(rf.faturamento.medido) : ''), `
+      <p class="sec-lead">Valor agregado (EV) e valor planejado (PV) da Curva S financeira do Prevision, contra o valor do contrato apurado no Controle de Medição. Nomenclatura e fontes: ver GOVERNANCA.md.</p>
+      <div class="kpis">
+        ${rf.faturamento ? `<div class="kpi"><span>Valor do contrato</span><b>${moeda(rf.faturamento.contratual)}</b><small>BAC</small></div>
+        <div class="kpi"><span>Medido acumulado</span><b>${moeda(rf.faturamento.medido)}</b><small>última medição ${esc(rf.faturamento.ultimaMedicao || '—')}</small></div>
+        <div class="kpi"><span>Saldo de contrato</span><b>${moeda(rf.faturamento.saldo)}</b><small>a medir</small></div>` : ''}
+        <div class="kpi"><span>SPI</span><b>${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'}</b><small>EV ÷ PV</small></div>
+        <div class="kpi"><span>CPI</span><b>${rf.cpi !== null ? fmtNum(rf.cpi, 2) : '—'}</b><small>${rf.cpi !== null ? 'EV ÷ AC' : 'sem dado de custo real (AC)'}</small></div>
+      </div>
+      ${rf.pts ? `<div class="legend"><span><i class="sw sw-real"></i>Realizado (EV)</span><span><i class="sw sw-prev"></i>Previsto (PV)</span><span><i class="sw sw-base"></i>Base</span><span class="note">% do valor do contrato</span></div>
+      <div class="chart" id="ch-fin"></div>` : '<p class="sub" style="margin:0">Ainda sem Curva S financeira (Financeiro VA) carregada.</p>'}`) : '';
+
     const frentes = !r.pesosOk && r.crono && r.crono.completo ? sec('frentes', 'Avanço por frente', `${Core.atividades(r).length} frentes da EAP`, `
       <p class="sec-lead">Avanço de cada atividade no cronograma do Prevision: barra = realizado da atividade; traço = planejado na data. Farol = realizado ÷ planejado. Toque numa frente para abrir as etapas.</p>
       ${ehAdmin() ? `<div class="note-box">O Progresso por tarefas veio filtrado por período (raiz ${pct(r.pesoRaiz, 2)}), então o peso de cada frente na obra não aparece. Exporte sem filtro de datas para ter os pesos.</div>` : ''}
@@ -364,7 +377,7 @@
         <p class="sub">${esc(o.cliente)} · contratante ${esc(o.contratante)}</p>
         <div class="meta">${o.contrato ? `<span>Contrato <b>${esc(o.contrato)}</b></span>` : ''}<span>Prazo contratual <b>${dBR(P.contrIni)} a ${dBR(P.contrFim)}</b> (${P.total} dias${P.contrFonte ? ' · ' + P.contrFonte : ''})</span><span>Decorridos <b>${P.decorrido}</b> · a vencer <b>${P.aVencer}</b></span>${o.responsavel ? `<span>Responsável <b>${esc(o.responsavel)}</b></span>` : ''}</div>
       </div>${ehAdmin() ? '<div class="bar-actions no-print"><button class="btn sec2" data-go="editar-obra">Editar cadastro</button></div>' : ''}</div>
-      ${situacao}${cronoSec}${curva}${mensal}${frentes}${tarefas}${campo}${fotosSec}${restr}${conf}`;
+      ${situacao}${cronoSec}${curva}${mensal}${financeiro}${frentes}${tarefas}${campo}${fotosSec}${restr}${conf}`;
   }
 
   // Admin: o que o cliente está vendo e o botão de publicar
@@ -549,49 +562,67 @@
   }
 
   // ---------- alimentar ----------
-  const TIPOS = [
+  // Dados financeiros (Financeiro VA) vêm nos mesmos arquivos e cabeçalhos do Prevision que os
+  // físicos — a única forma confiável de separar é o usuário dizer qual lote está enviando.
+  const TIPOS_FISICO = [
     ['curva', 'Curva S', 'Prevision · .xls'],
     ['mensal', 'Progresso mensal', 'Prevision · .xls'],
     ['tarefas', 'Progresso por tarefas', 'Prevision · .xlsx'],
     ['cronograma', 'Cronograma', 'Prevision · .xlsx'],
     ['rdos', 'RDOs do período', 'PDF compilado'],
   ];
+  const TIPOS_FINANCEIRO = [
+    ['financeiro.curva', 'Curva S financeira (VA)', 'Prevision · .xls'],
+    ['financeiro.mensal', 'Progresso mensal financeiro', 'Prevision · .xls'],
+    ['financeiro.tarefas', 'Progresso por tarefas financeiro', 'Prevision · .xlsx'],
+  ];
+  const TIPOS_CONTRATO = [['medicao', 'Controle de Medição', 'Machine · .xlsx']];
+  const TIPOS = [...TIPOS_FISICO, ...TIPOS_FINANCEIRO, ...TIPOS_CONTRATO];
   function viewAlimentar() {
     if (!DB.obras.length) return `<div><div class="kicker">Administração</div><h1 class="h1">Alimentar dados</h1></div><div class="card card-pad"><p class="sub" style="margin:0">Cadastre a obra antes de enviar os arquivos.</p><div class="bar-actions" style="margin-top:12px"><button class="btn" data-go="nova-obra">Cadastrar obra</button></div></div>`;
     const o = DB.obras.find(x => x.id === (S.obraId || DB.obras[0].id)) || DB.obras[0];
     const imp = S.imp || { arquivos: [], dados: {}, avisos: {} };
-    const tem = k => imp.dados[k];
+    const modo = S.impModo || 'fisico';
+    const val = k => k.includes('.') ? ((imp.dados[k.split('.')[0]] || {})[k.split('.')[1]]) : imp.dados[k];
+    const tiposMostrar = modo === 'financeiro' ? [...TIPOS_FINANCEIRO, ...TIPOS_CONTRATO] : [...TIPOS_FISICO, ...TIPOS_CONTRATO];
     return `
       <div><div class="kicker">Administração</div><h1 class="h1">Alimentar dados</h1>
-      <p class="sub">Envie as exportações do Prevision (Curva S, Progresso mensal, Progresso por tarefas e Cronograma) e o PDF dos diários de obra dos últimos 30 dias exportado da plataforma RDO. O painel reconhece cada arquivo, confere os números e grava a carga como rascunho.</p></div>
+      <p class="sub">Envie as exportações do Prevision (Curva S, Progresso mensal, Progresso por tarefas e Cronograma), o PDF dos diários de obra dos últimos 30 dias e, mensalmente, o Controle de Medição e a Curva S financeira (Valor Agregado). O painel reconhece cada arquivo, confere os números e grava a carga como rascunho.</p></div>
       <div class="card card-pad steps">
-        <div class="step-t">1 · Obra</div>
+        <div class="step-t">1 · Tipo de dados</div>
+        <div class="seg" role="group" aria-label="Tipo de dados do lote">
+          <button data-modo="fisico" aria-pressed="${modo === 'fisico'}">Dados físicos<b>%</b></button>
+          <button data-modo="financeiro" aria-pressed="${modo === 'financeiro'}">Dados financeiros<b>Valor Agregado</b></button>
+        </div>
+        <small class="hint">Escolha antes de enviar: o cabeçalho das planilhas é igual ao físico, só muda a pasta de exportação do Prevision ("Financeiro VA"). O Controle de Medição vale para os dois.</small>
+        <div class="step-t">2 · Obra</div>
         <div class="field" style="max-width:420px"><select class="inp" id="imp-obra">${DB.obras.map(x => `<option value="${x.id}" ${x.id === o.id ? 'selected' : ''}>${esc(x.codigo)} · ${esc(x.nome)}</option>`).join('')}</select></div>
-        <div class="step-t">2 · Arquivos</div>
-        <div class="tipos">${TIPOS.map(([k, t, s]) => `<div class="tipo ${tem(k) ? 'on' : ''}"><b>${t}</b><small>${s}</small><div class="st">${tem(k) ? '✓ ' + resumoTipo(k, imp.dados[k]) : 'aguardando'}</div></div>`).join('')}</div>
+        <div class="step-t">3 · Arquivos</div>
+        <div class="tipos">${tiposMostrar.map(([k, t, s]) => `<div class="tipo ${val(k) ? 'on' : ''}"><b>${t}</b><small>${s}</small><div class="st">${val(k) ? '✓ ' + resumoTipo(k, val(k)) : 'aguardando'}</div></div>`).join('')}</div>
         <label class="drop" id="drop" for="imp-file">
           ${IC.up}<b>Toque para escolher ou arraste os arquivos aqui</b>
-          <small>Planilhas do Prevision (.xls/.xlsx) e o PDF dos RDOs (últimos 30 dias). Podem ser enviados todos de uma vez.</small>
+          <small>Planilhas do Prevision (.xls/.xlsx), o Controle de Medição (.xlsx) e o PDF dos RDOs (últimos 30 dias). Podem ser enviados todos de uma vez.</small>
         </label>
         <input type="file" id="imp-file" multiple accept=".xls,.xlsx,.csv,.pdf" hidden>
         ${imp.arquivos.length ? `<div class="check">${imp.arquivos.map(a => `<div class="${a.erro ? 'er' : 'ok'}"><i>${a.erro ? '×' : '✓'}</i><span><b>${esc(a.nome)}</b> → ${a.erro ? esc(a.erro) : esc(a.tipoNome)}</span></div>`).join('')}</div>` : ''}
-        ${Object.keys(imp.dados).length ? `<div class="step-t">3 · Conferência</div><div class="check">${conferenciaImport(o, imp).map(([k, t]) => `<div class="${k}"><i>${k === 'ok' ? '✓' : k === 'av' ? '!' : '×'}</i><span>${t}</span></div>`).join('')}</div>
+        ${Object.keys(imp.dados).length ? `<div class="step-t">4 · Conferência</div><div class="check">${conferenciaImport(o, imp).map(([k, t]) => `<div class="${k}"><i>${k === 'ok' ? '✓' : k === 'av' ? '!' : '×'}</i><span>${t}</span></div>`).join('')}</div>
           <div class="field" style="max-width:260px"><label for="imp-corte">Data de corte</label><input class="inp" type="date" id="imp-corte" value="${imp.corte || o.dataCorte}"></div>
-          <div class="step-t">4 · Atualizar</div>
+          <div class="step-t">5 · Atualizar</div>
           <div class="bar-actions"><button class="btn" id="imp-aplicar">Salvar rascunho da obra ${esc(o.codigo)}</button><button class="btn sec2" id="imp-limpar">Descartar</button></div>
           <div class="note-box">A carga é gravada como <b>rascunho</b>: Planejamento e Diretoria veem em seguida; o cliente só depois de <b>Publicar para o cliente</b> na tela da obra.</div>` : ''}
       </div>
       <div class="card card-pad steps">
         <div class="step-t">Último carregamento</div>
-        <div class="meta" style="margin:0"><span>Obra <b>${esc(o.codigo)}</b></span><span>Data de corte <b>${dBR(o.dataCorte)}</b></span><span>Publicado ao cliente até <b>${dBR(o.publicadoAte)}</b></span><span>${(o.tarefas || []).length} tarefas · ${(o.curva || []).length} pontos de curva · ${(o.rdos || []).length} RDOs</span></div>
+        <div class="meta" style="margin:0"><span>Obra <b>${esc(o.codigo)}</b></span><span>Data de corte <b>${dBR(o.dataCorte)}</b></span><span>Financeiro atualizado em <b>${o.dataCorteFinanceiro ? dBR(o.dataCorteFinanceiro) : '—'}</b></span><span>Publicado ao cliente até <b>${dBR(o.publicadoAte)}</b></span><span>${(o.tarefas || []).length} tarefas · ${(o.curva || []).length} pontos de curva · ${(o.rdos || []).length} RDOs</span></div>
       </div>`;
   }
   function resumoTipo(k, d) {
-    if (k === 'curva') return `${d.length} meses`;
-    if (k === 'mensal') return `${d.length} meses`;
-    if (k === 'tarefas') return `${d.length} tarefas`;
+    if (k === 'curva' || k === 'financeiro.curva') return `${d.length} meses`;
+    if (k === 'mensal' || k === 'financeiro.mensal') return `${d.length} meses`;
+    if (k === 'tarefas' || k === 'financeiro.tarefas') return `${d.length} tarefas`;
     if (k === 'cronograma') return `${d.length} linhas`;
     if (k === 'rdos') return `${d.length} RDOs${S.imp && S.imp.dados.fotos ? ' · ' + S.imp.dados.fotos.length + ' fotos' : ''}`;
+    if (k === 'medicao') return `${d.resumo && d.resumo.totalContrato ? moeda(d.resumo.totalContrato) + ' · ' : ''}${d.boletins.length} boletim${d.boletins.length === 1 ? '' : 'ns'}`;
     return '';
   }
   // Código da obra pelo nome do arquivo ("Curva S - 207 - ...", "Cronograma_-_208_-_...") ou pelo nome da raiz ("208 - Fibrasa ...")
@@ -707,13 +738,29 @@
           S.imp.dados.rdos = rdos; S.imp.dados.fotos = fotos; reg.tipoNome = `RDOs (${rdos.length}) e ${fotos.length} fotos`;
           S.imp.nomes = { ...(S.imp.nomes || {}), rdos: f.name };
         } else {
-          const linhas = Parsers.lerLinhas(window.XLSX, buf);
-          const tipo = Parsers.tipoPlanilha(linhas);
-          if (!tipo) throw new Error('não reconheci as colunas (esperado: Curva S, Progresso mensal ou Progresso por tarefas do Prevision)');
-          S.imp.dados[tipo] = tipo === 'curva' ? Parsers.parseCurva(linhas) : tipo === 'mensal' ? Parsers.parseMensal(linhas) : tipo === 'cronograma' ? Parsers.parseCronograma(linhas) : Parsers.parseTarefas(linhas);
-          if (tipo === 'cronograma') S.imp.arqCrono = f.name;
-          S.imp.nomes = { ...(S.imp.nomes || {}), [tipo]: f.name };
-          reg.tipoNome = TIPOS.find(t => t[0] === tipo)[1];
+          const wb = Parsers.wbDe(window.XLSX, buf);
+          if (Parsers.ehMedicao(wb)) {
+            S.imp.dados.medicao = Parsers.parseMedicaoContrato(window.XLSX, wb);
+            S.imp.nomes = { ...(S.imp.nomes || {}), medicao: f.name };
+            reg.tipoNome = 'Controle de Medição';
+          } else {
+            const linhas = Parsers.linhasDaAba(window.XLSX, wb, wb.SheetNames[0]);
+            const tipo = Parsers.tipoPlanilha(linhas);
+            if (!tipo) throw new Error('não reconheci as colunas (esperado: Curva S, Progresso mensal, Progresso por tarefas ou Cronograma do Prevision)');
+            const dado = tipo === 'curva' ? Parsers.parseCurva(linhas) : tipo === 'mensal' ? Parsers.parseMensal(linhas) : tipo === 'cronograma' ? Parsers.parseCronograma(linhas) : Parsers.parseTarefas(linhas);
+            if ((S.impModo || 'fisico') === 'financeiro' && tipo !== 'cronograma') {
+              S.imp.dados.financeiro = S.imp.dados.financeiro || {};
+              S.imp.dados.financeiro[tipo] = dado;
+              const chaveFin = 'financeiro.' + tipo;
+              S.imp.nomes = { ...(S.imp.nomes || {}), [chaveFin]: f.name };
+              reg.tipoNome = TIPOS.find(t => t[0] === chaveFin)[1];
+            } else {
+              S.imp.dados[tipo] = dado;
+              if (tipo === 'cronograma') S.imp.arqCrono = f.name;
+              S.imp.nomes = { ...(S.imp.nomes || {}), [tipo]: f.name };
+              reg.tipoNome = TIPOS.find(t => t[0] === tipo)[1];
+            }
+          }
         }
       } catch (e) { reg.erro = e.message; }
       S.imp.arquivos = S.imp.arquivos.filter(a => a.nome !== reg.nome).concat(reg);
@@ -936,6 +983,16 @@
     const marcosSec = `<section class="rx-s rx-box"><h2><i class="rx-ic">${IC.rflag}</i>Próximos marcos<em><button class="rx-see" type="button" data-go="obra">Ver cronograma →</button></em></h2>
               <ul class="rx-ms">${X.marcos.lista.slice(0, 4).map(m => `<li class="${m.situacao}"><span class="rx-ms-d">${m.data ? dCurto(m.data) : 'a definir'}</span><span class="rx-ms-n">${m.codigo ? `<em>${esc(m.codigo)}</em> ` : ''}${esc(m.nome)}${m.interface ? ' <i title="Interface com o cliente">cliente</i>' : ''}</span><span class="rx-ms-v ${m.slip > 0 ? 'neg' : ''}">${m.situacao === 'vencido' ? 'vencido' : m.slip ? dias(m.slip) : ''}</span></li>`).join('')}${fimMs}</ul>
             </section>`;
+    const rf = Core.calcFinanceiro(o, r.corte);
+    const financeiroSec = rf ? `<section class="rx-s rx-box"><h2><i class="rx-ic">${IC.search}</i>Valor Agregado<em>SPI ${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'} · CPI ${rf.cpi !== null ? fmtNum(rf.cpi, 2) : 'sem custo'}</em></h2>
+              <div class="rx-cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+                ${rf.faturamento ? `<div class="rx-card ac-base"><small>Valor do contrato</small><b class="rx-card-v">${moeda(rf.faturamento.contratual)}</b><span class="rx-card-s">BAC</span></div>
+                <div class="rx-card ac-plan"><small>Medido acumulado</small><b class="rx-card-v">${moeda(rf.faturamento.medido)}</b><span class="rx-card-s">saldo ${moeda(rf.faturamento.saldo)}</span></div>` : ''}
+                <div class="rx-card ac-real"><small>SPI (EV ÷ PV)</small><b class="rx-card-v">${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'}</b><span class="rx-card-s">1,00 = em linha com o plano</span></div>
+              </div>
+              ${rf.pts ? `<div class="legend rx-leg" style="margin-top:8px"><span><i class="sw sw-real"></i>Realizado (EV)</span><span><i class="sw sw-prev"></i>Previsto (PV)</span><span><i class="sw sw-base"></i>Base</span><span class="note">% do valor do contrato</span></div>
+              <div class="chart" id="ch-fin-r"></div>` : ''}
+            </section>` : '';
     const corta = (t, n) => (t || '').length > n ? t.slice(0, n - 3).replace(/\s+\S*$/, '') + '…' : (t || '');
     const temCritico = X.atencao.some(a => /paralis|atras/i.test(a.tag));
     const atencaoSec = X.atencao.length ? `<section class="rx-s rx-box${temCritico ? ' rx-alert' : ''}"><h2><i class="rx-ic">${IC.alert}</i>Pontos de atenção${X.atencaoMais ? `<em>+${X.atencaoMais} na aba Obra</em>` : ''}<em><button class="rx-see" type="button" data-go="obra">Ver todos →</button></em></h2>
@@ -973,6 +1030,8 @@
               <span class="rx-leg-g">No mês</span><span><i class="sw sw-breal"></i>Realizado</span><span><i class="sw sw-bplan"></i>Planejado</span><span class="note">${Core.mesCurto(r.corte)} parcial até ${dCurto(r.corte)}</span></div>
             <div class="chart" id="ch-combo-r"></div>
           </section>
+
+          ${financeiroSec}
 
           <div class="rx-row half">${marcosSec}${atencaoSec}</div>
 
@@ -1022,6 +1081,10 @@
     const el2 = $('#ch-mensal'); if (el2 && el2.closest('details').open) Core.chartMensal(el2, o, r);
     const el3 = $('#ch-efetivo'); if (el3 && r.campo && el3.closest('details').open) Core.chartEfetivo(el3, r.campo);
     const el4 = $('#ch-combo-r'); if (el4) Core.chartCombo(el4, o, r);
+    const rf = Core.calcFinanceiro(o, r.corte);
+    const rFin = rf && rf.pts ? { pts: rf.pts, corte: r.corte, real: rf.evFrac, prevCorte: rf.pvFrac, baseCorte: rf.baseFrac, desvio: (rf.evFrac || 0) - (rf.pvFrac || 0) } : null;
+    const el5 = $('#ch-fin'); if (el5 && rFin && el5.closest('details').open) Core.chartCurvaS(el5, o, rFin);
+    const el6 = $('#ch-fin-r'); if (el6 && rFin) Core.chartCurvaS(el6, o, rFin, { compacto: true });
   }
 
   let tt;
@@ -1159,6 +1222,7 @@
     $$('details.rx-av-n').forEach(d => d.addEventListener('toggle', () => { S.abertos[d.dataset.k] = d.open; }));
     $$('[data-abre]').forEach(b => b.onclick = () => { const id = b.dataset.abre; S.abertos[id] = !S.abertos[id]; render(); });
     $$('[data-filtro]').forEach(b => b.onclick = () => { S.filtroTarefas = b.dataset.filtro; S.verTodas = false; render(); });
+    $$('[data-modo]').forEach(b => b.onclick = () => { S.impModo = b.dataset.modo; render(); });
     $$('[data-vertodas]').forEach(b => b.onclick = () => { S.verTodas = !S.verTodas; render(); });
     const fi = $('#imp-file'); if (fi) fi.onchange = () => { if (fi.files.length) lerArquivos([...fi.files]); };
     const dr = $('#drop');
