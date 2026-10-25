@@ -35,7 +35,9 @@ trocadas e os dados recifrados. Depois, **Publicação → Compactar histórico*
 - **Obra** — situação, cronograma, Curva S, avanço por mês, valor agregado, frentes, tarefas, campo (RDO), fotos,
   mapa de avanço e paralisações.
 - **Report** — folhas A4 paisagem para cliente e diretoria (ver item 6 da rotina).
-- **Manual do RDO** (menu da conta, uso interno) — padrão de preenchimento do diário de obra.
+- **Manual de alimentação** (menu da conta, uso interno) — padrão de cada documento que atualiza o painel (cadastro,
+  Cronograma, Progresso por tarefas, Curva S, Progresso mensal/semanal, RDO, plantas do mapa, Curva S financeira e
+  Controle de Medição): de onde vem, quando enviar, como gerar, as colunas lidas e quanto do padrão cada obra cumpre hoje.
 
 ## Rotina do administrador
 
@@ -59,8 +61,9 @@ trocadas e os dados recifrados. Depois, **Publicação → Compactar histórico*
    mapa, ou obra sem mapa, em grade de 12 por folha) e **Mapa de avanço** (uma ou duas plantas por folha).
    Com espaço sobrando, as etapas do avanço por atividade abrem sozinhas; as que não cabem seguem numa folha de
    continuação. Listas longas mostram os primeiros itens; o aviso "+N na aba Obra" aparece só na tela, não no PDF.
-   O **Manual do RDO** (menu da conta, uso interno) traz o padrão de preenchimento do diário e mede, nos RDOs carregados,
-   quanto de cada campo cada obra preenche, com exemplos da obra de referência.
+   O **Manual de alimentação** (menu da conta, uso interno) traz a rotina semanal e mensal, o padrão de cada documento e
+   a situação de cada obra (quanto do padrão aparece na carga, datas da última carga e da posição publicada), com a obra
+   de referência de cada item e exemplos reais do RDO.
 7. **Acessos** — aprovado um pedido, crie o acesso: o painel gera a senha e prepara o e-mail de envio.
 
 Cada gravação vira um commit neste repositório; o site atualiza em cerca de um minuto.

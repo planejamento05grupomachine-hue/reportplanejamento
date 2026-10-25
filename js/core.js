@@ -495,6 +495,91 @@
     return melhor && { mapa: melhor.m, zonas: melhor.zonas };
   }
 
+  // ---------- qualidade dos documentos que alimentam o painel (manual interno) ----------
+  // Por documento, os itens do padrão que dá para medir na carga da obra: true/false, fração de 0 a 1 ou null (não se
+  // aplica). Documento não enviado fica null. O RDO tem medida própria (qualidadeRdo). r = calc(obra).
+  function qualidadeDocs(obra, r, fotos) {
+    const igual = (a, b, tol) => a !== null && a !== undefined && b !== null && b !== undefined && Math.abs(a - b) <= tol;
+    const fr = (arr, f) => arr.length ? arr.filter(f).length / arr.length : null;
+    const tem = v => !!String(v || '').trim();
+    const dig = s => String(s || '').replace(/\D/g, '');
+    const tar = obra.tarefas || [], tR = tar.find(t => t.nivel === 1);
+    const linhas = (obra.cronograma && obra.cronograma.linhas) || [], cR = linhas.find(l => l.nivel === 1);
+    const eaps = linhas.map(l => l.eap), folhas = linhas.filter(l => l.nivel > 1 && !eaps.some(e => e.startsWith(l.eap + '.')));
+    const porLinha = new Map(tar.map(t => [t.linha, t]));
+    const curva = obra.curva || [], mm = obra.mensal || [];
+    const pCurva = curva.find(x => x.data >= r.corte && x.realizado > 0) || [...curva].reverse().find(x => x.realizado > 0);
+    const fimObra = (cR && cR.fim) || (tR && tR.fim) || null;
+    const contrRdo = (obra.rdos || []).map(x => x.contrato).filter(Boolean).at(-1);
+    const pz = obra.prazoContratual || {};
+    // Progresso mensal × Curva S: base acumulada mês a mês (o semanal somado em meses reparte a semana da virada)
+    const confereCurva = () => {
+      if (!curva.length) return null;
+      const tol = mm.some(m => m.origem === 'semanal') ? 0.02 : 0.002;
+      let acc = 0, comp = 0, ruins = 0;
+      mm.forEach(m => { acc += m.base || 0; const p = curva.find(x => x.data.slice(0, 7) === m.mes); if (p) { comp++; if (Math.abs((p.base || 0) - acc) > tol) ruins++; } });
+      return comp ? !ruins : null;
+    };
+    const fin = obra.financeiro && obra.financeiro.curva, rf = fin && fin.length ? calcFinanceiro(obra, r.corte) : null;
+    const res = obra.medicao && obra.medicao.resumo, bol = (obra.medicao && obra.medicao.boletins) || [];
+    const meses = res ? res.meses || [] : [], iUlt = meses.map(m => (m.realizadoCT || m.medicaoRealizada || 0) > 0).lastIndexOf(true);
+    const medidos = iUlt >= 0 ? meses.slice(0, iUlt + 1) : [];
+    const nMedidos = medidos.filter(m => (m.realizadoCT || m.medicaoRealizada || 0) > 0).length;
+    const mapas = mapasDaObra(obra, r), zonas = mapas.flatMap(m => m.zonas);
+    const it = (t, v) => ({ t, v: v === undefined ? null : v });
+    return {
+      cadastro: [
+        it('Cliente, contratante e cidade', fr(['cliente', 'contratante', 'cidade'], k => tem(obra[k]))),
+        it('Endereço da obra', tem(obra.local)),
+        it('Responsável em campo', tem(obra.responsavel)),
+        it('Número do contrato', !!dig(obra.contrato)),
+        it('Contrato igual ao do RDO', dig(obra.contrato) && dig(contrRdo) ? dig(obra.contrato) === dig(contrRdo) : null),
+        it('Prazo contratual (início e fim)', !!(pz.inicio && pz.fim)),
+      ],
+      cronograma: linhas.length ? [
+        it('Árvore toda expandida', tar.length ? linhas.length >= tar.length * 0.9 : null),
+        it('Linha de base salva nas tarefas', fr(folhas, l => l.inicioBase && l.fimBase)),
+        it('Tarefas com predecessora', fr(folhas, l => l.predecessoras)),
+        it('Tarefas com responsável', fr(folhas, l => l.responsaveis)),
+        it('Linhas ligadas ao Progresso por tarefas', tar.length ? fr(linhas, l => { const t = porLinha.get(l.linha); return t && normNome(t.tarefa) === normNome(l.nome); }) : null),
+        it('Mesmo realizado do Progresso por tarefas', cR && tR ? igual(cR.realizado, tR.realizado, 0.001) : null),
+      ] : null,
+      tarefas: tR ? [
+        it('Sem filtro de período (raiz com 100% de peso)', r.pesosOk),
+        it('Linha de base da obra fecha em 100%', igual(tR.base, 1, 0.002)),
+        it('Mesmo realizado da Curva S', pCurva ? igual(pCurva.realizado, tR.realizado, 0.001) : null),
+      ] : null,
+      curva: curva.length ? [
+        it('Linha de base fecha em 100%', igual(curva.at(-1).base, 1, 0.001)),
+        it('Linha de base sempre crescente', curva.every((p, i) => !i || p.base >= curva[i - 1].base - 1e-6)),
+        it('Vai até o término da obra', fimObra ? curva.at(-1).data.slice(0, 7) >= fimObra.slice(0, 7) : null),
+      ] : null,
+      mensal: mm.length ? [
+        it('Linha de base soma 100%', igual(mm.reduce((s, m) => s + (m.base || 0), 0), 1, 0.002)),
+        it('Confere com a Curva S', confereCurva()),
+        it('Cobre o mês da data de corte', obra.dataCorte ? mm.some(m => m.mes === obra.dataCorte.slice(0, 7)) : null),
+      ] : null,
+      mapas: mapas.length ? [
+        it('Áreas demarcadas nas plantas', zonas.length > 0),
+        it('Áreas vinculadas a uma atividade', fr(zonas, z => z.auto)),
+        it('Fotos do período que acham a frente no mapa', fotos && fotos.length ? fr(fotos, f => fotoNoMapa(f, mapas)) : null),
+      ] : null,
+      financeiro: rf ? [
+        it('Curva na base do contrato (±15%)', rf.bac ? rf.escala === 'contrato' : null),
+        it('Linha de base sempre crescente', fin.every((p, i) => !i || (p.base || 0) >= (fin[i - 1].base || 0) - 0.01)),
+        it('Valor agregado registrado no mês do corte', rf.ev > 0),
+      ] : null,
+      medicao: res ? [
+        it('Valor total do contrato', res.totalContrato > 0),
+        it('Medido acumulado e saldo', res.medidoAcumulado !== null && res.saldo !== null),
+        it('Contrato e obra identificados', !!(res.contrato && res.obra)),
+        it('Meses com previsto e realizado', fr(medidos, m => m.previstoCT !== null && m.realizadoCT !== null)),
+        it('Situação de cada medição', fr(medidos, m => tem(m.status))),
+        it('Boletim por item de EAP de cada medição', nMedidos ? Math.min(1, bol.length / nMedidos) : null),
+      ] : null,
+    };
+  }
+
   // ---------- narrativa automática (painel e report) ----------
   function narrativa(obra, r) {
     const out = [];
@@ -966,6 +1051,6 @@
 
   root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, diaSemana, diff, addDias, semaforo, FAIXAS,
     calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, narrativa, resumoExecutivo, chartCurvaS, chartMensal, chartCombo, chartEfetivo,
-    LIM_FOTOS: LIM.fotos, calcFinanceiro, moeda, moedaCurta, vaNoReport, empresasFrente, qualidadeRdo, MAPA_ST, atividadesParaMapa, ptsZona, geoZona, mapasDaObra, fotoNoMapa };
+    LIM_FOTOS: LIM.fotos, calcFinanceiro, moeda, moedaCurta, vaNoReport, empresasFrente, qualidadeRdo, qualidadeDocs, LIMIAR_DIAS: { fisico: LIMIAR_DIAS_FISICO, financeiro: LIMIAR_DIAS_FINANCEIRO }, MAPA_ST, atividadesParaMapa, ptsZona, geoZona, mapasDaObra, fotoNoMapa };
 })(typeof window !== 'undefined' ? window : globalThis);
 
