@@ -43,9 +43,15 @@ trocadas e os dados recifrados. Depois, **Publicação → Compactar histórico*
    e ajustada canto a canto. Classifique cada uma em Executado, Executando ou A executar. Área vinculada a uma atividade
    do cronograma muda de cor sozinha a cada carga. O mapa vai para o rascunho.
 5. Confira na tela da obra e clique em **Publicar para o cliente**.
-6. **Report → Baixar PDF** gera o report em folhas A4 retrato (uma página do PDF por folha; os quadros não são cortados
-   entre folhas: o avanço por atividade só continua na folha seguinte se for maior que uma folha, e as fotos seguem por linha); o mapa de avanço sai em
-   folha retrato (uma planta) ou paisagem (duas plantas), conforme escolhido no mapa.
+6. **Report → Baixar PDF** gera o report em folhas A4 paisagem, uma página do PDF por folha, com o mesmo desenho em
+   todas as obras: **Visão geral** (indicadores, leitura do período, Curva S, marcos e pontos de atenção), **Andamento
+   das frentes** (avanço por atividade e campo no último RDO), **Valor agregado** (quando entra no report), **Registro
+   fotográfico** (uma foto do serviço e, ao lado, a planta da frente com a área do serviço destacada; fotos sem frente no
+   mapa, ou obra sem mapa, em grade de 12 por folha) e **Mapa de avanço** (uma ou duas plantas por folha).
+   Com espaço sobrando, as etapas do avanço por atividade abrem sozinhas; as que não cabem seguem numa folha de
+   continuação. Listas longas mostram os primeiros itens; o aviso "+N na aba Obra" aparece só na tela, não no PDF.
+   O **Manual do RDO** (menu da conta, uso interno) traz o padrão de preenchimento do diário e mede, nos RDOs carregados,
+   quanto de cada campo cada obra preenche, com exemplos da obra de referência.
 7. **Acessos** — aprovado um pedido, crie o acesso: o painel gera a senha e prepara o e-mail de envio.
 
 Cada gravação vira um commit neste repositório; o site atualiza em cerca de um minuto.

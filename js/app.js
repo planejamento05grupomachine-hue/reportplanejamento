@@ -62,7 +62,7 @@
   function shell(conteudo) {
     const u = S.user;
     const o = S.obraId ? DB.obras.find(x => x.id === S.obraId) : null;
-    const crumb = S.view === 'obra' && o ? `<b>${esc(o.codigo)} · ${esc(o.nome)}</b>` : S.view === 'alimentar' ? '<b>Alimentar dados</b>' : S.view === 'report' ? `<b>Report${o ? ' · ' + esc(o.codigo) : ''}</b>` : S.view === 'acessos' ? '<b>Acessos</b>' : S.view === 'nova-obra' ? '<b>Nova obra</b>' : S.view === 'editar-obra' ? '<b>Cadastro da obra</b>' : S.view === 'senha' ? '<b>Senha</b>' : S.view === 'github' ? '<b>Publicação</b>' : '<b>Portfólio</b>';
+    const crumb = S.view === 'obra' && o ? `<b>${esc(o.codigo)} · ${esc(o.nome)}</b>` : S.view === 'alimentar' ? '<b>Alimentar dados</b>' : S.view === 'report' ? `<b>Report${o ? ' · ' + esc(o.codigo) : ''}</b>` : S.view === 'acessos' ? '<b>Acessos</b>' : S.view === 'nova-obra' ? '<b>Nova obra</b>' : S.view === 'editar-obra' ? '<b>Cadastro da obra</b>' : S.view === 'senha' ? '<b>Senha</b>' : S.view === 'github' ? '<b>Publicação</b>' : S.view === 'manual' ? '<b>Manual do RDO</b>' : '<b>Portfólio</b>';
     const itens = [
       ['portfolio', 'Portfólio', IC.home, !ehCliente() || obrasDoUsuario().length > 1],
       ['obra', 'Obra', IC.obra, true],
@@ -71,7 +71,7 @@
       ['acessos', 'Acessos', IC.users, ehAdmin()],
     ].filter(i => i[3]);
     return `
-      <header class="mast"><div class="mast-in">
+      <header class="mast"><div class="mast-in${S.view === 'report' ? ' larga' : ''}">
         <img src="${LOGO}" alt="Machine · Realizações com base sólida">
         <span class="ttl">Painel de Obras</span><span class="crumb">${crumb}</span>
         <span class="sp"></span>
@@ -80,8 +80,8 @@
         <button class="avatar" id="bt-user" aria-haspopup="menu" aria-expanded="${S.menu}" aria-label="Conta: ${esc(u.nome)}">${esc(u.ini)}</button>
       </div></header>
       ${S.menu ? `<div class="menu" role="menu"><div class="who"><b>${esc(u.nome)}</b><small>${esc(u.rotulo)}</small></div>
-        ${ehAdmin() ? `<button role="menuitem" data-go="senha">Trocar minha senha</button><button role="menuitem" data-go="github">Publicação (GitHub)</button>` : `<a role="menuitem" href="${mailtoSenha(u.email)}">Solicitar nova senha</a>`}<button role="menuitem" data-act="sair">Sair</button></div>` : ''}
-      <main class="page" id="main">${conteudo}</main>
+        ${!ehCliente() ? '<button role="menuitem" data-go="manual">Manual do RDO (interno)</button>' : ''}${ehAdmin() ? `<button role="menuitem" data-go="senha">Trocar minha senha</button><button role="menuitem" data-go="github">Publicação (GitHub)</button>` : `<a role="menuitem" href="${mailtoSenha(u.email)}">Solicitar nova senha</a>`}<button role="menuitem" data-act="sair">Sair</button></div>` : ''}
+      <main class="page${S.view === 'report' ? ' larga' : ''}" id="main">${conteudo}</main>
       <nav class="nav" aria-label="Navegação principal"><div class="nav-in">
         ${itens.map(([k, t, ic]) => `<button data-go="${k}" ${S.view === k ? 'aria-current="page"' : ''}>${ic}<span>${t}</span></button>`).join('')}
       </div></nav>`;
@@ -427,7 +427,7 @@
     const terc = u.maoDeObra.filter(m => m.tipo === 'terceiros').reduce((s, m) => s + m.qtd, 0);
     const clima = u.clima.map(x => `${x.turno.toLowerCase()} ${x.tempo?.toLowerCase() || ''}`).join(' · ');
     const pratic = u.clima.every(x => /pratic/i.test(x.condicao || '') && !/impratic/i.test(x.condicao || ''));
-    const empresas = [...new Set(u.atividades.map(a => a.empresa).filter(Boolean))];
+    const empresas = [...new Set(u.atividades.flatMap(Core.empresasFrente))];
     return `
       <p class="sec-lead">Último relatório diário ${ehCliente() ? 'aprovado' : ''}: nº ${u.numero}, ${diaSemana(u.data)}, ${dBR(u.data)} · ${u.status === 'aprovado' ? 'aprovado' : 'em preenchimento'} · responsável ${esc(u.responsavel || '—')}.</p>
       <div class="rdo-head">
@@ -539,7 +539,8 @@
   // Planta da obra (imagem ou página de PDF) com áreas demarcadas: Executado · Executando · A executar.
   // Área vinculada a uma atividade do cronograma muda de cor sozinha a cada carga; sem vínculo, a situação é a escolhida aqui.
   // O mapa salvo vai para o rascunho da obra e entra no report (folha A4 retrato, ou duas plantas numa folha paisagem).
-  const PAGINA_MAPA = { retrato: 'A4 retrato · 1 planta por folha', paisagem: 'A4 paisagem · 2 plantas por folha' };
+  // chaves antigas mantidas (mapas já salvos); o report é todo em A4 paisagem
+  const PAGINA_MAPA = { retrato: '1 planta por folha', paisagem: '2 plantas por folha' };
   const novoId = () => Math.random().toString(36).slice(2, 9);
   function blocoMapas(base, o, r) {
     const ed = S.mapaEd;
@@ -576,7 +577,7 @@
     return `<div class="mp-editor steps">
       <div class="two"><div class="field"><label for="mp-titulo">Frente de serviço</label><input class="inp" id="mp-titulo" value="${esc(m.titulo || '')}" placeholder="ex.: Cobertura · Armazém Praia do Forte"></div>
         <div class="field"><label for="mp-pagina">Folha no report</label><select class="inp" id="mp-pagina">${Object.entries(PAGINA_MAPA).map(([k, t]) => `<option value="${k}" ${(m.pagina || 'retrato') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
-          ${m.img && m.w / m.h >= 1.6 && (m.pagina || 'retrato') === 'retrato' ? '<small class="hint">Planta larga: a folha paisagem (duas plantas, uma sobre a outra) aproveita melhor o papel.</small>' : ''}</div></div>
+          <small class="hint">O report é em A4 paisagem; com 2 plantas largas na mesma folha, elas ficam uma sobre a outra.</small></div></div>
       <div class="field"><label for="mp-arq">Planta (PDF ou imagem)</label><input class="inp" type="file" id="mp-arq" accept=".pdf,image/png,image/jpeg">
         ${ed.pdfPaginas > 1 ? `<div class="bar-actions" style="margin-top:6px"><label for="mp-pag" class="hint">O PDF tem ${ed.pdfPaginas} páginas. Página:</label><input class="inp" id="mp-pag" type="number" min="1" max="${ed.pdfPaginas}" value="${ed.pdfPagina || 1}" style="width:90px"><button class="btn sec2" type="button" id="mp-usapag">Usar esta página</button></div>` : ''}
         ${ed.lendo ? `<small class="hint" role="status">${esc(ed.lendo)}</small>` : ''}</div>
@@ -846,6 +847,7 @@
           <small>Planilhas do Prevision (.xls/.xlsx), o Controle de Medição (.xlsx) e o PDF dos RDOs (últimos 30 dias). Podem ser enviados todos de uma vez.</small>
         </label>
         <input type="file" id="imp-file" multiple accept=".xls,.xlsx,.csv,.pdf" hidden>
+        <small class="hint">O que cada RDO precisa trazer para o painel e o report: <button class="btn sec2" type="button" data-go="manual" style="padding:2px 10px;min-height:0">Manual do RDO</button></small>
         ${imp.arquivos.length ? `<div class="check">${imp.arquivos.map(a => `<div class="${a.erro ? 'er' : 'ok'}"><i>${a.erro ? '×' : '✓'}</i><span><b>${esc(a.nome)}</b> → ${a.erro ? esc(a.erro) : esc(a.tipoNome)}</span></div>`).join('')}</div>` : ''}
         ${Object.keys(imp.dados).length ? `<div class="step-t">4 · Conferência</div><div class="check">${conferenciaImport(o, imp).map(([k, t]) => `<div class="${k}"><i>${k === 'ok' ? '✓' : k === 'av' ? '!' : '×'}</i><span>${t}</span></div>`).join('')}</div>
           <div class="field" style="max-width:260px"><label for="imp-corte">Data de corte</label><input class="inp" type="date" id="imp-corte" value="${imp.corte || o.dataCorte}"></div>
@@ -1066,6 +1068,83 @@
     toast('Rascunho salvo. Confira e publique para o cliente.');
   }
 
+  // ---------- manual de preenchimento do RDO (uso interno: administrador e diretoria) ----------
+  // O padrão junta o que cada obra já faz melhor; a tabela mede, nos RDOs carregados, quanto de cada campo aparece, e
+  // os exemplos saem do diário da obra de referência de cada bloco (a que mais preenche aquele bloco).
+  const PADRAO_RDO = [
+    { b: 1, k: 'diario', t: 'Um RDO por dia útil' }, { b: 1, k: 'aprovado', t: 'RDO aprovado' },
+    { b: 2, k: 'clima', t: 'Tempo e condição nos dois turnos' },
+    { b: 3, k: 'maoDeObra', t: 'Funções e empresas com efetivo', n: true }, { b: 3, k: 'equipamentos', t: 'Equipamentos do dia' },
+    { b: 4, k: 'atividades', t: 'Atividades por RDO', n: true }, { b: 4, k: 'eap', t: 'Código EAP do cronograma' }, { b: 4, k: 'empresa', t: 'Empresa executora' },
+    { b: 4, k: 'local', t: 'Local ou área' }, { b: 4, k: 'pct', t: '% acumulado da atividade' }, { b: 4, k: 'descricao', t: 'O que foi feito no dia' },
+    { b: 4, k: 'motivo', t: 'Motivo da paralisação' },
+    { b: 5, k: 'fotos', t: 'Fotos por RDO', n: true }, { b: 5, k: 'fotoLegenda', t: 'Legenda com o serviço' }, { b: 5, k: 'fotoEap', t: 'Legenda com código EAP' },
+    { b: 5, k: 'fotoLocal', t: 'Legenda com local ou área' },
+  ];
+  const BLOCOS_RDO = {
+    1: { t: 'Cabeçalho e aprovação', usa: 'cobertura do período, efetivo por dia e leitura de campo (o cliente só vê RDO aprovado)',
+      faz: ['Um RDO para cada dia trabalhado, inclusive sábado com equipe em campo.', 'Responsável da obra identificado.', 'Aprovação até o dia útil seguinte: RDO em preenchimento não entra na posição do cliente.'] },
+    2: { t: 'Horário e clima', usa: 'dias impraticáveis no período e justificativa de prazo',
+      faz: ['Tempo (claro, nublado, chuvoso) e condição (praticável ou impraticável) na manhã e na tarde, em campos separados.', 'Índice pluviométrico quando chover.', 'Turno impraticável: citar nas atividades qual frente parou por chuva.'] },
+    3: { t: 'Mão de obra e equipamentos', usa: 'efetivo próprio × terceiros no quadro Campo e no gráfico de efetivo por dia',
+      faz: ['Própria por função; terceiros por empresa, sempre com o mesmo nome (o do contrato).', 'Quantidade real presente no dia. Empresa sem ninguém na obra fica fora da lista do dia (não lançar zero).', 'Equipamentos usados no dia, com quantidade.'] },
+    4: { t: 'Atividades', usa: 'frentes no último RDO, paralisações (pontos de atenção), situação das áreas e foto ao lado do mapa de avanço',
+      faz: ['Serviço com o código EAP e o nome iguais aos do cronograma (Prevision). Ex.: 01.02.08.01.01.01 - Fornecimento e Instalação de Gradil…', 'Empresa executora, com o mesmo nome usado na mão de obra.', 'Local e área (galpão, bloco, pavimento, eixo), com os mesmos nomes das áreas do mapa de avanço.', '% acumulado da atividade até o dia (não o avanço do dia).', 'Situação: Em andamento, Paralisada ou Concluída. Paralisada sempre com o motivo: o que falta e de quem depende.', 'Descrição do que foi feito no dia e a equipe, no formato "Empresa (n)".'] },
+    5: { t: 'Fotos', usa: 'registro fotográfico do report, que coloca cada foto ao lado da planta da frente (pela EAP ou pelo nome do serviço)',
+      faz: ['Pelo menos 2 fotos de cada atividade em andamento, mostrando o serviço (de preferência na horizontal).', 'Legenda com código EAP, serviço e local/área, iguais aos da atividade.', 'Fotos só de clima, de pessoas ou de documentos não contam como registro do serviço.'] },
+  };
+  function viewManual() {
+    const obras = DB.obras.map(b => { const o = visaoDaObra(b); return { b, o, q: Core.qualidadeRdo(o.rdos || [], b.fotosPendentes ? null : o.fotos || []) }; }).filter(x => x.q);
+    const val = (x, c) => x.q.v[c.k];
+    const fmt = (v, c) => v === null || v === undefined ? '—' : c.n ? fmtNum(v, 1) : pct(v, 0);
+    const cls = (v, c) => v === null || v === undefined ? '' : c.n ? '' : v >= 0.9 ? 'ok' : v >= 0.5 ? 'atencao' : 'critico';
+    // referência do item: a(s) obra(s) com o maior valor; sem referência quando todas empatam ou o melhor é quase nada
+    const melhor = c => { const vs = obras.map(x => val(x, c)).filter(v => v !== null && v !== undefined); const m = vs.length ? Math.max(...vs) : 0;
+      const top = obras.filter(x => val(x, c) === m); return m >= (c.n ? 0.5 : 0.05) && top.length < obras.length ? top : []; };
+    // obra de referência de um bloco: a que vence mais itens dele
+    const refBloco = b => { const cont = new Map(); PADRAO_RDO.filter(c => c.b === b).forEach(c => melhor(c).forEach(x => cont.set(x, (cont.get(x) || 0) + 1))); return [...cont].sort((a, z) => z[1] - a[1])[0]?.[0] || null; };
+    const ultimo = x => [...x.o.rdos].sort((a, z) => a.data < z.data ? -1 : 1).at(-1);
+    const nome = x => `Obra ${esc(x.b.codigo)}`;
+    const exemplo = b => {
+      const x = refBloco(b); if (!x) return '';
+      const cab = `<div class="step-t" style="margin:4px 0 6px">Exemplo real · ${nome(x)}</div>`;
+      if (b === 3) { const u = ultimo(x), mo = u.maoDeObra.filter(m => m.qtd > 0);
+        return cab + `<div class="tw"><table class="t" style="min-width:0"><thead><tr><th>RDO nº ${u.numero} · ${dCurto(u.data)}</th><th>Tipo</th><th class="n">Qtd</th></tr></thead><tbody>${mo.slice(0, 8).map(m => `<tr><td>${esc(m.funcao)}</td><td>${m.tipo === 'propria' ? 'Própria' : 'Terceiro'}</td><td class="n">${m.qtd}</td></tr>`).join('')}</tbody></table></div>`; }
+      if (b === 4) {
+        // a atividade mais completa dos últimos RDOs da obra de referência
+        const campos = a => [a.eap, Core.empresasFrente(a).length, a.local || a.area, a.pct !== null && a.pct !== undefined, a.descricao && a.descricao !== a.servico].filter(Boolean).length;
+        const rds = [...x.o.rdos].sort((a, z) => a.data < z.data ? 1 : -1).slice(0, 10);
+        const [a, r] = rds.flatMap(r => r.atividades.map(a => [a, r])).sort((p, q) => campos(q[0]) - campos(p[0]))[0] || [];
+        if (!a) return '';
+        const lin = (t, v) => `<tr><td>${t}</td><td>${v ? esc(v) : '<span class="pill critico plain">não informado</span>'}</td></tr>`;
+        return cab + `<div class="tw"><table class="t" style="min-width:0"><thead><tr><th colspan="2">RDO nº ${r.numero} · ${dCurto(r.data)}</th></tr></thead><tbody>
+          ${lin('Serviço', a.servico)}${lin('Código EAP', a.eap)}${lin('Empresa', Core.empresasFrente(a).join(', '))}${lin('Local / área', [a.local, a.area].filter(Boolean).join(' · '))}
+          ${lin('% acumulado', a.pct === null || a.pct === undefined ? '' : pct(a.pct, 0))}${lin('Situação', a.situacao)}${/paralis/i.test(a.situacao || '') ? lin('Motivo', a.motivo) : ''}${lin('Descrição do dia', a.descricao && a.descricao !== a.servico ? a.descricao : '')}</tbody></table></div>`;
+      }
+      if (b === 5) { const f = [...(x.o.fotos || [])].reverse().find(f => f.legenda && f.legenda.eap) || [...(x.o.fotos || [])].reverse().find(f => f.legenda);
+        return f ? cab + `<figure style="margin:0;display:grid;gap:6px;max-width:360px"><img src="${f.src}" alt="" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px"><figcaption class="hint">RDO nº ${f.rdo} · ${dCurto(f.data)} — ${esc(f.legenda.texto || f.legenda.servico || '')}</figcaption></figure>` : ''; }
+      return '';
+    };
+    const tabela = obras.length ? `<div class="tw"><table class="t"><thead><tr><th>Item do padrão</th>${obras.map(x => `<th class="n">${nome(x)}</th>`).join('')}</tr></thead><tbody>
+      ${[1, 2, 3, 4, 5].map(b => `<tr><td colspan="${obras.length + 1}"><b>${b}. ${BLOCOS_RDO[b].t}</b></td></tr>` + PADRAO_RDO.filter(c => c.b === b).map(c => { const m = melhor(c);
+        return `<tr><td>${esc(c.t)}${c.n ? ' <small class="hint">(média)</small>' : ''}</td>${obras.map(x => { const v = val(x, c), k = cls(v, c);
+          return `<td class="n">${k ? `<span class="pill ${k} plain">${fmt(v, c)}</span>` : fmt(v, c)}${m.includes(x) ? ' <span title="referência">★</span>' : ''}</td>`; }).join('')}</tr>`; }).join('')).join('')}
+      </tbody></table></div>
+      <small class="hint">★ obra de referência do item. Base: ${obras.map(x => `${nome(x)} — ${x.q.n} RDOs de ${dCurto(x.q.de)} a ${dCurto(x.q.ate)}${x.q.nFotos ? `, ${x.q.nFotos} fotos` : ''}${x.q.nParalisadas ? '' : ', sem paralisação no período'}`).join(' · ')}.</small>`
+      : '<p class="sub" style="margin:0">Nenhuma obra tem RDOs carregados ainda.</p>';
+    return `
+      <div><div class="kicker">Uso interno · Machine</div><h1 class="h1">Manual de preenchimento do RDO</h1>
+      <p class="sub">O diário de obra alimenta o painel e o report do cliente. Este é o padrão único para todas as obras, montado com o que cada obra já faz melhor. A tabela mostra quanto do padrão aparece hoje nos RDOs carregados no painel.</p></div>
+      <div class="card card-pad"><div class="step-t" style="margin-bottom:8px">Como os diários estão hoje</div>${tabela}</div>
+      ${[1, 2, 3, 4, 5].map(b => { const B = BLOCOS_RDO[b], x = refBloco(b);
+        return `<div class="card card-pad"><div class="step-t">${b}. ${B.t}${x ? ` <span class="pill info plain">referência: ${nome(x)}</span>` : ''}</div>
+          <ul class="man-l">${B.faz.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+          <p class="hint" style="margin:0 0 6px">No painel: ${esc(B.usa)}.</p>${exemplo(b)}</div>`; }).join('')}
+      <div class="card card-pad"><div class="step-t">6. Comentários e ocorrências</div>
+        <ul class="man-l"><li>Visitas do cliente e da fiscalização, entregas de material, acidentes e incidentes, interferências e pendências do cliente, com data e responsável.</li>
+        <li>O que estiver nos comentários não aparece no report: o que afeta prazo vai também na atividade (situação e motivo).</li></ul></div>`;
+  }
+
   // ---------- acessos (administrador) ----------
   function viewAcessos() {
     const lista = API.listarAcessos();
@@ -1169,6 +1248,8 @@
             doc.querySelectorAll('.folha').forEach(f => { f.style.zoom = '1'; f.style.boxShadow = 'none'; });
             // html2canvas desenha o conteúdo de <details> fechado: tira antes de capturar
             doc.querySelectorAll('details:not([open]) > :not(summary)').forEach(e => e.remove());
+            // avisos internos da tela ("+N na aba Obra") não vão para o cliente
+            doc.querySelectorAll('.fl-int').forEach(e => e.remove());
           } });
         const W = land ? 297 : 210, H = land ? 210 : 297;
         if (!pdf) pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: land ? 'landscape' : 'portrait' });
@@ -1232,6 +1313,13 @@
       ${ativ.map(a => linha(a, 0)).join('')}</div>`;
   }
 
+  // ---------- report: folhas A4 paisagem (rev. 25/10/2026) ----------
+  // Desenho fixo, o mesmo em todas as obras, com cabeçalho e rodapé iguais em todas as folhas:
+  //   Visão geral — identificação, 4 indicadores, leitura do período; Curva S física (esquerda), marcos e pontos de atenção (direita)
+  //   Andamento — avanço por atividade (esquerda) e campo no último RDO (direita)
+  //   Valor agregado — só quando entra no report (cadastro da obra → Valor agregado no report)
+  //   Registro fotográfico — até 12 fotos por folha (4 × 3) · Mapa de avanço — uma ou duas plantas por folha
+  // Os gráficos ocupam a altura que sobra no quadro; o que não cabe é ajustado depois, em montaFolhas().
   function viewReport() {
     const base = DB.obras.find(x => x.id === S.obraId) || obrasDoUsuario()[0];
     if (!base || !temDados(visaoDaObra(base))) return `<div class="card card-pad"><p class="sub" style="margin:0">Ainda não há dados para o report desta obra.</p></div>`;
@@ -1257,138 +1345,160 @@
       { k: P.contrFim ? 'Término previsto (base)' : 'Término previsto', ac: 'base', v: P.contrFim ? dBR(P.contrFim) : P.fimCron ? dBR(P.fimCron) : '—',
         s: P.contrFim ? `cronograma atual ${dBR(P.fimCron)}${slipFim ? ` · <b class="${slipFim > 0 ? 'warn' : 'ok'}">${dias(slipFim)}</b>` : ''}` : 'cronograma atual (sem linha de base)', html: true },
     ];
+    const corte = dBR(r.corte);
+    const cab = (titulo, sub) => `<header class="fl-cab"><div class="fl-cab-a"><img src="${LOGO}" alt="Machine"><i></i><span>Relatório de<br>acompanhamento</span></div>
+        <div class="fl-cab-b"><b>${titulo}</b><span>Obra ${esc(o.codigo)} · ${esc(o.nome)}${sub ? ` · ${sub}` : ''}</span></div>
+        <div class="fl-cab-c"><small>Posição de</small><b>${corte}</b></div></header>`;
+    const pe = `<footer class="fl-pe"><span>Machine · Planejamento e Controle</span><span>${esc([o.cliente, o.cidade].filter(Boolean).join(' · '))}</span><span class="fl-n"></span></footer>`;
+    const folha = (titulo, corpo, cls = '', sub = '') => `<article class="folha paisagem exec ${cls}">${cab(titulo, sub)}<div class="fl-corpo">${corpo}</div>${pe}</article>`;
 
-    const ativ = Core.atividades(r);
+    // ----- Visão geral -----
     const fimMs = `<li class="fim"><span class="rx-ms-d">${P.fimCron ? dCurto(P.fimCron) : '—'}</span><span class="rx-ms-n">Término da obra</span><span class="rx-ms-v ${slipFim > 0 ? 'neg' : ''}">${slipFim ? dias(slipFim) : 'na base'}</span></li>`;
-    const marcosSec = `<section class="rx-s rx-box"><h2><i class="rx-ic">${IC.rflag}</i>Próximos marcos<em><button class="rx-see" type="button" data-go="obra">Ver cronograma →</button></em></h2>
-              <ul class="rx-ms">${X.marcos.lista.slice(0, 4).map(m => `<li class="${m.situacao}"><span class="rx-ms-d">${m.data ? dCurto(m.data) : 'a definir'}</span><span class="rx-ms-n">${m.codigo ? `<em>${esc(m.codigo)}</em> ` : ''}${esc(m.nome)}${m.interface ? ' <i title="Interface com o cliente">cliente</i>' : ''}</span><span class="rx-ms-v ${m.slip > 0 ? 'neg' : ''}">${m.situacao === 'vencido' ? 'vencido' : m.slip ? dias(m.slip) : ''}</span></li>`).join('')}${fimMs}</ul>
-            </section>`;
-    const rf = Core.calcFinanceiro(o, r.corte);
-    const financeiroSec = Core.vaNoReport(o, rf) ? `<section class="rx-s rx-box" data-bloco="va"><h2><i class="rx-ic">${IC.search}</i>Valor agregado${rf.cpi !== null ? `<em>CPI ${fmtNum(rf.cpi, 2)}</em>` : ''}</h2>
-              ${cartoesVA(rf, o)}
-              ${rf.spi !== null ? GLOSSARIO_VA : ''}
-              ${rf.pts ? `<div class="legend rx-leg"><span><i class="sw sw-real"></i>Realizado (EV)</span><span><i class="sw sw-prev"></i>Planejado (PV)</span><span><i class="sw sw-base"></i>Base</span><span class="note">${notaEscalaVA(rf)}</span></div>
-              <div class="chart" id="ch-fin-r"></div>` : ''}
-            </section>` : '';
+    const marcosSec = `<section class="rx-s rx-box"><h2><i class="rx-ic">${IC.rflag}</i>Próximos marcos</h2>
+        <ul class="rx-ms" data-corta>${X.marcos.lista.slice(0, 5).map(m => `<li class="${m.situacao}"><span class="rx-ms-d">${m.data ? dCurto(m.data) : 'a definir'}</span><span class="rx-ms-n">${m.codigo ? `<em>${esc(m.codigo)}</em> ` : ''}${esc(m.nome)}${m.interface ? ' <i title="Interface com o cliente">cliente</i>' : ''}</span><span class="rx-ms-v ${m.slip > 0 ? 'neg' : ''}">${m.situacao === 'vencido' ? 'vencido' : m.slip ? dias(m.slip) : ''}</span></li>`).join('')}${fimMs}</ul>
+      </section>`;
     const corta = (t, n) => (t || '').length > n ? t.slice(0, n - 3).replace(/\s+\S*$/, '') + '…' : (t || '');
     const temCritico = X.atencao.some(a => /paralis|atras/i.test(a.tag));
-    const atencaoSec = X.atencao.length ? `<section class="rx-s rx-box${temCritico ? ' rx-alert' : ''}"><h2><i class="rx-ic">${IC.alert}</i>Pontos de atenção${X.atencaoMais ? `<em>+${X.atencaoMais} na aba Obra</em>` : ''}<em><button class="rx-see" type="button" data-go="obra">Ver todos →</button></em></h2>
-              <ul class="rx-at">${X.atencao.map(a => `<li><span class="rx-dot ${/paralis|atras/i.test(a.tag) ? 'crit' : 'warn'}">${a.tag}</span><span class="rx-at-t"><b>${esc(a.titulo)}</b><small>${esc(corta(a.det, 96))}</small></span></li>`).join('')}</ul>
-            </section>` : '';
+    const atencaoSec = X.atencao.length ? `<section class="rx-s rx-box${temCritico ? ' rx-alert' : ''}"><h2><i class="rx-ic">${IC.alert}</i>Pontos de atenção</h2>
+        <ul class="rx-at" data-corta${X.atencaoMais ? ` data-cortados="${X.atencaoMais}"` : ''}>${X.atencao.map(a => `<li><span class="rx-dot ${/paralis|atras/i.test(a.tag) ? 'crit' : 'warn'}">${a.tag}</span><span class="rx-at-t"><b>${esc(a.titulo)}</b><small>${esc(corta(a.det, 90))}</small></span></li>`).join('')}</ul>
+      </section>` : '';
+    const visao = `<div class="rx-id"><div><h1>${esc(o.nome)}</h1><div class="rx-hd-sub"><span>${esc(o.cliente)}</span><i></i><span>${esc(o.cidade)}</span><span class="rx-st ${r.sem.k}">${esc(r.sem.t)}</span></div></div>
+        <dl class="rx-hd-meta"><dt>Data de corte</dt><dd>${corte}</dd><dt>Prazo contratual</dt><dd>${P.contrFim ? `${dBR(P.contrIni)} – ${dBR(P.contrFim)}` : '—'}</dd></dl></div>
+      <div class="rx-cards">${cards.map(k => `<div class="rx-card ac-${k.ac}"><small>${k.k}</small><b class="rx-card-v ${k.cls || ''}">${k.v}</b>${k.x || ''}<span class="rx-card-s">${k.html ? k.s : esc(k.s)}</span></div>`).join('')}</div>
+      ${X.manchete ? `<div class="rx-lead"><i class="rx-lead-ic">${IC.trend}</i><p>${esc(X.manchete)}</p></div>` : ''}
+      <div class="p-duas">
+        <section class="rx-s rx-box fx"><h2><i class="rx-ic">${IC.search}</i>Curva S física e avanço mensal<em>% do total da obra</em></h2>
+          <div class="legend rx-leg"><span class="rx-leg-g">Acumulado</span><span><i class="sw sw-real"></i>Realizado</span><span><i class="sw sw-prev"></i>Planejado</span><span><i class="sw sw-base"></i>Base</span>
+            <span class="rx-leg-g">No mês</span><span><i class="sw sw-breal"></i>Realizado</span><span><i class="sw sw-bplan"></i>Planejado</span><span class="note">${Core.mesCurto(r.corte)} parcial até ${dCurto(r.corte)}</span></div>
+          <div class="chart" id="ch-combo-r" data-fill></div></section>
+        <div class="p-lado" data-ajusta>${marcosSec}${atencaoSec}</div>
+      </div>`;
+
+    // ----- Andamento -----
+    const ativ = Core.atividades(r), c = r.campo;
+    let campoSec = '';
+    if (c) {
+      const u = c.ultimo, qtd = t => u.maoDeObra.filter(m => m.tipo === t).reduce((s, m) => s + m.qtd, 0), prop = qtd('propria'), terc = qtd('terceiros');
+      const pratic = u.clima.every(x => /pratic/i.test(x.condicao || '') && !/impratic/i.test(x.condicao || ''));
+      const empDe = Core.empresasFrente;
+      const empresas = new Set(u.atividades.flatMap(empDe)).size;
+      const ordem = f => /paralis/i.test(f.situacao) ? 0 : /conclu/i.test(f.situacao) ? 2 : 1;
+      const nSit = ['paralisadas', 'em andamento', 'concluídas'].map((t, k) => [u.atividades.filter(a => ordem(a) === k).length, t]).filter(x => x[0] && x[1] !== 'paralisadas');
+      // paralisadas primeiro, depois em andamento (menos avançadas antes), concluídas por último
+      const frentesCampo = [...c.frentes].sort((a, b) => ordem(a) - ordem(b) || (a.pct || 0) - (b.pct || 0));
+      // 2ª linha da frente: empresa · local · área; sem nada disso, o que foi feito (descrição, se diferente do serviço)
+      const detFrente = f => { const d = [...new Set(empDe(f))].concat([f.local, f.area].filter(Boolean)).join(' · ');
+        const desc = String(f.descricao || '').replace(/\s*[|.]?\s*[A-Za-zÀ-ú0-9][^.|()]*?\s*\(\d+\)/g, '').replace(/[.\s]+$/, '').trim();
+        return d || (desc && desc.toLowerCase() !== String(f.servico || '').toLowerCase() ? desc : ''); };
+      campoSec = `<section class="rx-s rx-box fx"><h2><i class="rx-ic">${IC.obra}</i>Campo<em>último RDO · nº ${u.numero} · ${dCurto(u.data)}</em></h2>
+          <div class="rx-mini">
+            <div><small>Efetivo</small><b>${prop + terc}</b><span>${prop} próprios · ${terc} terceiros</span></div>
+            <div><small>Frentes de serviço</small><b>${u.atividades.length}</b><span>${empresas ? `${empresas} ${empresas === 1 ? 'empresa' : 'empresas'}` : nSit.map(x => x.join(' ')).join(' · ') || '—'}</span></div>
+            <div class="${c.paralisadas.length ? 'crit' : ''}"><small>Frentes paralisadas</small><b>${c.paralisadas.length}</b><span>${c.paralisadas.length ? esc(corta(c.paralisadas.map(f => f.servico).join(' · '), 44)) : 'nenhuma'}</span></div>
+            <div><small>Clima</small><b>${pratic ? 'Praticável' : 'Impraticável'}</b><span>${esc(u.clima.map(x => `${x.turno.toLowerCase()} ${(x.tempo || '').toLowerCase()}`).join(' · '))}</span></div>
+          </div>
+          <div class="rx-fr-box" data-ajusta><h3 class="rx-sub">Frentes no último RDO</h3>
+            <ul class="rx-fr" data-corta>${frentesCampo.map(f => { const par = /paralis/i.test(f.situacao), conc = /conclu/i.test(f.situacao);
+              const det = detFrente(f);
+              return `<li><span class="rx-fr-n"><b>${esc(f.servico || f.descricao || '—')}</b>${det ? `<small>${esc(det)}</small>` : ''}</span><span class="rx-fr-p">${f.pct === null || f.pct === undefined ? '' : pct(f.pct, 0)}</span><span class="rx-dot ${par ? 'crit' : conc ? 'ok' : 'info'}">${par ? 'Paralisada' : conc ? 'Concluída' : 'Em andamento'}</span></li>`; }).join('')}</ul></div>
+          <div class="legend rx-leg"><span class="rx-leg-g">Efetivo por dia</span><span><i class="sw sw-terc"></i>Terceiros</span><span><i class="sw sw-prop"></i>Próprios</span><span class="note">${c.serie.length} RDOs</span></div>
+          <div class="chart" id="ch-efetivo-r" data-fill></div></section>`;
+    }
+    const andamento = `<div class="p-duas${campoSec ? '' : ' so'}"><section class="rx-s fx p-ativ" data-bloco="atividades"><h2><i class="rx-ic">${IC.rlist}</i>Avanço por atividade${legFarol}</h2>${atividadesHTML(ativ, o, true)}</section>${campoSec}</div>`;
+
+    // ----- Valor agregado -----
+    const rf = Core.calcFinanceiro(o, r.corte);
+    const valor = Core.vaNoReport(o, rf) ? `${cartoesVA(rf, o)}${rf.spi !== null ? GLOSSARIO_VA : ''}
+      ${rf.pts ? `<section class="rx-s rx-box fx p-cresce"><h2><i class="rx-ic">${IC.search}</i>Curva S financeira<em>${notaEscalaVA(rf)}</em></h2>
+        <div class="legend rx-leg"><span><i class="sw sw-real"></i>Realizado (EV)</span><span><i class="sw sw-prev"></i>Planejado (PV)</span><span><i class="sw sw-base"></i>Base</span>${rf.cpi !== null ? `<span class="note">CPI ${fmtNum(rf.cpi, 2)}</span>` : ''}</div>
+        <div class="chart" id="ch-fin-r" data-fill></div></section>` : ''}` : '';
+
+    // ----- Registro fotográfico -----
+    // Foto do serviço ao lado da planta da frente (mapa de avanço, área do serviço destacada), uma foto e uma planta por
+    // folha; foto sem frente no mapa (ou obra sem mapa) vai na grade de 12 por folha
     const mapas = Core.mapasDaObra(o, r);
-    const folhasMapa = folhasDoMapa(mapas, o, r);
-    const rodape = `<footer class="fl-pe"><span>Machine · Planejamento e Controle</span><span>Report · Obra ${esc(o.codigo)} · posição de ${dBR(r.corte)}</span><span class="fl-n"></span></footer>`;
+    const pares = [], soltas = [];
+    // até 4 pares (4 folhas), um por área: a segunda foto da mesma área vai para a grade
+    const chavePar = v => v.mapa.id + '|' + v.zonas.join(',');
+    X.fotos.forEach(f => { const v = mapas.length && pares.length < 4 ? Core.fotoNoMapa(f, mapas) : null;
+      if (v && !pares.some(p => chavePar(p) === chavePar(v))) pares.push({ f, ...v }); else soltas.push(f); });
+    const figFoto = f => `<figure><img src="${f.src}" alt="${esc(legendaCurta(f) || `Foto do RDO nº ${f.rdo}, ${dBR(f.data)}`)}"><figcaption><small>${dCurto(f.data)} · RDO ${f.rdo}</small>${legendaCurta(f) ? `<span>${esc(legendaCurta(f))}</span>` : ''}</figcaption></figure>`;
+    const parHTML = p => { const dz = p.mapa.zonas.filter(z => p.zonas.includes(z.id));
+      return `<div class="rx-par"><section class="rx-s rx-box fx"><h2><i class="rx-ic">${IC.doc}</i>Serviço em execução<em>${dCurto(p.f.data)} · RDO ${p.f.rdo}</em></h2>
+          <div class="rx-par-f"><img src="${p.f.src}" alt="${esc(legendaCurta(p.f) || `Foto do RDO nº ${p.f.rdo}, ${dBR(p.f.data)}`)}"></div>${legendaCurta(p.f) ? `<p class="rx-par-l">${esc(legendaCurta(p.f))}</p>` : ''}</section>
+        <section class="rx-s rx-box fx"><h2><i class="rx-ic">${IC.search}</i>Mapa de avanço<em>${esc(p.mapa.titulo || '')}</em></h2>
+          ${dz.length ? `<p class="rx-par-l">${dz.map(z => `<b>${z.n} · ${esc(z.rotulo || 'Área')}</b>: ${Core.MAPA_ST[z.st].toLowerCase()}${z.feito === null ? '' : ' (' + pct(z.feito, 0) + ')'}`).join(' · ')}</p>` : ''}
+          <div class="rx-par-m">${plantaHTML(p.mapa, { maxH: 300, destaque: p.zonas })}</div>${legMapa(p.mapa)}${tabelaMapa(p.mapa, true)}</section></div>`; };
+    const periodoFotos = fs => fs.length ? `${fs.length} ${fs.length === 1 ? 'foto' : 'fotos'} de ${dCurto(fs[0].data)} a ${dCurto(fs[fs.length - 1].data)}` : '';
+    const folhasPar = pares.map(p => folha('Registro fotográfico', parHTML(p), 'fl-pares', 'foto do serviço e mapa de avanço da frente'));
+    const grupos = [];
+    for (let i = 0; i < soltas.length; i += 12) grupos.push(soltas.slice(i, i + 12));
+    const fotos = folhasPar.join('') + grupos.map(g => folha('Registro fotográfico', `<div class="rx-fotos">${g.map(figFoto).join('')}</div>`, 'fl-fotos', periodoFotos(soltas))).join('');
+
     return `
-      <div class="head-row no-print"><div><div class="kicker">Report</div><h1 class="h1">Obra ${esc(o.codigo)} · ${dBR(r.corte)}</h1>
-        <p class="sub">Folhas A4 retrato, sempre os mesmos blocos na mesma ordem${mapas.length ? ', com o mapa de avanço no fim' : ''}. O detalhe completo fica na aba Obra.</p></div>
-        <div class="bar-actions"><button class="btn" id="bt-pdf">Baixar PDF</button><a class="btn sec2" href="${mailto('', `Report de planejamento · Obra ${o.codigo} · ${dBR(r.corte)}`, `Prezados,\n\nSegue o report de planejamento da obra ${o.codigo} · ${o.nome}, com posição de ${dBR(r.corte)}.\n\nO painel completo está disponível em ${SITE()} (acesso com e-mail e senha).\n\nAtenciosamente,\nPlanejamento · Machine`)}">Enviar por e-mail</a></div></div>
+      <div class="head-row no-print"><div><div class="kicker">Report</div><h1 class="h1">Obra ${esc(o.codigo)} · ${corte}</h1>
+        <p class="sub">Folhas A4 paisagem, com os mesmos quadros na mesma ordem em todas as obras${mapas.length ? ' e o mapa de avanço no fim' : ''}. O detalhe completo fica na aba Obra.</p></div>
+        <div class="bar-actions"><button class="btn" id="bt-pdf">Baixar PDF</button><a class="btn sec2" href="${mailto('', `Report de planejamento · Obra ${o.codigo} · ${corte}`, `Prezados,\n\nSegue o report de planejamento da obra ${o.codigo} · ${o.nome}, com posição de ${corte}.\n\nO painel completo está disponível em ${SITE()} (acesso com e-mail e senha).\n\nAtenciosamente,\nPlanejamento · Machine`)}">Enviar por e-mail</a></div></div>
       <div class="folhas" id="paper" data-corte="${r.corte}" data-obra="${esc(o.codigo)}">
-      <article class="folha retrato exec" data-fluxo="1">
-        <header class="rx-hd">
-          <div class="rx-hd-top">
-            <div class="rx-brand"><img src="${LOGO}" alt="Machine"><i></i><span>Report</span><i></i><span>Obra ${esc(o.codigo)}</span></div>
-            <div class="rx-hd-label">Relatório de<br>acompanhamento</div>
-          </div>
-          <div class="rx-hd-main">
-            <div class="rx-hd-id">
-              <h1>${esc(o.nome)}</h1>
-              <div class="rx-hd-sub"><span>${esc(o.cliente)}</span><i></i><span>${esc(o.cidade)}</span><span class="rx-st ${r.sem.k}">${esc(r.sem.t)}</span></div>
-            </div>
-            <dl class="rx-hd-meta">
-              <dt>Data de corte</dt><dd>${dBR(r.corte)}</dd>
-              <dt>Prazo contratual</dt><dd>${P.contrFim ? `${dBR(P.contrIni)} – ${dBR(P.contrFim)}` : '—'}</dd>
-            </dl>
-          </div>
-        </header>
-        <div class="fl-corpo">
-          <div class="rx-top" data-bloco="topo">
-            ${X.manchete ? `<div class="rx-lead"><i class="rx-lead-ic">${IC.trend}</i><p>${esc(X.manchete)}</p></div>` : ''}
-            <div class="rx-cards">${cards.map(k => `<div class="rx-card ac-${k.ac}"><small>${k.k}</small><b class="rx-card-v ${k.cls || ''}">${k.v}</b>${k.x || ''}<span class="rx-card-s">${k.html ? k.s : esc(k.s)}</span></div>`).join('')}</div>
-          </div>
-
-          <section class="rx-s rx-box" data-bloco="curva"><h2><i class="rx-ic">${IC.search}</i>Curva S física e avanço mensal<em>% do total da obra</em></h2>
-            <div class="legend rx-leg"><span class="rx-leg-g">Acumulado</span><span><i class="sw sw-real"></i>Realizado</span><span><i class="sw sw-prev"></i>Planejado</span><span><i class="sw sw-base"></i>Base</span>
-              <span class="rx-leg-g">No mês</span><span><i class="sw sw-breal"></i>Realizado</span><span><i class="sw sw-bplan"></i>Planejado</span><span class="note">${Core.mesCurto(r.corte)} parcial até ${dCurto(r.corte)}</span></div>
-            <div class="chart" id="ch-combo-r"></div>
-          </section>
-
-          ${financeiroSec}
-
-          <div class="rx-row half" data-bloco="marcos">${marcosSec}${atencaoSec}</div>
-
-          ${ativ.length ? `<section class="rx-s" data-bloco="atividades" data-partes data-inteiro><h2><i class="rx-ic">${IC.rlist}</i>Avanço por atividade${legFarol}</h2>${atividadesHTML(ativ, o, true)}</section>` : ''}
-
-          ${X.fotos.length ? `<section class="rx-s" data-bloco="fotos" data-partes><h2><i class="rx-ic">${IC.photo}</i>Registro fotográfico<em>${X.fotos.length} ${X.fotos.length === 1 ? 'foto' : 'fotos'} · ${dCurto(X.fotos[0].data)} a ${dCurto(X.fotos[X.fotos.length - 1].data)}</em></h2>
-            <div class="rx-fotos" data-partes-box>${X.fotos.map(f => `<figure data-parte><img src="${f.src}" alt="${esc(legendaCurta(f) || `Foto do RDO nº ${f.rdo}, ${dBR(f.data)}`)}"><figcaption><small>${dCurto(f.data)} · RDO ${f.rdo}</small>${legendaCurta(f) ? `<span>${esc(legendaCurta(f))}</span>` : ''}</figcaption></figure>`).join('')}</div>
-          </section>` : ''}
-        </div>
-        ${rodape}
-      </article>
-      ${folhasMapa}
+        ${folha('Visão geral', visao, 'fl-visao')}
+        ${folha('Andamento das frentes', andamento, 'fl-andamento')}
+        ${valor ? folha('Valor agregado', valor, 'fl-valor') : ''}
+        ${fotos}
+        ${folhasDoMapa(mapas, folha)}
       </div>`;
   }
 
-  // ---------- folhas A4 do report ----------
-  // O conteúdo entra todo na 1ª folha; depois de desenhado (gráficos prontos), paginar() move para folhas novas os
-  // blocos que não couberam, inteiros. Blocos com data-partes (fotos; atividades só se maiores que uma folha) são divididos pelas suas
-  // partes (data-parte). As folhas do mapa de avanço já nascem prontas (uma planta por folha retrato, ou duas por
-  // folha paisagem). No fim, numera "página x de y".
-  function cabCurto(fl) {
-    return `<header class="fl-hd2"><div class="rx-brand"><img src="${LOGO}" alt="Machine"><i></i><span>Report</span><i></i><span>Obra ${esc(fl.dataset.obra)}</span></div><span>Posição de ${dBR(fl.dataset.corte)}</span></header>`;
-  }
-  let fontesProntas = false;
-  // graf: { id do gráfico: altura => redesenha } — para o gráfico ocupar a sobra da folha
-  function paginar(graf) {
+  // ---------- montagem das folhas ----------
+  // Depois de desenhadas: (1) frentes do avanço por atividade que não cabem seguem numa folha de continuação, na largura
+  // inteira; (2) a coluna lateral da Visão geral perde os últimos itens até caber (o resto fica na aba Obra); (3) os
+  // gráficos são desenhados na altura que sobrou no quadro; (4) numera "Página x de y".
+  let fontesProntas = false, autoAbrindo = false;
+  // graf: { id do gráfico: altura => desenha }
+  function montaFolhas(graf) {
     const fl = $('#paper.folhas'); if (!fl || fl.dataset.paginado) return;
     // medida só com as fontes finais; quando carregarem, redesenha o report uma vez
     if (!fontesProntas && document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(() => { fontesProntas = true; if (S.view === 'report') render(); });
     else fontesProntas = true;
-    const rod = fl.querySelector('.fl-pe').outerHTML;
-    const nova = () => { const a = document.createElement('article'); a.className = 'folha retrato exec'; a.dataset.fluxo = '1'; a.innerHTML = cabCurto(fl) + '<div class="fl-corpo"></div>' + rod; return a; };
-    let folha = fl.querySelector('.folha[data-fluxo]');
-    for (let guarda = 0; folha && guarda < 30; guarda++) {
-      const corpo = folha.querySelector('.fl-corpo');
-      if (corpo.scrollHeight <= corpo.clientHeight + 1) { const prox = folha.nextElementSibling; folha = prox && prox.dataset.fluxo ? prox : null; continue; }
-      const lim = corpo.getBoundingClientRect().top + corpo.clientHeight;
-      const blocos = [...corpo.children];
-      let i = blocos.findIndex(b => b.getBoundingClientRect().bottom > lim + 0.5);
-      if (i < 0) { folha = null; break; }
-      const b = blocos[i], seguinte = nova();
-      folha.after(seguinte);
-      const destino = seguinte.querySelector('.fl-corpo');
-      let mover = blocos.slice(i);
-      // data-inteiro (atividades): o bloco vai inteiro para a folha seguinte; só é dividido se não couber nem numa folha vazia
-      const divide = b.hasAttribute('data-partes') && (!b.hasAttribute('data-inteiro') || i === 0);
-      if (divide) {
-        const box = b.querySelector('[data-partes-box]'), partes = box ? [...box.querySelectorAll(':scope > [data-parte]')] : [];
-        let k = partes.findIndex(p => p.getBoundingClientRect().bottom > lim + 0.5);
-        // fotos em grade: corta no começo da linha
-        while (k > 0 && Math.abs(partes[k - 1].getBoundingClientRect().top - partes[k].getBoundingClientRect().top) < 2) k--;
-        if (k === 0 && i === 0 && partes.length > 1) k = 1; // nada coube e não há para onde empurrar: leva ao menos uma parte
-        if (k > 0) {
-          const cont = b.cloneNode(true);
-          const h = cont.querySelector('h2'); if (h && !h.querySelector('.fl-cont')) h.insertAdjacentHTML('beforeend', '<em class="fl-cont">continuação</em>');
-          [...cont.querySelector('[data-partes-box]').querySelectorAll(':scope > [data-parte]')].slice(0, k).forEach(p => p.remove());
-          partes.slice(k).forEach(p => p.remove());
-          mover = [cont, ...blocos.slice(i + 1)];
-        }
-      } else if (i === 0) { seguinte.remove(); folha = null; break; } // bloco maior que a folha: fica (não há como dividir)
-      destino.append(...mover);
-      folha = seguinte;
+    let sec = $('[data-bloco="atividades"]', fl);
+    // folga no avanço por atividade (obra com poucas etapas, como a 208): abre, na ordem, as etapas que couberem inteiras
+    if (sec) {
+      const lim = sec.getBoundingClientRect().bottom - 2, box = sec.querySelector('[data-partes-box]');
+      const cabe = () => box.lastElementChild.getBoundingClientRect().bottom <= lim;
+      autoAbrindo = true; setTimeout(() => { autoAbrindo = false; });
+      if (cabe()) $$(':scope > details[data-parte]:not([open])', box).forEach(d => { d.open = true; if (!cabe()) d.open = false; });
     }
-    const todas = $$('.folha', fl);
-    // folha com sobra embaixo e um gráfico: o gráfico cresce para ocupar parte da sobra (até 460 px de altura)
-    todas.forEach(f => {
-      const corpo = f.querySelector('.fl-corpo'), ult = corpo && corpo.lastElementChild; if (!ult) return;
-      const sobra = corpo.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(corpo).paddingBottom) || 0) - ult.getBoundingClientRect().bottom;
-      const ch = $$('.chart[id]', corpo).find(c => graf && graf[c.id]);
-      if (ch && sobra > 40) { const h = ch.getBoundingClientRect().height; graf[ch.id](Math.round(Math.min(460, h + sobra - 16))); }
+    for (let guarda = 0; sec && guarda < 12; guarda++) {
+      const lim = sec.getBoundingClientRect().bottom;
+      const partes = [...sec.querySelectorAll('[data-partes-box] > [data-parte]')];
+      let k = partes.findIndex(p => p.getBoundingClientRect().bottom > lim + 0.5);
+      if (k < 0) break;
+      k = Math.max(1, k); if (k >= partes.length) break;
+      const folha = sec.closest('.folha'), cont = sec.cloneNode(true);
+      [...cont.querySelectorAll('[data-partes-box] > [data-parte]')].slice(0, k).forEach(p => p.remove());
+      partes.slice(k).forEach(p => p.remove());
+      const h = cont.querySelector('h2'); if (h && !h.querySelector('.fl-cont')) h.insertAdjacentHTML('beforeend', '<em class="fl-cont">continuação</em>');
+      const nova = document.createElement('article'); nova.className = folha.className;
+      nova.innerHTML = folha.querySelector('.fl-cab').outerHTML + '<div class="fl-corpo"><div class="p-duas so"></div></div>' + folha.querySelector('.fl-pe').outerHTML;
+      nova.querySelector('.p-duas').append(cont);
+      folha.after(nova); sec = cont;
+    }
+    $$('[data-ajusta]', fl).forEach(col => {
+      for (let guarda = 0; guarda < 20 && col.scrollHeight > col.clientHeight + 1; guarda++) {
+        const u = $$('ul[data-corta]', col).filter(x => x.querySelectorAll(':scope > li:not(.fim)').length > 1).pop(); if (!u) break;
+        [...u.querySelectorAll(':scope > li:not(.fim)')].pop().remove();
+        u.dataset.cortados = (+u.dataset.cortados || 0) + 1;
+      }
+      // o aviso vai no título da própria lista (h3) ou, sem ele, no título do quadro; é só da tela (fl-int: fora do PDF e da impressão)
+      $$('ul[data-cortados]', col).forEach(u => { const t = u.previousElementSibling && u.previousElementSibling.matches('.rx-sub') ? u.previousElementSibling : u.closest('section').querySelector('h2');
+        t.insertAdjacentHTML('beforeend', `<em class="fl-int">+${u.dataset.cortados} na aba Obra</em>`); });
     });
+    $$('.chart[data-fill]', fl).forEach(el => { if (graf[el.id]) graf[el.id](Math.max(110, Math.floor(el.clientHeight) - 4)); });
+    const todas = $$('.folha', fl);
     todas.forEach((f, k) => { const n = f.querySelector('.fl-n'); if (n) n.textContent = `Página ${k + 1} de ${todas.length}`; });
     fl.dataset.paginado = '1';
     ajustaZoomFolhas();
   }
-  // Na tela, a folha A4 é reduzida para caber na largura disponível (celular, folha paisagem); impressa e no PDF, tamanho real
+  // Na tela, a folha A4 é reduzida para caber na largura disponível (celular, tela estreita); impressa e no PDF, tamanho real
   function ajustaZoomFolhas() {
     const fl = $('#paper.folhas'); if (!fl) return;
     const disp = fl.clientWidth;
@@ -1412,8 +1522,10 @@
   // opts.editor: alças da área selecionada (opts.sel) e camada do desenho em andamento
   function plantaHTML(m, opts = {}) {
     const larg = opts.maxH ? `;width:min(100%, ${Math.round(opts.maxH * m.w / m.h)}px)` : '';
-    const poli = m.zonas.map(z => { const [f, s, a] = COR_SVG[z.st], sel = opts.sel === z.id;
-      return `<polygon data-zona="${esc(z.id)}"${sel ? ' class="sel"' : ''} points="${ptsSvg(z.pts, m)}" fill="${f}" fill-opacity="${a}" stroke="${sel ? '#1F3045' : s}" stroke-width="${sel ? 3 : 2}" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`; }).join('');
+    // opts.destaque: ids das áreas do serviço da foto (contorno escuro; as demais ficam mais claras)
+    const dest = opts.destaque && opts.destaque.length ? opts.destaque : null;
+    const poli = m.zonas.map(z => { const [f, s, a] = COR_SVG[z.st], sel = opts.sel === z.id || (dest && dest.includes(z.id)), apaga = dest && !sel;
+      return `<polygon data-zona="${esc(z.id)}"${sel ? ' class="sel"' : ''} points="${ptsSvg(z.pts, m)}" fill="${f}" fill-opacity="${apaga ? a / 2 : a}" stroke="${sel ? '#1F3045' : s}" stroke-width="${sel ? 3 : 2}" stroke-opacity="${apaga ? 0.5 : 1}" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`; }).join('');
     const sel = opts.editor && m.zonas.find(z => z.id === opts.sel);
     return `<div class="mp-planta" style="aspect-ratio:${m.w} / ${m.h}${larg}"><img src="${m.img}" alt="Planta: ${esc(m.titulo || 'mapa de avanço')}" width="${m.w}" height="${m.h}">
       <svg class="mp-svg" viewBox="0 0 ${m.w} ${m.h}" preserveAspectRatio="none" aria-hidden="true">${poli}${opts.editor ? '<g class="mp-rasc"></g>' : ''}</svg>
@@ -1422,21 +1534,20 @@
   const legMapa = m => `<div class="mp-leg">${m.resumo.map(x => `<span><i class="mp-sw ${COR_MAPA[x.k]}"></i>${x.t}${m.zonas.length ? ` <small>${x.n} ${x.n === 1 ? 'área' : 'áreas'} · ${pct(x.area, 0)}</small>` : ''}</span>`).join('')}</div>`;
   const tabelaMapa = (m, comp) => m.zonas.length ? `<table class="mp-tab${comp ? ' comp' : ''}"><thead><tr><th>Nº</th><th>Área</th>${comp ? '' : '<th>Atividade</th>'}<th class="n">Avanço</th><th>Situação</th></tr></thead><tbody>
     ${m.zonas.map(z => `<tr><td class="mp-n"><i class="mp-sw ${COR_MAPA[z.st]}"></i>${z.n}</td><td>${esc(z.rotulo || '—')}</td>${comp ? '' : `<td>${z.ativ ? esc(z.ativ.nome) : '<small>situação informada no painel</small>'}</td>`}<td class="n">${z.feito === null ? '—' : pct(z.feito, 0)}</td><td>${Core.MAPA_ST[z.st]}</td></tr>`).join('')}</tbody></table>` : '';
-  function folhasDoMapa(mapas, o, r) {
+  // folhas do mapa (paisagem, como todo o report): uma planta por folha, com legenda e tabela ao lado (abaixo, se a
+  // planta for larga), ou duas plantas por folha — lado a lado, ou uma sobre a outra quando as duas são largas
+  function folhasDoMapa(mapas, folha) {
     if (!mapas.length) return '';
-    const cab = `<header class="rx-hd mp-hd"><div class="rx-hd-top"><div class="rx-brand"><img src="${LOGO}" alt="Machine"><i></i><span>Mapa de avanço físico</span><i></i><span>Obra ${esc(o.codigo)}</span></div>
-      <div class="rx-hd-label">Posição de ${dBR(r.corte)}</div></div></header>`;
-    const rod = `<footer class="fl-pe"><span>Machine · Planejamento e Controle</span><span>Mapa de avanço · Obra ${esc(o.codigo)} · ${esc(o.nome)}</span><span class="fl-n"></span></footer>`;
     const titulo = m => `<h2 class="mp-tt"><small>Frente de serviço</small>${esc(m.titulo || 'Sem título')}</h2>`;
-    // alturas máximas da planta (px na folha): retrato desconta a tabela de áreas; paisagem, lado a lado ou empilhadas
-    const ret = mapas.filter(m => m.pagina !== 'paisagem').map(m => `<article class="folha retrato exec mp-folha">${cab}
-      <div class="fl-corpo">${titulo(m)}${plantaHTML(m, { maxH: Math.max(380, 820 - 29 * m.zonas.length) })}${legMapa(m)}${tabelaMapa(m, false)}</div>${rod}</article>`);
-    const pais = mapas.filter(m => m.pagina === 'paisagem'), pares = [];
-    for (let i = 0; i < pais.length; i += 2) pares.push(pais.slice(i, i + 2));
-    // plantas largas (mais de 1,6 × a altura) ficam uma sobre a outra, ocupando a largura da folha deitada
-    const land = pares.map(par => { const emp = par.every(m => m.w / m.h >= 1.6); return `<article class="folha paisagem exec mp-folha">${cab}
-      <div class="fl-corpo"><div class="mp-dupla${emp ? ' empilha' : ''}">${par.map(m => `<div class="mp-meia">${titulo(m)}${plantaHTML(m, { maxH: emp ? (par.length > 1 ? 235 : 520) : 520 })}${legMapa(m)}</div>`).join('')}</div></div>${rod}</article>`; });
-    return ret.concat(land).join('');
+    const larga = m => m.w / m.h >= 1.6;
+    const uma = mapas.filter(m => m.pagina !== 'paisagem').map(m => folha('Mapa de avanço físico', larga(m)
+      ? `${titulo(m)}<div class="mp-um largo">${plantaHTML(m, { maxH: Math.max(260, 470 - 27 * m.zonas.length) })}<div class="mp-info">${legMapa(m)}${tabelaMapa(m, false)}</div></div>`
+      : `<div class="mp-um">${plantaHTML(m, { maxH: 640 })}<div class="mp-info">${titulo(m)}${legMapa(m)}${tabelaMapa(m, true)}</div></div>`, 'mp-folha'));
+    const duas = mapas.filter(m => m.pagina === 'paisagem'), pares = [];
+    for (let i = 0; i < duas.length; i += 2) pares.push(duas.slice(i, i + 2));
+    const dupla = pares.map(par => { const emp = par.length > 1 && par.every(larga);
+      return folha('Mapa de avanço físico', `<div class="mp-dupla${emp ? ' empilha' : ''}">${par.map(m => `<div class="mp-meia">${titulo(m)}${plantaHTML(m, { maxH: emp ? 228 : 540 })}${legMapa(m)}</div>`).join('')}</div>`, 'mp-folha'); });
+    return uma.concat(dupla).join('');
   }
 
   // ---------- render ----------
@@ -1449,11 +1560,13 @@
     }
     if (!S.obraId || !DB.obras.some(o => o.id === S.obraId)) S.obraId = obrasDoUsuario()[0]?.id;
     if (!ehAdmin() && ['alimentar', 'acessos', 'nova-obra', 'editar-obra', 'senha', 'github'].includes(S.view)) S.view = 'obra';
+    if (ehCliente() && S.view === 'manual') S.view = 'obra';
+    if (S.view === 'manual') DB.obras.filter(o => o.fotosPendentes).forEach(carregarFotos);
     const base = DB.obras.find(x => x.id === S.obraId);
     if (base && base.fotosPendentes && ['obra', 'report'].includes(S.view)) carregarFotos(base);
     const v = S.view === 'portfolio' ? viewPortfolio() : S.view === 'obra' ? viewObra() : S.view === 'alimentar' ? viewAlimentar()
       : S.view === 'acessos' ? viewAcessos() : S.view === 'nova-obra' ? viewNovaObra() : S.view === 'editar-obra' ? viewNovaObra(base)
-      : S.view === 'senha' ? viewSenha() : S.view === 'github' ? viewGithub() : viewReport();
+      : S.view === 'senha' ? viewSenha() : S.view === 'github' ? viewGithub() : S.view === 'manual' ? viewManual() : viewReport();
     app.innerHTML = shell(v) + lightbox() + modalHTML();
     bind(); desenha();
   }
@@ -1475,16 +1588,16 @@
     const el1 = $('#ch-curva'); if (el1 && el1.closest('details').open) Core.chartCurvaS(el1, o, r);
     const el2 = $('#ch-mensal'); if (el2 && el2.closest('details').open) Core.chartMensal(el2, o, r);
     const el3 = $('#ch-efetivo'); if (el3 && r.campo && el3.closest('details').open) Core.chartEfetivo(el3, r.campo);
-    // report: as folhas têm largura fixa (A4), os gráficos são desenhados uma vez, antes da paginação
-    const el4 = $('#ch-combo-r'); if (el4 && !el4.firstChild) Core.chartCombo(el4, o, r);
     const rf = Core.calcFinanceiro(o, r.corte);
     const rFin = rf && rf.pts ? { pts: rf.pts, corte: r.corte, real: rf.evFrac, prevCorte: rf.pvFrac, baseCorte: rf.baseFrac, desvio: (rf.evFrac || 0) - (rf.pvFrac || 0) } : null;
     const el5 = $('#ch-fin'); if (el5 && rFin && el5.closest('details').open) Core.chartCurvaS(el5, o, rFin);
-    const el6 = $('#ch-fin-r'); if (el6 && rFin && !el6.firstChild) Core.chartCurvaS(el6, o, rFin, { compacto: true });
-    const graf = {};
+    // report: os gráficos são desenhados na montagem das folhas, já na altura que sobrou no quadro
+    if (S.view !== 'report') return;
+    const el4 = $('#ch-combo-r'), el6 = $('#ch-fin-r'), el7 = $('#ch-efetivo-r'), graf = {};
     if (el4) graf['ch-combo-r'] = h => Core.chartCombo(el4, o, r, { altura: h });
-    if (el6 && rFin) graf['ch-fin-r'] = h => Core.chartCurvaS(el6, o, rFin, { compacto: true, altura: h });
-    if (S.view === 'report') { paginar(graf); ajustaZoomFolhas(); }
+    if (el6 && rFin) graf['ch-fin-r'] = h => Core.chartCurvaS(el6, o, rFin, { altura: h });
+    if (el7 && r.campo) graf['ch-efetivo-r'] = h => Core.chartEfetivo(el7, r.campo, { altura: h });
+    montaFolhas(graf); ajustaZoomFolhas();
   }
 
   let tt;
@@ -1620,7 +1733,7 @@
     };
     $$('details.sec').forEach(d => d.addEventListener('toggle', () => { S.abertos[d.dataset.sec] = d.open; if (d.open) desenha(); }));
     // no report, abrir uma frente muda a altura da folha: redesenha para repaginar
-    $$('details.rx-av-n').forEach(d => d.addEventListener('toggle', () => { const antes = !!S.abertos[d.dataset.k]; S.abertos[d.dataset.k] = d.open; if (S.view === 'report' && antes !== d.open) render(); }));
+    $$('details.rx-av-n').forEach(d => d.addEventListener('toggle', () => { if (autoAbrindo) return; const antes = !!S.abertos[d.dataset.k]; S.abertos[d.dataset.k] = d.open; if (S.view === 'report' && antes !== d.open) render(); }));
     bindMapa();
     $$('[data-abre]').forEach(b => b.onclick = () => { const id = b.dataset.abre; S.abertos[id] = !S.abertos[id]; render(); });
     $$('[data-filtro]').forEach(b => b.onclick = () => { S.filtroTarefas = b.dataset.filtro; S.verTodas = false; render(); });
@@ -1672,7 +1785,7 @@
     const h = location.hash || '';
     const mo = h.match(/obra-([\w-]+)/); if (mo && DB.obras.some(o => o.id === mo[1])) S.obraId = mo[1];
     if (!S.obraId || !DB.obras.some(o => o.id === S.obraId)) S.obraId = DB.obras[0]?.id;
-    S.view = /report/.test(h) ? 'report' : /alimentar/.test(h) && ehAdmin() ? 'alimentar' : DB.obras.length > 1 || ehAdmin() ? 'portfolio' : 'obra';
+    S.view = /report/.test(h) ? 'report' : /manual/.test(h) && u.perfil !== 'cliente' ? 'manual' : /alimentar/.test(h) && ehAdmin() ? 'alimentar' : DB.obras.length > 1 || ehAdmin() ? 'portfolio' : 'obra';
     render(); window.scrollTo(0, 0);
   }
   (async () => {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================
-// Painel de Obras Machine — exporta o report de uma obra em PDF (folhas A4, uma página por folha).
+// Painel de Obras Machine — exporta o report de uma obra em PDF (folhas A4 paisagem, uma página por folha).
 // Abre o painel desta pasta num Chromium sem tela, entra com e-mail e senha e imprime o report.
 // Os dados ficam cifrados em data/: sem uma conta válida não há o que exportar.
 //
@@ -52,7 +52,7 @@ const srv = http.createServer((req, res) => {
     if (!(await p.$('#paper'))) throw new Error(`A obra ${opt.obra} não tem report disponível para esta conta.`);
     await p.waitForFunction(() => ![...document.querySelectorAll('#paper img')].some(i => !i.complete), null, { timeout: 60000 });
     await p.evaluate(() => document.fonts.ready);
-    // o report é paginado no navegador em folhas A4 (retrato; mapa em dupla, paisagem): espera a paginação final
+    // o report é montado no navegador em folhas A4 paisagem (gráficos no espaço do quadro, continuação, numeração): espera o fim
     await p.waitForTimeout(500);
     await p.waitForSelector('#paper[data-paginado]', { timeout: 30000 });
     const corte = await p.getAttribute('#paper', 'data-corte');
