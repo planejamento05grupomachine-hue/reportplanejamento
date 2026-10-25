@@ -58,7 +58,15 @@ A estrutura de pastas é sempre a mesma por obra (`<obra>/contrato`, `<obra>/cus
   no próprio painel (PDF, escolhendo a página, ou PNG/JPG) e guardada no rascunho da obra como
   imagem de até 2000 px. Cada área demarcada tem situação manual (Executado / Executando / A
   executar) ou vínculo com uma atividade do cronograma (100% = executado, >0 = executando,
-  0 = a executar), recalculada a cada carga.
+  0 = a executar), recalculada a cada carga. As áreas são polígonos (vértices em fração da planta, `pts`); mapas
+  antigos com retângulos `{x, y, w, h}` são convertidos ao abrir no editor.
+
+## Valor agregado no report
+
+O cadastro da obra define se o quadro de valor agregado entra no report (`reportVA`): **Automático** (padrão) mostra
+só quando há SPI e a Curva S financeira está na base do contrato (198 e 208); **Mostrar sempre**; **Não mostrar**.
+Na 207, a curva do Prevision é o orçamento da obra e não o contrato Machine, então no automático o quadro fica fora do
+report. O cliente segue a mesma regra na aba Obra; administradores e diretoria sempre veem os números lá.
 
 ## Cadência de atualização
 

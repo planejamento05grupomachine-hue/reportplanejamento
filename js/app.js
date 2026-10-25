@@ -1,4 +1,3 @@
-
 // ============================================================
 // Machine · Painel de Obras — app (telas e navegação).
 // Dados cifrados no próprio repositório (js/api.js); acesso só com e-mail e senha.
@@ -339,16 +338,16 @@
       <div class="chart" id="ch-mensal"></div>`, true);
 
     const rf = Core.calcFinanceiro(o, r.corte);
-    const financeiro = rf ? sec('financeiro', 'Financeiro — Valor Agregado', rf.spi !== null ? `SPI ${fmtNum(rf.spi, 2)}` : (rf.faturamento ? moeda(rf.faturamento.medido) : ''), `
-      <p class="sec-lead">Valor agregado (EV) e valor planejado (PV) da Curva S financeira do Prevision; valor do contrato, medido e saldo do Controle de Medição.</p>
+    // cliente vê o financeiro nas mesmas condições do report (cadastro da obra → Valor agregado no report)
+    const financeiro = rf && (!ehCliente() || Core.vaNoReport(o, rf)) ? sec('financeiro', 'Financeiro — Valor Agregado', rf.spi !== null ? `SPI ${fmtNum(rf.spi, 2)}` : (rf.faturamento ? moeda(rf.faturamento.medido) : ''), `
       <div class="kpis">
-        ${rf.faturamento ? `<div class="kpi"><span>Valor do contrato</span><b>${moeda(rf.faturamento.contratual)}</b><small>BAC</small></div>
+        ${rf.faturamento ? `<div class="kpi"><span>Valor do contrato</span><b>${moeda(rf.faturamento.contratual)}</b><small>com aditivos</small></div>
         <div class="kpi"><span>Medido acumulado</span><b>${moeda(rf.faturamento.medido)}</b><small>${rf.faturamento.pctMedido !== null ? pct(rf.faturamento.pctMedido, 1) + ' do contrato · ' : ''}última medição ${esc(rf.faturamento.ultimaMedicao || '—')}</small></div>
         <div class="kpi"><span>Saldo de contrato</span><b>${moeda(rf.faturamento.saldo)}</b><small>a medir</small></div>` : ''}
         <div class="kpi"><span>SPI</span><b>${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'}</b><small>${rf.spi !== null ? `EV ${Core.moedaCurta(rf.ev)} ÷ PV ${Core.moedaCurta(rf.pv)}` : 'EV ÷ PV'}</small></div>
         <div class="kpi"><span>CPI</span><b>${rf.cpi !== null ? fmtNum(rf.cpi, 2) : '—'}</b><small>${rf.cpi !== null ? 'EV ÷ AC' : 'sem dado de custo real (AC)'}</small></div>
       </div>
-      <div class="rx-tok">${GLOSSARIO_VA}</div>
+      ${rf.spi !== null ? `<div class="rx-tok">${GLOSSARIO_VA}</div>` : ''}
       ${rf.pts ? `<div class="legend"><span><i class="sw sw-real"></i>Realizado (EV)</span><span><i class="sw sw-prev"></i>Planejado (PV)</span><span><i class="sw sw-base"></i>Base</span><span class="note">${notaEscalaVA(rf)}</span></div>
       <div class="chart" id="ch-fin"></div>` : '<p class="sub" style="margin:0">Ainda sem Curva S financeira (Financeiro VA) carregada.</p>'}`) : '';
 
@@ -557,6 +556,14 @@
     const ativ = Core.atividadesParaMapa(r), m = ed.m;
     const vis = m.img ? Core.mapasDaObra({ mapas: [m] }, r)[0] : { ...m, zonas: [], resumo: [] }, zonas = vis.zonas;
     const z = zonas.find(x => x.id === ed.sel);
+    const modo = ed.modo || 'retangulo', rasc = ed.rasc || [];
+    const ferr = m.img ? `<div class="mp-ferr">
+        <div class="seg" role="group" aria-label="Ferramenta de desenho">${[['retangulo', '▭ Retângulo'], ['poligono', '⬠ Polígono']].map(([k, t]) => `<button data-mpmodo="${k}" aria-pressed="${modo === k}">${t}</button>`).join('')}</div>
+        ${modo === 'poligono' ? `<button class="btn" type="button" data-mprasc="fecha" ${rasc.length < 3 ? 'disabled' : ''}>Concluir área${rasc.length ? ` (${rasc.length} ${rasc.length === 1 ? 'ponto' : 'pontos'})` : ''}</button><button class="more" type="button" data-mprasc="volta" ${rasc.length ? '' : 'disabled'}>Desfazer ponto</button><button class="more" type="button" data-mprasc="cancela" ${rasc.length ? '' : 'disabled'}>Cancelar</button>` : ''}
+        <p class="hint">${modo === 'poligono'
+          ? 'Clique nos cantos da área, um por um, contornando o desenho da planta. Para fechar, clique no primeiro ponto, dê duplo clique ou tecle Enter (Esc cancela).'
+          : 'Arraste sobre a planta para criar uma área.'} Numa área selecionada: arraste o meio para mover, os pontos brancos para ajustar os cantos, os tracejados para criar um canto novo e o círculo escuro acima para girar.</p>
+      </div>` : '';
     const painel = z ? `<div class="mp-painel card-pad">
         <div class="step-t">Área ${z.n}</div>
         <div class="field"><label for="mp-rot">Nome da área</label><input class="inp" id="mp-rot" value="${esc(z.rotulo || '')}" placeholder="ex.: Galpão A · eixo 1–5"></div>
@@ -564,8 +571,8 @@
           ${ativ.map(a => `<option value="${esc(a.chave)}" ${z.vinculo && z.vinculo.chave === a.chave ? 'selected' : ''}>${'  '.repeat(Math.max(0, a.nivel - 2))}${esc(a.eap)} · ${esc(a.nome)} (${pct(a.feito, 0)})</option>`).join('')}</select>
           <small class="hint">${z.auto ? `Situação automática: <b>${Core.MAPA_ST[z.st]}</b> (${pct(z.feito, 0)} realizado).` : 'Sem vínculo, a situação é a escolhida abaixo e não muda sozinha.'}</small></div>
         <div class="seg" role="group" aria-label="Situação da área">${Object.entries(Core.MAPA_ST).map(([k, t]) => `<button data-mpst="${k}" aria-pressed="${z.st === k}" ${z.auto ? 'disabled' : ''}><i class="mp-sw ${COR_MAPA[k]}"></i>${t}</button>`).join('')}</div>
-        <div class="bar-actions"><button class="more neg" data-mpzdel="1">Remover área</button><button class="more" data-mpsel="">Fechar</button></div>
-      </div>` : `<p class="hint" style="margin:0">${m.img ? 'Arraste sobre a planta para demarcar uma área. Toque numa área para editar.' : ''}</p>`;
+        <div class="bar-actions"><button class="more" data-mpdup="1">Duplicar área</button><button class="more neg" data-mpzdel="1">Remover área</button><button class="more" data-mpsel="">Fechar</button></div>
+      </div>` : '';
     return `<div class="mp-editor steps">
       <div class="two"><div class="field"><label for="mp-titulo">Frente de serviço</label><input class="inp" id="mp-titulo" value="${esc(m.titulo || '')}" placeholder="ex.: Cobertura · Armazém Praia do Forte"></div>
         <div class="field"><label for="mp-pagina">Folha no report</label><select class="inp" id="mp-pagina">${Object.entries(PAGINA_MAPA).map(([k, t]) => `<option value="${k}" ${(m.pagina || 'retrato') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
@@ -573,7 +580,8 @@
       <div class="field"><label for="mp-arq">Planta (PDF ou imagem)</label><input class="inp" type="file" id="mp-arq" accept=".pdf,image/png,image/jpeg">
         ${ed.pdfPaginas > 1 ? `<div class="bar-actions" style="margin-top:6px"><label for="mp-pag" class="hint">O PDF tem ${ed.pdfPaginas} páginas. Página:</label><input class="inp" id="mp-pag" type="number" min="1" max="${ed.pdfPaginas}" value="${ed.pdfPagina || 1}" style="width:90px"><button class="btn sec2" type="button" id="mp-usapag">Usar esta página</button></div>` : ''}
         ${ed.lendo ? `<small class="hint" role="status">${esc(ed.lendo)}</small>` : ''}</div>
-      ${m.img ? `<div class="mp-edit">${plantaHTML(vis, { sel: ed.sel })}</div>${legMapa(vis)}` : ''}
+      ${ferr}
+      ${m.img ? `<div class="mp-edit${modo === 'poligono' ? ' desenhando' : ''}">${plantaHTML(vis, { sel: rasc.length ? null : ed.sel, editor: true })}</div>${legMapa(vis)}` : ''}
       ${painel}
       ${zonas.length ? `<div class="tw">${tabelaMapa(vis, false).replace(/<tr><td class="mp-n">/g, '<tr class="mp-linha"><td class="mp-n">')}</div>` : ''}
       <div class="bar-actions"><button class="btn" id="mp-salvar" ${m.img ? '' : 'disabled'}>Salvar mapa</button><button class="btn sec2" id="mp-cancelar">Cancelar</button></div>
@@ -620,7 +628,10 @@
     $$('[data-mapaed]').forEach(b => b.onclick = () => {
       const base = DB.obras.find(x => x.id === S.obraId), lista = base.mapas || [];
       const i = b.dataset.mapaed === 'novo' ? -1 : +b.dataset.mapaed;
-      S.mapaEd = { idx: i, m: i < 0 ? { id: novoId(), titulo: '', pagina: 'retrato', zonas: [] } : JSON.parse(JSON.stringify(lista[i])), sel: null };
+      const m = i < 0 ? { id: novoId(), titulo: '', pagina: 'retrato', zonas: [] } : JSON.parse(JSON.stringify(lista[i]));
+      // retângulos de mapas antigos viram polígonos de 4 pontos (editáveis e giráveis)
+      m.zonas = (m.zonas || []).map(({ x, y, w, h, ...z }) => ({ ...z, pts: Core.ptsZona({ x, y, w, h, ...z }) }));
+      S.mapaEd = { idx: i, m, sel: null, modo: 'retangulo', rasc: [] };
       mapaPdf = null; render();
     });
     $$('[data-mapadel]').forEach(b => b.onclick = () => {
@@ -639,36 +650,123 @@
     const vc = $('#mp-vinc'); if (vc) vc.onchange = () => { const z = zona(); if (!z) return; const base = DB.obras.find(x => x.id === S.obraId); const a = Core.atividadesParaMapa(Core.calc(visaoDaObra(base))).find(x => x.chave === vc.value); z.vinculo = a ? { chave: a.chave, eap: a.eap, nome: a.nome } : null; render(); };
     $$('[data-mpst]').forEach(b => b.onclick = () => { const z = zona(); if (z) { z.status = b.dataset.mpst; render(); } });
     $$('[data-mpzdel]').forEach(b => b.onclick = () => { m.zonas = m.zonas.filter(z => z.id !== ed.sel); ed.sel = null; render(); });
+    $$('[data-mpdup]').forEach(b => b.onclick = () => {
+      const z = zona(); if (!z) return;
+      const xs = z.pts.map(p => p[0]), ys = z.pts.map(p => p[1]), dx = Math.min(0.03, 1 - Math.max(...xs)), dy = Math.min(0.03, 1 - Math.max(...ys));
+      const nz = { ...JSON.parse(JSON.stringify(z)), id: novoId(), rotulo: z.rotulo ? z.rotulo + ' (cópia)' : '', pts: z.pts.map(([x, y]) => [x + dx, y + dy]) };
+      m.zonas.push(nz); ed.sel = nz.id; render();
+    });
     $$('[data-mpsel]').forEach(b => b.onclick = () => { ed.sel = b.dataset.mpsel || null; render(); });
     $$('.mp-linha').forEach((tr, i) => tr.onclick = () => { ed.sel = m.zonas[i] && m.zonas[i].id; render(); });
+    $$('[data-mpmodo]').forEach(b => b.onclick = () => { ed.modo = b.dataset.mpmodo; ed.rasc = []; render(); });
+    $$('[data-mprasc]').forEach(b => b.onclick = () => { const a = b.dataset.mprasc; if (a === 'fecha') fechaRasc(); else { if (a === 'volta') ed.rasc.pop(); else ed.rasc = []; render(); } });
     const cn = $('#mp-cancelar'); if (cn) cn.onclick = () => { S.mapaEd = null; mapaPdf = null; render(); };
     const sv = $('#mp-salvar'); if (sv) sv.onclick = async () => {
       const base = DB.obras.find(x => x.id === S.obraId), lista = [...(base.mapas || [])];
-      const limpo = { ...m, zonas: m.zonas.map(({ id, x, y, w, h, rotulo, status, vinculo }) => ({ id, x, y, w, h, rotulo: rotulo || '', status: status || 'a-executar', vinculo: vinculo || null })), atualizadoEm: new Date().toISOString().slice(0, 10) };
+      const r4 = v => Math.round(Math.max(0, Math.min(1, v)) * 1e4) / 1e4;
+      const limpo = { ...m, zonas: m.zonas.map(({ id, pts, rotulo, status, vinculo }) => ({ id, pts: pts.map(([x, y]) => [r4(x), r4(y)]), rotulo: rotulo || '', status: status || 'a-executar', vinculo: vinculo || null })), atualizadoEm: new Date().toISOString().slice(0, 10) };
       if (ed.idx < 0) lista.push(limpo); else lista[ed.idx] = limpo;
       if (await salvarMapas(base, lista)) { S.mapaEd = null; mapaPdf = null; render(); }
     };
-    // desenhar área: arrastar sobre a planta; tocar numa área seleciona
+    if (!bindMapa.tecla) { bindMapa.tecla = true; document.addEventListener('keydown', teclaMapa); }
+
     const pl = $('.mp-edit .mp-planta'); if (!pl) return;
+    const c01 = v => Math.max(0, Math.min(1, v));
+    const pos = e => { const b = pl.getBoundingClientRect(); return [c01((e.clientX - b.left) / b.width), c01((e.clientY - b.top) / b.height)]; };
+    const pxDist = (a, b) => { const bb = pl.getBoundingClientRect(); return Math.hypot((a[0] - b[0]) * bb.width, (a[1] - b[1]) * bb.height); };
+    const rasc = pl.querySelector('.mp-rasc');
+    const tracejado = (pts, fechado) => `<${fechado ? 'polygon' : 'polyline'} points="${ptsSvg(pts, m)}" fill="${fechado ? 'rgba(84,124,165,.22)' : 'none'}" stroke="#547CA5" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/>`;
+    // atualiza só a área mexida (sem redesenhar a tela) enquanto arrasta
+    const vivo = z => {
+      const el = [...pl.querySelectorAll('polygon[data-zona]')].find(p => p.dataset.zona === z.id); if (el) el.setAttribute('points', ptsSvg(z.pts, m));
+      const g = Core.geoZona(z.pts), n = [...pl.querySelectorAll('.mp-num')].find(x => x.dataset.n === z.id); if (n) { n.style.left = g.cx * 100 + '%'; n.style.top = g.cy * 100 + '%'; }
+      pl.querySelectorAll('.mp-h, .mp-hm, .mp-hr').forEach(x => x.remove());
+      pl.insertAdjacentHTML('beforeend', alcasZona(z.pts));
+    };
+    // polígono em andamento: linha tracejada até o cursor e os cantos já marcados (o primeiro maior: clicar nele fecha)
+    const desenhaRasc = extra => {
+      if (!rasc) return;
+      const R = ed.rasc, p = extra ? [...R, extra] : R, esc1 = m.w / pl.getBoundingClientRect().width;
+      rasc.innerHTML = R.length ? tracejado(p, false) + R.map((q, i) => `<circle cx="${q[0] * m.w}" cy="${q[1] * m.h}" r="${(i === 0 ? 7 : 4.5) * esc1}" fill="${i === 0 ? '#FFFFFF' : '#547CA5'}" stroke="#547CA5" stroke-width="2" vector-effect="non-scaling-stroke"/>`).join('') : '';
+    };
+    desenhaRasc();
+    pl.onpointermove = ed.modo === 'poligono' ? e => { if (ed.rasc.length) desenhaRasc(pos(e)); } : null;
+    pl.ondblclick = e => {
+      const h = e.target.closest('.mp-h'), z = zona();
+      if (h && z && z.pts.length > 3) { z.pts.splice(+h.dataset.v, 1); render(); }
+    };
     pl.onpointerdown = ev => {
-      const zEl = ev.target.closest('.mp-z');
-      if (zEl) { ed.sel = zEl.dataset.zona; render(); return; }
+      if (ev.button > 0) return;
       ev.preventDefault();
-      const bb = pl.getBoundingClientRect(), fx = x => Math.max(0, Math.min(1, (x - bb.left) / bb.width)), fy = y => Math.max(0, Math.min(1, (y - bb.top) / bb.height));
-      const x0 = fx(ev.clientX), y0 = fy(ev.clientY);
-      const tmp = document.createElement('i'); tmp.className = 'mp-z novo'; pl.appendChild(tmp);
-      const ret = e => { const x1 = fx(e.clientX), y1 = fy(e.clientY); return { x: Math.min(x0, x1), y: Math.min(y0, y1), w: Math.abs(x1 - x0), h: Math.abs(y1 - y0) }; };
-      const move = e => { const q = ret(e); Object.assign(tmp.style, { left: q.x * 100 + '%', top: q.y * 100 + '%', width: q.w * 100 + '%', height: q.h * 100 + '%' }); };
+      const p0 = pos(ev);
+      // polígono: cada clique é um canto; perto do primeiro ponto (ou duplo clique) fecha.
+      // Antes do primeiro canto, as alças da área selecionada continuam editáveis.
+      if (ed.modo === 'poligono' && (ed.rasc.length || !ev.target.closest('.mp-h, .mp-hm, .mp-hr'))) {
+        const R = ed.rasc;
+        if (R.length >= 3 && pxDist(p0, R[0]) < 12) return fechaRasc();
+        if (R.length && pxDist(p0, R[R.length - 1]) < 5) { if (R.length >= 3 && ev.detail >= 2) fechaRasc(); return; }
+        R.push(p0); ed.sel = null; render(); return;
+      }
+      const h = ev.target.closest('.mp-h, .mp-hm, .mp-hr'), z = zona();
+      let acao;
+      if (h && z) {
+        if (h.classList.contains('mp-h')) acao = { k: 'vertice', i: +h.dataset.v };
+        else if (h.classList.contains('mp-hm')) { const i = +h.dataset.m + 1; z.pts.splice(i, 0, p0); acao = { k: 'vertice', i }; vivo(z); }
+        else { const g = Core.geoZona(z.pts); acao = { k: 'giro', c: [g.cx * m.w, g.cy * m.h], orig: z.pts.map(p => [...p]) }; acao.a0 = Math.atan2(p0[1] * m.h - acao.c[1], p0[0] * m.w - acao.c[0]); }
+      } else {
+        const poly = ev.target.closest('polygon[data-zona]');
+        if (poly && poly.dataset.zona !== ed.sel) { ed.sel = poly.dataset.zona; render(); return; }
+        acao = poly ? { k: 'mover', orig: z.pts.map(p => [...p]) } : { k: 'ret' };
+      }
+      let mexeu = acao.k === 'vertice' && h.classList.contains('mp-hm');
+      const move = e => {
+        const p = pos(e); if (!mexeu && pxDist(p, p0) < 3) return; mexeu = true;
+        if (acao.k === 'vertice') { z.pts[acao.i] = p; vivo(z); }
+        else if (acao.k === 'mover') {
+          const xs = acao.orig.map(q => q[0]), ys = acao.orig.map(q => q[1]);
+          const dx = Math.max(-Math.min(...xs), Math.min(1 - Math.max(...xs), p[0] - p0[0])), dy = Math.max(-Math.min(...ys), Math.min(1 - Math.max(...ys), p[1] - p0[1]));
+          z.pts = acao.orig.map(([x, y]) => [x + dx, y + dy]); vivo(z);
+        } else if (acao.k === 'giro') {
+          let da = Math.atan2(p[1] * m.h - acao.c[1], p[0] * m.w - acao.c[0]) - acao.a0;
+          if (e.shiftKey) da = Math.round(da / (Math.PI / 12)) * (Math.PI / 12);
+          const [cx, cy] = acao.c, cs = Math.cos(da), sn = Math.sin(da);
+          const rot = acao.orig.map(([x, y]) => { const X = x * m.w - cx, Y = y * m.h - cy; return [(cx + X * cs - Y * sn) / m.w, (cy + X * sn + Y * cs) / m.h]; });
+          // canto saindo da planta: desloca a área inteira para dentro (sem deformar); só corta se ela não couber
+          const ajuste = k => { const v = rot.map(q => q[k]), lo = Math.min(...v), hi = Math.max(...v); return lo < 0 ? -lo : hi > 1 ? 1 - hi : 0; };
+          const ax = ajuste(0), ay = ajuste(1);
+          z.pts = rot.map(([x, y]) => [c01(x + ax), c01(y + ay)]); vivo(z);
+        } else if (rasc) {
+          const [x0, y0] = p0, [x1, y1] = p;
+          rasc.innerHTML = tracejado([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], true);
+        }
+      };
       const fim = e => {
         pl.removeEventListener('pointermove', move); pl.removeEventListener('pointerup', fim); pl.removeEventListener('pointercancel', fim);
-        const q = ret(e); tmp.remove();
-        if (q.w < 0.01 || q.h < 0.01) return;
-        const z = { id: novoId(), ...q, rotulo: '', status: 'a-executar', vinculo: null };
-        m.zonas.push(z); ed.sel = z.id; render();
+        if (acao.k === 'ret') {
+          const [x0, y0] = p0, [x1, y1] = pos(e);
+          if (!mexeu || Math.abs(x1 - x0) < 0.01 || Math.abs(y1 - y0) < 0.01) { if (rasc) rasc.innerHTML = ''; if (ed.sel) { ed.sel = null; render(); } return; }
+          const zn = { id: novoId(), pts: [[Math.min(x0, x1), Math.min(y0, y1)], [Math.max(x0, x1), Math.min(y0, y1)], [Math.max(x0, x1), Math.max(y0, y1)], [Math.min(x0, x1), Math.max(y0, y1)]], rotulo: '', status: 'a-executar', vinculo: null };
+          m.zonas.push(zn); ed.sel = zn.id; render(); return;
+        }
+        if (mexeu) render();
       };
       try { pl.setPointerCapture(ev.pointerId); } catch (e) { /* sem captura: o arraste ainda funciona dentro da planta */ }
       pl.addEventListener('pointermove', move); pl.addEventListener('pointerup', fim); pl.addEventListener('pointercancel', fim);
     };
+  }
+  function fechaRasc() {
+    const ed = S.mapaEd; if (!ed || ed.rasc.length < 3) return;
+    const z = { id: novoId(), pts: ed.rasc, rotulo: '', status: 'a-executar', vinculo: null };
+    ed.m.zonas.push(z); ed.rasc = []; ed.sel = z.id; render();
+  }
+  // polígono em andamento: Enter fecha, Esc cancela, Backspace desfaz o último ponto; Esc também solta a área selecionada
+  function teclaMapa(e) {
+    const ed = S.mapaEd; if (!ed || S.view !== 'obra' || /INPUT|SELECT|TEXTAREA/.test((e.target || {}).tagName || '')) return;
+    if (ed.rasc && ed.rasc.length) {
+      if (e.key === 'Enter') { e.preventDefault(); fechaRasc(); }
+      else if (e.key === 'Escape') { ed.rasc = []; render(); }
+      else if (e.key === 'Backspace') { e.preventDefault(); ed.rasc.pop(); render(); }
+    } else if (e.key === 'Escape' && ed.sel) { ed.sel = null; render(); }
   }
   async function salvarMapas(base, lista) {
     const ok = await gravando('Salvando o mapa de avanço…', () => API.salvarMapas(base.id, lista).then(() => true));
@@ -1006,6 +1104,7 @@
   }
 
   // ---------- cadastro de obra ----------
+  const OPCOES_VA = { auto: 'Automático', mostrar: 'Mostrar sempre', ocultar: 'Não mostrar' };
   function viewNovaObra(o) {
     const f = (id, rot, v, tipo = 'text', extra = '') => `<div class="field"><label for="${id}">${rot}</label><input class="inp" id="${id}" type="${tipo}" value="${esc(v || '')}" ${extra}></div>`;
     const pz = (o && o.prazoContratual) || {};
@@ -1017,6 +1116,8 @@
         <div class="two">${f('o-cidade', 'Cidade/UF', o && o.cidade)}${f('o-contrato', 'Contrato', o && o.contrato)}</div>
         ${f('o-local', 'Endereço', o && o.local)}
         <div class="two">${f('o-resp', 'Responsável em campo', o && o.responsavel)}<div class="two">${f('o-ini', 'Início contratual', pz.inicio, 'date')}${f('o-fim', 'Fim contratual', pz.fim, 'date')}</div></div>
+        <div class="field"><label for="o-va">Valor agregado no report</label><select class="inp" id="o-va">${Object.entries(OPCOES_VA).map(([k, t]) => `<option value="${k}" ${((o && o.reportVA) || 'auto') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+          <small class="hint">Automático: o quadro só entra no report quando há SPI e a Curva S financeira está na base do contrato. Na aba Obra, administradores e diretoria continuam vendo os números.</small></div>
         <div class="bar-actions"><button class="btn" type="submit">Salvar obra</button><button class="btn sec2" type="button" data-go="${o ? 'obra' : 'portfolio'}">Cancelar</button></div>
       </form>`;
   }
@@ -1083,27 +1184,21 @@
     } finally { btn.disabled = false; btn.textContent = rotulo; }
   }
 
-  // ---------- Valor agregado: cartões e legenda dos termos (report e aba Obra) ----------
-  const GLOSSARIO_VA = `<dl class="rx-glos" aria-label="O que significam SPI, EV e PV">
-      <div><dt>SPI</dt><dd>Índice de desempenho de prazo = <b>EV ÷ PV</b>. 1,00 = no ritmo do plano; abaixo de 1,00 = atrasado; acima = adiantado.</dd></div>
-      <div><dt>EV</dt><dd>Valor agregado: quanto vale, em R$, o serviço <b>efetivamente executado</b> até a data de corte.</dd></div>
-      <div><dt>PV</dt><dd>Valor planejado: quanto valeria, em R$, o serviço que o cronograma <b>previa executar</b> até a data de corte.</dd></div>
-    </dl>`;
+  // ---------- Valor agregado: cartões e nota dos termos (report e aba Obra) ----------
+  const GLOSSARIO_VA = `<p class="rx-glos"><b>SPI</b> = EV ÷ PV (1,00 = no ritmo do plano) · <b>EV</b> valor do que foi executado · <b>PV</b> valor do que estava previsto até o corte</p>`;
   function cartoesVA(rf, o) {
     const F = rf.faturamento, cls = rf.spi === null ? '' : rf.sem.k === 'critico' ? 'crit' : rf.sem.k === 'atencao' ? 'warn' : 'ok';
-    const spi = `<div class="rx-card ac-${cls || 'real'}"><small>SPI (EV ÷ PV)</small><b class="rx-card-v ${cls}">${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'}</b>
-      <span class="rx-card-s">${rf.spi !== null ? `EV ${Core.moedaCurta(rf.ev)} ÷ PV ${Core.moedaCurta(rf.pv)}` : 'envie a Curva S financeira (Prevision · Financeiro VA)'}</span></div>`;
-    const cards = F ? [
-      `<div class="rx-card ac-base"><small>Valor do contrato</small><b class="rx-card-v">${Core.moedaCurta(F.contratual)}</b><span class="rx-card-s">BAC · Controle de Medição</span></div>`,
-      `<div class="rx-card ac-plan"><small>Medido acumulado</small><b class="rx-card-v">${Core.moedaCurta(F.medido)}</b><span class="rx-card-s">${F.pctMedido !== null ? pct(F.pctMedido, 1) + ' do contrato' : ''}${F.ultimaMedicao ? ` · última: ${esc(F.ultimaMedicao.replace(/\s*\(.*$/, ''))}` : ''}</span></div>`,
-      `<div class="rx-card ac-base"><small>Saldo a medir</small><b class="rx-card-v">${Core.moedaCurta(F.saldo)}</b><span class="rx-card-s">${F.pctMedido !== null ? pct(1 - F.pctMedido, 1) + ' do contrato' : 'contrato − medido'}</span></div>`,
-      spi,
+    const spi = rf.spi === null ? null : `<div class="rx-card ac-${cls}"><small>SPI · prazo</small><b class="rx-card-v ${cls}">${fmtNum(rf.spi, 2)}</b>
+      <span class="rx-card-s">EV ${Core.moedaCurta(rf.ev).replace('R$ ', '')} · PV ${Core.moedaCurta(rf.pv).replace('R$ ', '')}</span></div>`;
+    const cards = (F ? [
+      `<div class="rx-card ac-base"><small>Valor do contrato</small><b class="rx-card-v">${Core.moedaCurta(F.contratual)}</b><span class="rx-card-s"></span></div>`,
+      `<div class="rx-card ac-plan"><small>Medido acumulado</small><b class="rx-card-v">${Core.moedaCurta(F.medido)}</b><span class="rx-card-s">${F.pctMedido !== null ? pct(F.pctMedido, 1) + ' do contrato' : ''}</span></div>`,
+      `<div class="rx-card ac-base"><small>Saldo a medir</small><b class="rx-card-v">${Core.moedaCurta(F.saldo)}</b><span class="rx-card-s">${F.pctMedido !== null ? pct(1 - F.pctMedido, 1) + ' do contrato' : ''}</span></div>`,
     ] : [
-      `<div class="rx-card ac-real"><small>EV · valor agregado</small><b class="rx-card-v">${Core.moedaCurta(rf.ev)}</b><span class="rx-card-s">executado até ${dCurto(o.dataCorteFinanceiro || o.dataCorte)}</span></div>`,
-      `<div class="rx-card ac-plan"><small>PV · valor planejado</small><b class="rx-card-v">${Core.moedaCurta(rf.pv)}</b><span class="rx-card-s">previsto para a data</span></div>`,
-      spi,
-    ];
-    return `<div class="rx-cards${cards.length === 3 ? ' c3' : ''}">${cards.join('')}</div>`;
+      `<div class="rx-card ac-real"><small>EV · executado</small><b class="rx-card-v">${Core.moedaCurta(rf.ev)}</b><span class="rx-card-s">até ${dCurto(o.dataCorteFinanceiro || o.dataCorte)}</span></div>`,
+      `<div class="rx-card ac-plan"><small>PV · previsto</small><b class="rx-card-v">${Core.moedaCurta(rf.pv)}</b><span class="rx-card-s">para a mesma data</span></div>`,
+    ]).concat(spi ? [spi] : []);
+    return `<div class="rx-cards${cards.length === 3 ? ' c3' : cards.length === 2 ? ' c2' : ''}">${cards.join('')}</div>`;
   }
   // a Curva S financeira do Prevision nem sempre está na base do contrato (207: orçamento da obra × contrato Machine)
   const notaEscalaVA = rf => rf.escala === 'orcamento' ? `% do orçamento no Prevision (${Core.moedaCurta(rf.totalCurva)}), não do contrato` : '% do valor do contrato';
@@ -1169,9 +1264,9 @@
               <ul class="rx-ms">${X.marcos.lista.slice(0, 4).map(m => `<li class="${m.situacao}"><span class="rx-ms-d">${m.data ? dCurto(m.data) : 'a definir'}</span><span class="rx-ms-n">${m.codigo ? `<em>${esc(m.codigo)}</em> ` : ''}${esc(m.nome)}${m.interface ? ' <i title="Interface com o cliente">cliente</i>' : ''}</span><span class="rx-ms-v ${m.slip > 0 ? 'neg' : ''}">${m.situacao === 'vencido' ? 'vencido' : m.slip ? dias(m.slip) : ''}</span></li>`).join('')}${fimMs}</ul>
             </section>`;
     const rf = Core.calcFinanceiro(o, r.corte);
-    const financeiroSec = rf ? `<section class="rx-s rx-box" data-bloco="va"><h2><i class="rx-ic">${IC.search}</i>Valor Agregado<em>SPI ${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'} · CPI ${rf.cpi !== null ? fmtNum(rf.cpi, 2) : 'sem custo real'}</em></h2>
+    const financeiroSec = Core.vaNoReport(o, rf) ? `<section class="rx-s rx-box" data-bloco="va"><h2><i class="rx-ic">${IC.search}</i>Valor agregado${rf.cpi !== null ? `<em>CPI ${fmtNum(rf.cpi, 2)}</em>` : ''}</h2>
               ${cartoesVA(rf, o)}
-              ${GLOSSARIO_VA}
+              ${rf.spi !== null ? GLOSSARIO_VA : ''}
               ${rf.pts ? `<div class="legend rx-leg"><span><i class="sw sw-real"></i>Realizado (EV)</span><span><i class="sw sw-prev"></i>Planejado (PV)</span><span><i class="sw sw-base"></i>Base</span><span class="note">${notaEscalaVA(rf)}</span></div>
               <div class="chart" id="ch-fin-r"></div>` : ''}
             </section>` : '';
@@ -1221,7 +1316,7 @@
 
           <div class="rx-row half" data-bloco="marcos">${marcosSec}${atencaoSec}</div>
 
-          ${ativ.length ? `<section class="rx-s" data-bloco="atividades" data-partes><h2><i class="rx-ic">${IC.rlist}</i>Avanço por atividade${legFarol}</h2>${atividadesHTML(ativ, o, true)}</section>` : ''}
+          ${ativ.length ? `<section class="rx-s" data-bloco="atividades" data-partes data-inteiro><h2><i class="rx-ic">${IC.rlist}</i>Avanço por atividade${legFarol}</h2>${atividadesHTML(ativ, o, true)}</section>` : ''}
 
           ${X.fotos.length ? `<section class="rx-s" data-bloco="fotos" data-partes><h2><i class="rx-ic">${IC.photo}</i>Registro fotográfico<em>${X.fotos.length} ${X.fotos.length === 1 ? 'foto' : 'fotos'} · ${dCurto(X.fotos[0].data)} a ${dCurto(X.fotos[X.fotos.length - 1].data)}</em></h2>
             <div class="rx-fotos" data-partes-box>${X.fotos.map(f => `<figure data-parte><img src="${f.src}" alt="${esc(legendaCurta(f) || `Foto do RDO nº ${f.rdo}, ${dBR(f.data)}`)}"><figcaption><small>${dCurto(f.data)} · RDO ${f.rdo}</small>${legendaCurta(f) ? `<span>${esc(legendaCurta(f))}</span>` : ''}</figcaption></figure>`).join('')}</div>
@@ -1235,7 +1330,7 @@
 
   // ---------- folhas A4 do report ----------
   // O conteúdo entra todo na 1ª folha; depois de desenhado (gráficos prontos), paginar() move para folhas novas os
-  // blocos que não couberam. Blocos com data-partes (atividades, fotos) podem ser divididos entre folhas pelas suas
+  // blocos que não couberam, inteiros. Blocos com data-partes (fotos; atividades só se maiores que uma folha) são divididos pelas suas
   // partes (data-parte). As folhas do mapa de avanço já nascem prontas (uma planta por folha retrato, ou duas por
   // folha paisagem). No fim, numera "página x de y".
   function cabCurto(fl) {
@@ -1262,7 +1357,9 @@
       folha.after(seguinte);
       const destino = seguinte.querySelector('.fl-corpo');
       let mover = blocos.slice(i);
-      if (b.hasAttribute('data-partes')) {
+      // data-inteiro (atividades): o bloco vai inteiro para a folha seguinte; só é dividido se não couber nem numa folha vazia
+      const divide = b.hasAttribute('data-partes') && (!b.hasAttribute('data-inteiro') || i === 0);
+      if (divide) {
         const box = b.querySelector('[data-partes-box]'), partes = box ? [...box.querySelectorAll(':scope > [data-parte]')] : [];
         let k = partes.findIndex(p => p.getBoundingClientRect().bottom > lim + 0.5);
         // fotos em grade: corta no começo da linha
@@ -1300,11 +1397,27 @@
 
   // ---------- mapa de avanço: folhas do report ----------
   const COR_MAPA = { executado: 'ok', executando: 'andamento', 'a-executar': 'pendente' };
-  // opts.maxH (px): altura máxima da planta na folha — a largura encolhe junto, para as áreas (em %) seguirem a imagem
+  // preenchimento · contorno · opacidade (padrão de mapeamento); vão como atributos do SVG para o PDF sair igual
+  const COR_SVG = { executado: ['#22C55E', '#16A34A', 0.36], executando: ['#FACC15', '#CA8A04', 0.42], 'a-executar': ['#EF4444', '#DC2626', 0.32] };
+  const ptsSvg = (pts, m) => pts.map(([x, y]) => `${+(x * m.w).toFixed(1)},${+(y * m.h).toFixed(1)}`).join(' ');
+  // alças da área selecionada no editor: vértices, meio de cada lado (cria vértice) e giro (acima do topo da área)
+  function alcasZona(pts) {
+    const P = (x, y) => `left:${x * 100}%;top:${y * 100}%`;
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    return pts.map((p, i) => `<b class="mp-h" data-v="${i}" style="${P(p[0], p[1])}" title="Arraste para ajustar · duplo clique remove o ponto"></b>`).join('')
+      + pts.map((p, i) => { const q = pts[(i + 1) % pts.length]; return `<b class="mp-hm" data-m="${i}" style="${P((p[0] + q[0]) / 2, (p[1] + q[1]) / 2)}" title="Arraste para criar um ponto"></b>`; }).join('')
+      + `<b class="mp-hr" style="left:${(Math.min(...xs) + Math.max(...xs)) / 2 * 100}%;top:calc(${Math.min(...ys) * 100}% - 24px)" title="Arraste para girar (Shift: de 15 em 15°)"></b>`;
+  }
+  // opts.maxH (px): altura máxima da planta na folha — a largura encolhe junto, para as áreas seguirem a imagem
+  // opts.editor: alças da área selecionada (opts.sel) e camada do desenho em andamento
   function plantaHTML(m, opts = {}) {
     const larg = opts.maxH ? `;width:min(100%, ${Math.round(opts.maxH * m.w / m.h)}px)` : '';
+    const poli = m.zonas.map(z => { const [f, s, a] = COR_SVG[z.st], sel = opts.sel === z.id;
+      return `<polygon data-zona="${esc(z.id)}"${sel ? ' class="sel"' : ''} points="${ptsSvg(z.pts, m)}" fill="${f}" fill-opacity="${a}" stroke="${sel ? '#1F3045' : s}" stroke-width="${sel ? 3 : 2}" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`; }).join('');
+    const sel = opts.editor && m.zonas.find(z => z.id === opts.sel);
     return `<div class="mp-planta" style="aspect-ratio:${m.w} / ${m.h}${larg}"><img src="${m.img}" alt="Planta: ${esc(m.titulo || 'mapa de avanço')}" width="${m.w}" height="${m.h}">
-      ${m.zonas.map(z => `<i class="mp-z ${COR_MAPA[z.st]}${opts.sel === z.id ? ' sel' : ''}" data-zona="${esc(z.id)}" style="left:${z.x * 100}%;top:${z.y * 100}%;width:${z.w * 100}%;height:${z.h * 100}%"><b>${z.n}</b></i>`).join('')}</div>`;
+      <svg class="mp-svg" viewBox="0 0 ${m.w} ${m.h}" preserveAspectRatio="none" aria-hidden="true">${poli}${opts.editor ? '<g class="mp-rasc"></g>' : ''}</svg>
+      ${m.zonas.map(z => `<i class="mp-num" data-n="${esc(z.id)}" style="left:${z.cx * 100}%;top:${z.cy * 100}%">${z.n}</i>`).join('')}${sel ? alcasZona(sel.pts) : ''}</div>`;
   }
   const legMapa = m => `<div class="mp-leg">${m.resumo.map(x => `<span><i class="mp-sw ${COR_MAPA[x.k]}"></i>${x.t}${m.zonas.length ? ` <small>${x.n} ${x.n === 1 ? 'área' : 'áreas'} · ${pct(x.area, 0)}</small>` : ''}</span>`).join('')}</div>`;
   const tabelaMapa = (m, comp) => m.zonas.length ? `<table class="mp-tab${comp ? ' comp' : ''}"><thead><tr><th>Nº</th><th>Área</th>${comp ? '' : '<th>Atividade</th>'}<th class="n">Avanço</th><th>Situação</th></tr></thead><tbody>
@@ -1499,7 +1612,7 @@
       const ini = v('o-ini') || null, fim = v('o-fim') || null;
       if (ini && fim && fim < ini) { toast('O fim contratual é anterior ao início.'); return; }
       const dados = { novo, id: novo ? v('o-codigo') : S.obraId, codigo: v('o-codigo'), nome: v('o-nome'), cliente: v('o-cliente'), contratante: v('o-contratante'), cidade: v('o-cidade'),
-        contrato: v('o-contrato'), local: v('o-local'), responsavel: v('o-resp'), prazo_inicio: ini, prazo_fim: fim, prazo_dias: ini && fim ? Core.diff(ini, fim) + 1 : null };
+        contrato: v('o-contrato'), local: v('o-local'), responsavel: v('o-resp'), reportVA: v('o-va'), prazo_inicio: ini, prazo_fim: fim, prazo_dias: ini && fim ? Core.diff(ini, fim) + 1 : null };
       const o = await gravando(novo ? 'Cadastrando a obra…' : 'Salvando o cadastro…', () => API.salvarObra(dados));
       if (!o) return;
       S.obraId = o.id; S.view = novo ? 'alimentar' : 'obra'; await recarregar();

@@ -392,6 +392,14 @@
       faturamento: resumo ? { contratual: resumo.totalContrato, medido: resumo.medidoAcumulado, saldo: resumo.saldo, ultimaMedicao: resumo.ultimaMedicao,
         pctMedido: resumo.totalContrato && resumo.medidoAcumulado !== null ? resumo.medidoAcumulado / resumo.totalContrato : null } : null };
   }
+  // Valor agregado no report (cadastro da obra: obra.reportVA = 'auto' | 'mostrar' | 'ocultar').
+  // Automático: só quando há SPI e a Curva S financeira está na base do contrato — sem isso o quadro vira só faturamento,
+  // ou mistura bases (207: curva = orçamento da obra, contrato Machine = outro valor) e confunde cliente e diretoria.
+  function vaNoReport(obra, rf) {
+    if (!rf || obra.reportVA === 'ocultar') return false;
+    if (obra.reportVA === 'mostrar') return true;
+    return rf.spi !== null && (rf.escala === 'contrato' || !rf.bac);
+  }
   // R$ compacto para cartões: "R$ 12,84 mi" · "R$ 103,0 mil"
   const moedaCurta = v => v === null || v === undefined || isNaN(v) ? '—' : Math.abs(v) >= 1e6 ? 'R$ ' + fmtNum(v / 1e6, 2) + ' mi' : Math.abs(v) >= 1e3 ? 'R$ ' + fmtNum(v / 1e3, 1) + ' mil' : 'R$ ' + fmtNum(v, 0);
 
@@ -415,12 +423,22 @@
     }
     return { st: z.status || 'a-executar', feito: null, auto: false, ativ: null };
   }
+  // Zona = polígono de vértices em fração da planta (0–1). Mapas antigos guardavam retângulos {x, y, w, h}.
+  const ptsZona = z => Array.isArray(z.pts) && z.pts.length >= 3 ? z.pts
+    : [[z.x, z.y], [z.x + z.w, z.y], [z.x + z.w, z.y + z.h], [z.x, z.y + z.h]];
+  // área (fórmula do laço) e centroide do polígono, nas unidades da planta (w × h)
+  function geoZona(pts, w = 1, h = 1) {
+    let a = 0, cx = 0, cy = 0;
+    pts.forEach(([x0, y0], i) => { const [x1, y1] = pts[(i + 1) % pts.length]; const c = x0 * y1 - x1 * y0; a += c; cx += (x0 + x1) * c; cy += (y0 + y1) * c; });
+    if (Math.abs(a) < 1e-9) return { area: 0, cx: pts.reduce((s, p) => s + p[0], 0) / pts.length, cy: pts.reduce((s, p) => s + p[1], 0) / pts.length };
+    return { area: Math.abs(a / 2) * w * h, cx: cx / (3 * a), cy: cy / (3 * a) };
+  }
   function mapasDaObra(obra, r) {
     const ativ = atividadesParaMapa(r);
     return (obra.mapas || []).filter(m => m.img).map(m => {
-      const zonas = (m.zonas || []).map((z, i) => ({ ...z, n: i + 1, ...statusZona(z, ativ) }));
-      const area = k => zonas.filter(z => z.st === k).reduce((s, z) => s + z.w * z.h, 0);
-      const tot = zonas.reduce((s, z) => s + z.w * z.h, 0) || 1;
+      const zonas = (m.zonas || []).map((z, i) => { const pts = ptsZona(z), g = geoZona(pts); return { ...z, pts, area: g.area, cx: g.cx, cy: g.cy, n: i + 1, ...statusZona(z, ativ) }; });
+      const area = k => zonas.filter(z => z.st === k).reduce((s, z) => s + z.area, 0);
+      const tot = zonas.reduce((s, z) => s + z.area, 0) || 1;
       const resumo = Object.keys(MAPA_ST).map(k => ({ k, t: MAPA_ST[k], n: zonas.filter(z => z.st === k).length, area: area(k) / tot }));
       return { ...m, zonas, resumo };
     });
@@ -897,6 +915,6 @@
 
   root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, diaSemana, diff, addDias, nomeBonito, semaforo, FAIXAS,
     calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, nomeCurto, narrativa, resumoExecutivo, auditoria, marcos, motivoCurto, chartCurvaS, chartMensal, chartCombo, chartEfetivo, interp, fracTempo,
-    calcFinanceiro, moeda, moedaCurta, MAPA_ST, atividadesParaMapa, statusZona, mapasDaObra };
+    calcFinanceiro, moeda, moedaCurta, vaNoReport, MAPA_ST, atividadesParaMapa, statusZona, ptsZona, geoZona, mapasDaObra };
 })(typeof window !== 'undefined' ? window : globalThis);
 
