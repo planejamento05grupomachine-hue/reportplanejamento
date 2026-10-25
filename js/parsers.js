@@ -64,7 +64,7 @@
   // outras planilhas do Prevision (uma aba só, cabeçalho na 1ª linha) — por isso a detecção é
   // pelo nome das abas, não pelo cabeçalho de uma tabela.
   function ehMedicao(wb) {
-    return wb.SheetNames.some(n => /^m\s*\d/.test(norm(n)) || /visao geral|controle mensal/.test(norm(n)));
+    return wb.SheetNames.some(n => /^m\s*\d/.test(norm(n)) || /visao geral|controle mensal|serie de medic/.test(norm(n)));
   }
   function achaCelula(linhas, re, filtraLinha) {
     for (let i = 0; i < linhas.length; i++) {
@@ -78,6 +78,7 @@
     for (let k = j + 1; k < linhas[i].length; k++) if (linhas[i][k] !== null) return linhas[i][k];
     return null;
   }
+  const MES_RE = /^(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)/;
   function parseResumoMedicao(linhas) {
     const r = {};
     // rótulos como "Contrato"/"Obra" também aparecem como cabeçalho de outras tabelas da mesma
@@ -86,28 +87,45 @@
     // (muitas colunas preenchidas) — por isso só considera linhas com poucas células preenchidas.
     const linhaEsparsa = row => row.filter(x => x !== null).length <= 4;
     const campo = (re, conv = num) => { const c = achaCelula(linhas, re, linhaEsparsa); if (!c) return null; const v = valorApos(linhas, c.i, c.j); return v === null ? null : conv(v); };
+    // valores em R$: o rótulo é específico o bastante para dispensar a linha esparsa; o valor vem à direita
+    // (layout de tabela, obras 198/208/207-série) ou logo abaixo, na mesma coluna (cartões do "RESUMO" da 207)
+    const valor = re => {
+      for (let i = 0; i < linhas.length; i++) for (let j = 0; j < linhas[i].length; j++) {
+        if (!re.test(norm(linhas[i][j]))) continue;
+        const dir = num(valorApos(linhas, i, j));
+        if (dir !== null) return dir;
+        const abaixo = linhas[i + 1] ? num(linhas[i + 1][j]) : null;
+        if (abaixo !== null) return abaixo;
+      }
+      return null;
+    };
     r.contrato = campo(/^contrato$/, v => String(v).trim());
     r.obra = campo(/^obra$/, v => String(v).trim());
-    // "Total do contrato" (obra 198) ou "Valor do contrato" (obra 208) — nomenclatura varia por obra
-    r.totalContrato = campo(/total do contrato|^valor do contrato$/);
-    r.medidoAcumulado = campo(/total medido acumulado/);
-    r.saldo = campo(/saldo de contrato/);
+    // "Total do contrato" (198), "Valor do contrato" (208), "Valor do contrato (vigente)" / "Contrato vigente" (207)
+    r.totalContrato = valor(/total do contrato|^valor do contrato|^contrato vigente$/);
+    // "Medido acumulado" sozinho, na 207, é o acumulado até junho (ponte da rebaseline): só vale com "total" ou "até"
+    r.medidoAcumulado = valor(/total medido acumulado|^medido acumulado ate/);
+    r.saldo = valor(/saldo de contrato|^saldo projetado a medir/);
     r.ultimaMedicao = campo(/ultima medi[cç][ãa]o|última medição/, v => String(v).trim());
     // tabela mensal: acha o cabeçalho pelas colunas-chave (a linha varia de obra para obra)
-    const ih = linhas.findIndex(l => l.some(c => norm(c) === 'mes') && l.some(c => norm(c).startsWith('previsto (ct')));
+    const ih = linhas.findIndex(l => l.some(c => norm(c).startsWith('mes')) && l.some(c => norm(c).startsWith('previsto')) && l.some(c => /realizad/.test(norm(c))));
     const meses = [];
     let totalRow = null;
     if (ih >= 0) {
       const h = linhas[ih].map(norm);
-      const ix = k => h.findIndex(x => x.startsWith(k));
-      const iMes = ix('mes'), iPrevCT = ix('previsto (ct'), iRealCT = ix('realizado (ct'), iFat = ix('faturamento direto'),
-        iMP = ix('medicao machine prevista'), iMR = ix('medicao machine realizada'), iSt = ix('status');
+      const ix = (...ks) => { for (const k of ks) { const i = h.findIndex(x => x.startsWith(k)); if (i >= 0) return i; } return -1; };
+      const iMes = ix('mes'), iPrevCT = ix('previsto (ct', 'previsto'), iRealCT = ix('realizado (ct', 'medicao realizada', 'realizado'),
+        iFat = ix('faturamento direto'), iMP = ix('medicao machine prevista', 'previsao rebalanceada'), iMR = ix('medicao machine realizada'),
+        iSt = ix('status'), iBol = ix('boletim'), iFis = ix('% fisico acumulado');
       for (let i = ih + 1; i < linhas.length; i++) {
         const row = linhas[i], nomeMes = row[iMes];
         if (!nomeMes) break;
-        if (/^total/i.test(String(nomeMes).trim())) { totalRow = { previstoCT: num(row[iPrevCT]), realizadoCT: num(row[iRealCT]) }; break; }
+        if (/^(total|fechamento)/.test(norm(nomeMes))) { totalRow = { previstoCT: num(row[iPrevCT]), realizadoCT: num(row[iRealCT]) }; break; }
+        // linhas de evento no meio da série (ex.: "REBASELINE / RÉGUA CRONOGRAMA" na 207) não são meses
+        if (!MES_RE.test(norm(nomeMes))) continue;
         meses.push({ mes: String(nomeMes).trim(), previstoCT: num(row[iPrevCT]), realizadoCT: num(row[iRealCT]),
-          faturamentoDireto: num(row[iFat]), medicaoPrevista: num(row[iMP]), medicaoRealizada: num(row[iMR]),
+          faturamentoDireto: iFat >= 0 ? num(row[iFat]) : null, medicaoPrevista: iMP >= 0 ? num(row[iMP]) : null, medicaoRealizada: iMR >= 0 ? num(row[iMR]) : null,
+          boletim: iBol >= 0 ? (String(row[iBol] || '').trim() || null) : null, fisicoAcumulado: iFis >= 0 ? num(row[iFis]) : null,
           status: iSt >= 0 ? (String(row[iSt] || '').trim() || null) : null });
       }
     }
@@ -116,6 +134,10 @@
     // cai para o total da própria tabela mensal (sempre presente)
     if (r.totalContrato === null && totalRow) r.totalContrato = totalRow.previstoCT;
     if (r.medidoAcumulado === null && totalRow) r.medidoAcumulado = totalRow.realizadoCT;
+    if (r.saldo === null && r.totalContrato !== null && r.medidoAcumulado !== null) r.saldo = r.totalContrato - r.medidoAcumulado;
+    // sem rótulo de "Última medição": o último mês medido da tabela (boletim · mês · situação)
+    const ult = [...meses].reverse().find(m => (m.realizadoCT || m.medicaoRealizada || 0) > 0);
+    if (!r.ultimaMedicao && ult) r.ultimaMedicao = [ult.boletim, ult.mes].filter(Boolean).join(' · ') + (ult.status && !/^realizad/i.test(ult.status) ? ` (${ult.status.replace(/\s*\(([^)]*)\)/g, ', $1').toLowerCase()})` : '');
     return r;
   }
   // Boletim de medição por item de EAP ("M1", "M2"... ou variantes como "M4 ADITIVO").
@@ -140,9 +162,16 @@
     return out;
   }
   function parseMedicaoContrato(XLSX, wb) {
-    const abaResumo = wb.SheetNames.find(n => /visao geral|controle mensal/.test(norm(n))) || wb.SheetNames[0];
-    const resumo = parseResumoMedicao(linhasDaAba(XLSX, wb, abaResumo));
-    const boletins = wb.SheetNames.filter(n => n !== abaResumo && /^m\s*\d/.test(norm(n)))
+    // abas de resumo, em ordem de confiança: a série mensal (207) ou a visão geral/controle mensal (198/208) e,
+    // por último, o "RESUMO" em cartões (207). Cada campo vem da primeira aba que o traz.
+    const prio = [/serie de medic/, /visao geral|controle mensal/, /^resumo/];
+    const abas = prio.flatMap(re => wb.SheetNames.filter(n => re.test(norm(n))));
+    if (!abas.length) abas.push(wb.SheetNames[0]);
+    const lidos = abas.map(n => parseResumoMedicao(linhasDaAba(XLSX, wb, n)));
+    const resumo = {};
+    ['contrato', 'obra', 'totalContrato', 'medidoAcumulado', 'saldo', 'ultimaMedicao'].forEach(k => { const x = lidos.find(l => l[k] !== null && l[k] !== undefined); resumo[k] = x ? x[k] : null; });
+    resumo.meses = (lidos.find(l => l.meses.length) || { meses: [] }).meses;
+    const boletins = wb.SheetNames.filter(n => !abas.includes(n) && /^m\s*\d/.test(norm(n)))
       .map(nome => ({ aba: nome, itens: parseBoletim(linhasDaAba(XLSX, wb, nome)) }))
       .filter(b => b.itens.length);
     return { resumo, boletins };
@@ -197,16 +226,30 @@
     })).filter(p => p.data);
   }
 
+  // Progresso mensal ("Mar/2026") ou semanal ("16/Mar/2026": o Prevision exporta o "progresso-semanal" com o
+  // mesmo cabeçalho "Mês"). O semanal vira mensal: cada semana (segunda a domingo) é repartida entre os meses
+  // pelos dias que caem em cada um, para o acumulado bater com a Curva S no fim do mês.
   function parseMensal(linhas) {
     const h = linhas[0].map(norm);
     const ix = k => h.indexOf(k);
-    return linhas.slice(1).map(r => ({
-      mes: mesISO(r[ix('mes')]),
-      base: num(r[ix('base')]),
-      previsto: num(r[ix('previsto')]),
-      realizado: num(r[ix('realizado')]),
+    const semana = s => { const m = String(s || '').trim().toLowerCase().match(/^(\d{1,2})\/([a-zç]{3})\/(\d{4})/); return m && MESES[m[2]] ? `${m[3]}-${String(MESES[m[2]]).padStart(2, '0')}-${m[1].padStart(2, '0')}` : null; };
+    const brutas = linhas.slice(1).map(r => ({
+      mes: mesISO(r[ix('mes')]), semana: semana(r[ix('mes')]),
+      base: num(r[ix('base')]), previsto: num(r[ix('previsto')]), realizado: num(r[ix('realizado')]),
       idpm: ix('idpm') >= 0 ? num(r[ix('idpm')]) : null,
-    })).filter(p => p.mes);
+    }));
+    if (brutas.some(p => p.mes)) return brutas.filter(p => p.mes).map(({ semana: _s, ...p }) => p);
+    const porMes = new Map();
+    for (const p of brutas.filter(x => x.semana)) {
+      const d0 = new Date(p.semana + 'T12:00:00Z');
+      for (let k = 0; k < 7; k++) {
+        const mes = new Date(d0.getTime() + k * 864e5).toISOString().slice(0, 7);
+        if (!porMes.has(mes)) porMes.set(mes, { mes, base: 0, previsto: 0, realizado: 0, idpm: null, origem: 'semanal' });
+        const m = porMes.get(mes);
+        m.base += (p.base || 0) / 7; m.previsto += (p.previsto || 0) / 7; m.realizado += (p.realizado || 0) / 7;
+      }
+    }
+    return [...porMes.values()].sort((a, b) => a.mes < b.mes ? -1 : 1);
   }
 
   function parseTarefas(linhas) {
@@ -250,7 +293,8 @@
 
   // Fotos dos RDOs: acha onde cada imagem é desenhada na página (matriz de transformação),
   // renderiza a página e recorta cada foto. Só no navegador (precisa de canvas).
-  // Ignora imagens pequenas (logos e assinaturas).
+  // Ignora imagens pequenas (logos e assinaturas). opts.desde (aaaa-mm-dd): pula os RDOs mais antigos.
+  // opts.progresso(p, n) é chamado a cada página, para a tela mostrar o andamento (PDFs de 60 MB levam minutos).
   async function pdfFotos(pdfjs, paginas, opts = {}) {
     const doc = paginas.doc;
     const larguraMax = opts.larguraMax || 900, qualidade = opts.qualidade || 0.72, minPt = opts.minPt || 100;
@@ -259,10 +303,12 @@
     const out = [];
     const contPorRdo = {};
     for (let p = 1; p <= doc.numPages; p++) {
+      if (opts.progresso) opts.progresso(p, doc.numPages);
       const cab = linhasDe(paginas[p - 1]).find(l => RE_CAB.test(l.txt));
       if (!cab) continue;
       const m = cab.txt.match(RE_CAB);
       const rdo = +m[2], data = dataISO(m[1]);
+      if (opts.desde && data && data < opts.desde) continue;
       const page = await doc.getPage(p);
       const ops = await page.getOperatorList();
       const rects = [];
@@ -303,7 +349,6 @@
         out.push({ rdo, data, idx: contPorRdo[rdo], pagina: p, w: c2.width, h: c2.height, legenda, src: c2.toDataURL('image/jpeg', qualidade) });
       }
       cv.width = cv.height = 0;
-      if (opts.progresso) opts.progresso(p, doc.numPages);
     }
     return out;
   }

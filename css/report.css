@@ -1,10 +1,10 @@
 
-/* ===== Report — sistema visual (rev. 19/10/2026: quadros com fundo na Curva S/Marcos/Atenção, ícones de seção, até 12 fotos) =====
+/* ===== Report — sistema visual (rev. 24/10/2026: folhas A4; rev. 19/10/2026: quadros com fundo na Curva S/Marcos/Atenção, ícones de seção, até 12 fotos) =====
    Tipografia: escala modular 1,25 (terça maior) sobre 12 px → 12 · 15 · 19 · 24 · 30 (+13 px para texto de tabela, +11 px para eixos).
    Espaçamento: grade de 8 pt (4 · 8 · 16 · 24 · 32 · 40). Alinhamento: texto à esquerda, números à direita e tabulares.
    Notação dos gráficos no padrão IBCS: realizado = cheio escuro · planejado = contorno/linha azul · base = tracejado claro;
    vermelho e verde só para desvio e farol. */
-.paper.exec {
+.folha.exec {
   --rx-navy: #1F3045; --rx-ink: #344054; --rx-muted: #667085; --rx-faint: #98A2B3;
   --rx-line: #E4E7EC; --rx-line-2: #F0F2F5; --rx-bg: #F7F9FB; --rx-blue: #547CA5; --rx-blue-2: #A9BED4;
   --rx-ok: #67A58A; --rx-warn: #D4A44A; --rx-crit: #C77373;
@@ -15,17 +15,17 @@
   --real: var(--rx-navy); --plan: var(--rx-blue); --grid: var(--rx-line-2); --card: #FFFFFF; --card-2: var(--rx-bg);
   --gap: rgba(199, 115, 115, .12); --ok: var(--rx-ok-ink); --crit: var(--rx-crit-ink); --ink: var(--rx-navy); --ink-2: var(--rx-ink);
   --muted: var(--rx-muted); --rule: var(--rx-line); --head-rule: var(--rx-navy);
-  background: #FFFFFF; border: 1px solid var(--rx-line); border-radius: 8px; box-shadow: none;
+  background: #FFFFFF;
   color: var(--rx-ink); font-family: var(--rx-font); font-size: var(--fs-13); line-height: 1.5; font-feature-settings: "tnum" 1, "cv11" 1;
 }
-.paper.exec * { font-family: inherit; }
+.folha.exec * { font-family: inherit; }
 .rx-tok { --rx-navy: #1F3045; --rx-ink: #344054; --rx-muted: #667085; --rx-faint: #98A2B3; --rx-line: #E4E7EC; --rx-line-2: #F0F2F5; --rx-bg: #F7F9FB; --rx-blue: #547CA5;
   --rx-ok: #67A58A; --rx-warn: #D4A44A; --rx-crit: #C77373; --fs-11: 11px; --fs-12: 12px; --fs-13: 13px; --sp-1: 4px; --sp-2: 8px; --sp-3: 16px; background: #fff; border-radius: 8px; padding: 4px 16px; }
 .rx-av.sem-peso .rx-av-r { grid-template-columns: minmax(0, 1fr) 48px 232px; }
 @media (max-width: 960px) { .rx-av.sem-peso .rx-av-r { grid-template-columns: minmax(0, 1fr) 40px 180px; } }
 @media (max-width: 600px) { .rx-av.sem-peso .rx-av-r { grid-template-columns: minmax(0, 1fr) 16px 112px; } }
 
-.paper.exec h1, .paper.exec h2, .paper.exec p { text-align: left; }
+.folha.exec h1, .folha.exec h2, .folha.exec p { text-align: left; }
 
 /* Nível 1 — identificação */
 .rx-hd { padding: var(--sp-5) var(--sp-6) var(--sp-4); border-bottom: 1px solid var(--rx-line); display: grid; gap: var(--sp-4); }
@@ -48,7 +48,7 @@
 .rx-hd-meta dt { color: var(--rx-muted); text-align: right; } .rx-hd-meta dd { margin: 0; color: var(--rx-navy); font-weight: 500; text-align: right; }
 
 /* corpo */
-.paper.exec .pb { padding: var(--sp-5) var(--sp-6) var(--sp-6); display: grid; gap: var(--sp-6); }
+.folha.exec .pb { padding: var(--sp-5) var(--sp-6) var(--sp-6); display: grid; gap: var(--sp-6); }
 
 /* Nível 2 — síntese: frase + cartões */
 .rx-top { display: grid; gap: var(--sp-4); }
@@ -87,28 +87,28 @@
 .rx-box.rx-alert { background: rgba(199, 115, 115, .07); border-color: rgba(199, 115, 115, .3); }
 
 /* gráfico combinado */
-.paper.exec .legend { font-size: var(--fs-12); color: var(--rx-ink); gap: 6px var(--sp-3); }
+.folha.exec .legend { font-size: var(--fs-12); color: var(--rx-ink); gap: 6px var(--sp-3); }
 .rx-leg-g { font-weight: 600; color: var(--rx-navy); }
 .rx-leg .rx-leg-g + span { margin-left: -4px; }
 .rx-leg .rx-leg-g:not(:first-child) { margin-left: var(--sp-3); padding-left: var(--sp-3); border-left: 1px solid var(--rx-line); }
-.paper.exec .legend .note { margin-left: auto; color: var(--rx-muted); }
-.paper.exec .sw-base { background: repeating-linear-gradient(90deg, var(--rx-blue-2) 0 4px, transparent 4px 7px); height: 2px; }
+.folha.exec .legend .note { margin-left: auto; color: var(--rx-muted); }
+.folha.exec .sw-base { background: repeating-linear-gradient(90deg, var(--rx-blue-2) 0 4px, transparent 4px 7px); height: 2px; }
 .sw-breal, .sw-bplan { display: inline-block; width: 9px; height: 10px; border-radius: 1.5px; }
 .sw-breal { background: var(--rx-navy, #1F3045); } .sw-bplan { background: #fff; box-shadow: inset 0 0 0 1.25px var(--rx-blue, #547CA5); }
-.paper.exec .chart .grid { stroke: var(--rx-line); }
-.paper.exec .chart .ax { fill: var(--rx-muted); font-size: var(--fs-11); }
-.paper.exec .chart .ax-t { fill: var(--rx-faint); }
-.paper.exec .chart .ax-strong { fill: var(--rx-navy); font-weight: 600; }
-.paper.exec .chart .ln-base { stroke: var(--rx-blue-2); stroke-width: 1.5; }
-.paper.exec .chart .ln-prev { stroke: var(--rx-blue); stroke-width: 2; }
-.paper.exec .chart .ln-real { stroke: var(--rx-navy); stroke-width: 2.5; }
-.paper.exec .chart .corte { stroke: var(--rx-faint); }
-.paper.exec .chart .cb-plan { fill: #FFFFFF; stroke: var(--rx-blue); stroke-width: 1.25; }
-.paper.exec .chart .cb-real { fill: var(--rx-navy); opacity: .82; }
-.paper.exec .chart .cb-real.parcial { opacity: .35; }
-.paper.exec .chart .lbl { fill: var(--rx-blue); font-size: var(--fs-12); font-weight: 600; }
-.paper.exec .chart .lbl-real { fill: var(--rx-navy); font-size: var(--fs-13); }
-.paper.exec .chart .lbl, .paper.exec .chart .ax { paint-order: stroke; stroke: var(--rx-bg); stroke-width: 3px; stroke-linejoin: round; }
+.folha.exec .chart .grid { stroke: var(--rx-line); }
+.folha.exec .chart .ax { fill: var(--rx-muted); font-size: var(--fs-11); }
+.folha.exec .chart .ax-t { fill: var(--rx-faint); }
+.folha.exec .chart .ax-strong { fill: var(--rx-navy); font-weight: 600; }
+.folha.exec .chart .ln-base { stroke: var(--rx-blue-2); stroke-width: 1.5; }
+.folha.exec .chart .ln-prev { stroke: var(--rx-blue); stroke-width: 2; }
+.folha.exec .chart .ln-real { stroke: var(--rx-navy); stroke-width: 2.5; }
+.folha.exec .chart .corte { stroke: var(--rx-faint); }
+.folha.exec .chart .cb-plan { fill: #FFFFFF; stroke: var(--rx-blue); stroke-width: 1.25; }
+.folha.exec .chart .cb-real { fill: var(--rx-navy); opacity: .82; }
+.folha.exec .chart .cb-real.parcial { opacity: .35; }
+.folha.exec .chart .lbl { fill: var(--rx-blue); font-size: var(--fs-12); font-weight: 600; }
+.folha.exec .chart .lbl-real { fill: var(--rx-navy); font-size: var(--fs-13); }
+.folha.exec .chart .lbl, .folha.exec .chart .ax { paint-order: stroke; stroke: var(--rx-bg); stroke-width: 3px; stroke-linejoin: round; }
 .chart .tip[hidden] { display: none; }
 .chart .tip .tip-g { margin-top: 4px; font-size: 11px; color: var(--muted); font-weight: 600; }
 
@@ -173,36 +173,97 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .rx-fotos figcaption { display: grid; gap: 2px; font-size: var(--fs-12); line-height: 1.4; color: var(--rx-ink); }
 .rx-fotos figcaption small { font-size: var(--fs-11); color: var(--rx-muted); }
 
-@media (max-width: 960px) {
-  .rx-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .rx-row { grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); }
-  .rx-av-r { grid-template-columns: minmax(0, 1fr) 56px 40px 180px; }
-}
+
+/* aba Obra: o quadro de atividades usa o mesmo desenho do report, mas acompanha a largura da tela */
+@media (max-width: 960px) { .rx-tok .rx-av-r { grid-template-columns: minmax(0, 1fr) 56px 40px 180px; } }
 @media (max-width: 600px) {
-  .rx-hd { padding: var(--sp-4) var(--sp-3) var(--sp-3); gap: var(--sp-3); }
-  .rx-hd-main { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
-  .rx-hd-meta { grid-template-columns: auto minmax(0, 1fr); white-space: normal; }
-  .rx-hd-meta dt, .rx-hd-meta dd { text-align: left; }
-  .rx-hd h1 { font-size: var(--fs-24); }
-  .paper.exec .pb { padding: var(--sp-4) var(--sp-3) var(--sp-5); gap: var(--sp-5); }
-  .rx-cards { gap: var(--sp-2); }
-  .rx-card { padding: var(--sp-3) 14px 14px; }
-  .rx-card-v { font-size: var(--fs-19); }
-  .rx-av-r { grid-template-columns: minmax(0, 1fr) 16px 112px; gap: 10px; }
-  .rx-av-ps { display: none; }
-  .rx-av-nm { padding-left: calc(var(--nv, 0) * 12px); }
-  .rx-av-h .rx-av-br { font-size: 0; } .rx-av-h .rx-av-br::before { content: "Realizado"; font-size: var(--fs-12); }
-  .rx-av-h .rx-av-fa { font-size: 0; }
-  .rx-at li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
-  .rx-fotos { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
-  .rx-fa-lg { margin-left: 0 !important; }
+  .rx-tok .rx-av-r { grid-template-columns: minmax(0, 1fr) 16px 112px; gap: 10px; }
+  .rx-tok .rx-av-ps { display: none; }
+  .rx-tok .rx-av-nm { padding-left: calc(var(--nv, 0) * 12px); }
+  .rx-tok .rx-av-h .rx-av-br { font-size: 0; } .rx-tok .rx-av-h .rx-av-br::before { content: "Realizado"; font-size: var(--fs-12); }
+  .rx-tok .rx-av-h .rx-av-fa { font-size: 0; }
+  .rx-tok .rx-fa-lg { margin-left: 0 !important; }
 }
+
+/* ===== Folhas A4 (rev. 24/10/2026) =====
+   O report é um conjunto de folhas de tamanho fixo (210 × 297 mm; o mapa em dupla, 297 × 210 mm). Dentro da folha nada
+   depende da largura da tela: o que se vê é o que sai na impressão e no PDF. Em telas estreitas a folha inteira é
+   reduzida (zoom calculado em app.js). Cabeçalho completo na 1ª folha, cabeçalho curto nas seguintes, rodapé numerado. */
+.folhas { display: grid; justify-items: center; gap: 24px; min-width: 0; }
+.folha { box-sizing: border-box; width: 210mm; height: 297mm; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden;
+  border: 0; border-radius: 2px; box-shadow: 0 1px 3px rgba(16, 24, 40, .10), 0 10px 28px rgba(16, 24, 40, .10); }
+.folha.paisagem { width: 297mm; height: 210mm; }
+.folha.exec .rx-hd { padding: 26px 36px 18px; gap: 16px; }
+.folha.exec .rx-hd h1 { font-size: 27px; }
+.fl-hd2 { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 36px 12px; border-bottom: 1px solid var(--rx-line); font-size: var(--fs-11); color: var(--rx-muted); }
+.fl-hd2 .rx-brand img { height: 15px; }
+.fl-corpo { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 18px; padding: 18px 36px 10px; }
+.fl-corpo > * { flex: none; }
+.fl-pe { display: flex; justify-content: space-between; gap: 12px; padding: 9px 36px 14px; border-top: 1px solid var(--rx-line); font-size: 10px; line-height: 1.3; color: var(--rx-faint); }
+.fl-n { font-weight: 600; color: var(--rx-muted); white-space: nowrap; }
+.rx-s > h2 em.fl-cont { margin-left: 0; color: var(--rx-faint); font-size: var(--fs-11); }
+.folha.exec .rx-box { padding: 14px 20px 18px; }
+.folha.exec .rx-card { padding: 16px 16px 14px; }
+.folha.exec .rx-card-v { font-size: 21px; }
+.rx-cards.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* Valor agregado: legenda dos termos */
+.rx-glos { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 18px; padding: 10px 14px; background: #FFFFFF;
+  border: 1px solid var(--rx-line); border-radius: 8px; font-size: var(--fs-11); line-height: 1.45; color: var(--rx-ink); }
+.rx-glos > div { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.rx-glos dt { font-weight: 700; font-size: var(--fs-12); color: var(--rx-navy); letter-spacing: .02em; }
+.rx-glos dd { margin: 0; }
+.rx-glos b { font-weight: 600; color: var(--rx-navy); }
+.rx-tok .rx-glos { border: 0; padding: 8px 0; }
+@media (max-width: 720px) { .rx-tok .rx-glos { grid-template-columns: minmax(0, 1fr); } }
+
+/* ===== Mapa de avanço ===== cores do padrão de mapeamento: verde executado · amarelo executando · vermelho a executar */
+.mp-planta { position: relative; width: 100%; margin-inline: auto; background: #FFFFFF; border: 1px solid var(--rx-line, var(--rule)); border-radius: 6px; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+.mp-planta img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; display: block; pointer-events: none; max-width: none; }
+.mp-z { position: absolute; box-sizing: border-box; border: 2px solid; display: block; font-style: normal; }
+.mp-z b { position: absolute; left: 3px; top: 3px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: #FFFFFF; color: #1F3045;
+  font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; box-shadow: 0 0 0 1px rgba(16, 24, 40, .18); }
+.mp-z.ok { background: rgba(34, 197, 94, .36); border-color: #16A34A; }
+.mp-z.andamento { background: rgba(250, 204, 21, .42); border-color: #CA8A04; }
+.mp-z.pendente { background: rgba(239, 68, 68, .32); border-color: #DC2626; }
+.mp-z.novo { background: rgba(84, 124, 165, .22); border: 2px dashed #547CA5; }
+.mp-z.sel { outline: 3px solid #1F3045; outline-offset: 1px; z-index: 2; }
+.mp-sw { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -1px; margin-right: 6px; flex: none; }
+.mp-sw.ok { background: #22C55E; } .mp-sw.andamento { background: #FACC15; } .mp-sw.pendente { background: #EF4444; }
+.mp-leg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; font-size: 12px; color: var(--rx-ink, var(--ink-2)); }
+.mp-leg span { display: inline-flex; align-items: center; }
+.mp-leg small { color: var(--rx-muted, var(--muted)); margin-left: 6px; }
+.mp-tab { width: 100%; border-collapse: collapse; font-size: 11.5px; line-height: 1.4; color: var(--rx-ink, var(--ink-2)); }
+.mp-tab th { text-align: left; font-weight: 600; color: var(--rx-muted, var(--muted)); border-bottom: 1px solid var(--rx-line, var(--rule)); padding: 6px 8px; }
+.mp-tab td { border-bottom: 1px solid var(--rx-line-2, var(--rule)); padding: 6px 8px; vertical-align: top; }
+.mp-tab .n { text-align: right; white-space: nowrap; } .mp-n { white-space: nowrap; font-weight: 600; }
+.mp-tab small { color: var(--rx-muted, var(--muted)); }
+.mp-tt { margin: 0; display: grid; gap: 2px; font-size: 19px; line-height: 1.25; font-weight: 600; color: var(--rx-navy); text-transform: none; letter-spacing: 0; }
+.mp-tt small { font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--rx-faint); }
+.mp-folha .fl-corpo { gap: 12px; }
+.mp-folha .rx-hd { padding-bottom: 14px; }
+.mp-dupla { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.mp-meia { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.mp-dupla.empilha { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.mp-dupla.empilha .mp-meia { gap: 8px; }
+/* aba Obra: lista e editor */
+.mp-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.mp-card { margin: 0; display: grid; gap: 10px; align-content: start; padding: 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--card); }
+.mp-card figcaption b { display: block; color: var(--ink); }
+.mp-card figcaption small { color: var(--muted); }
+.mp-editor .mp-edit .mp-planta { cursor: crosshair; }
+.mp-editor .mp-edit .mp-z { cursor: pointer; }
+.mp-painel { display: grid; gap: 10px; border: 1px solid var(--rule); border-radius: 10px; background: var(--card-2); }
+.mp-painel .seg button { display: inline-flex; align-items: center; }
+.mp-linha { cursor: pointer; }
+.mp-linha:hover td { background: var(--soft); }
+
 @media print {
-  .paper.exec { border: 0; zoom: .84; }
-  .rx-cards { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
-  .rx-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; }
-  .rx-fotos { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
-  .rx-s, .rx-card, .rx-av-r, .rx-lead { break-inside: avoid; }
-  .rx-card { box-shadow: none; }
-  .paper.exec, .rx-card::before, .rx-fa, .cb-real, .rx-box, .rx-lead, .rx-av, .rx-av-k { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @page folha { size: A4 portrait; margin: 0; }
+  @page folhaPaisagem { size: A4 landscape; margin: 0; }
+  .folhas { display: block; }
+  .folha { page: folha; zoom: 1 !important; box-shadow: none; border-radius: 0; margin: 0; break-after: page; }
+  .folha.paisagem { page: folhaPaisagem; }
+  .folha:last-child { break-after: auto; }
+  .folha, .folha * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }

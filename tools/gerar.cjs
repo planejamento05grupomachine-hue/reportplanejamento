@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================
-// Painel de Obras Machine — exporta o report de uma obra em PDF (A4, uma página).
+// Painel de Obras Machine — exporta o report de uma obra em PDF (folhas A4, uma página por folha).
 // Abre o painel desta pasta num Chromium sem tela, entra com e-mail e senha e imprime o report.
 // Os dados ficam cifrados em data/: sem uma conta válida não há o que exportar.
 //
@@ -52,20 +52,15 @@ const srv = http.createServer((req, res) => {
     if (!(await p.$('#paper'))) throw new Error(`A obra ${opt.obra} não tem report disponível para esta conta.`);
     await p.waitForFunction(() => ![...document.querySelectorAll('#paper img')].some(i => !i.complete), null, { timeout: 60000 });
     await p.evaluate(() => document.fonts.ready);
+    // o report é paginado no navegador em folhas A4 (retrato; mapa em dupla, paisagem): espera a paginação final
+    await p.waitForTimeout(500);
+    await p.waitForSelector('#paper[data-paginado]', { timeout: 30000 });
     const corte = await p.getAttribute('#paper', 'data-corte');
-    await p.emulateMedia({ media: 'print' });
-    // escala automática: o report cabe em uma página A4 (área útil ~718 x 1047 px a 96 dpi, margens de 10 mm).
-    // Largura fixa de 860 px e escala de impressão do Chrome (o zoom de CSS quebra a paginação).
-    const escala = await p.evaluate(() => {
-      const el = document.getElementById('paper');
-      Object.assign(el.style, { zoom: '1', width: '860px', maxWidth: '860px', margin: '0' });
-      const r = el.getBoundingClientRect();
-      return Math.floor(Math.min(718 / r.width, 1047 / r.height, 1) * 1000) / 1000;
-    });
-    console.log('Escala do PDF: ' + Math.round(escala * 100) + '%');
+    console.log('Folhas: ' + await p.$$eval('#paper .folha', f => f.length));
     fs.mkdirSync(opt.saida, { recursive: true });
     const arq = path.join(opt.saida, `Report-Obra-${opt.obra}-${corte || new Date().toISOString().slice(0, 10)}.pdf`);
-    await p.pdf({ path: arq, format: 'A4', printBackground: true, scale: escala, margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' } });
+    // cada folha vira uma página do tamanho dela (CSS @page folha / folhaPaisagem, margem zero)
+    await p.pdf({ path: arq, printBackground: true, preferCSSPageSize: true, margin: { top: '0', bottom: '0', left: '0', right: '0' } });
     if (erros.length) console.log('Avisos da página:\n' + erros.join('\n'));
     console.log('PDF: ' + arq);
   } catch (e) {

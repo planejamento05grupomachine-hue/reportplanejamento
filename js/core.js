@@ -367,7 +367,11 @@
     const bac = resumo ? resumo.totalContrato : null;
     const pv = pts ? interp(pts, 'previsto', corte) : null;
     const baseVA = pts ? interp(pts, 'base', corte) : null;
-    const ev = pts ? interp(pts, 'realizado', corte) : null;
+    // EV: o Prevision grava o realizado do mês corrente no ponto de fim de mês (posição do dia da exportação).
+    // Interpolar até o corte subestimaria o executado; vale o último realizado registrado até o fim do mês do corte.
+    const fimMesCorte = fimDoMes(corte.slice(0, 7));
+    const comReal = pts ? pts.filter(p => p.data <= fimMesCorte && (p.realizado || 0) > 0) : [];
+    const ev = pts ? (comReal.length ? comReal.at(-1).realizado : 0) : null;
     const custo = serieCusto(obra);
     const ac = custo.length ? interp(custo, 'realizado', corte) : null;
     const spi = pv > 0 ? ev / pv : null;
@@ -375,13 +379,51 @@
     const eac = cpi && bac !== null ? ac + (bac - ev) / cpi : null;
     const vac = eac !== null ? bac - eac : null;
     const sem = spi !== null ? semaforo(spi, obra.faixas) : { k: 'neutro', t: 'Sem dados', e: 'sem-dados' };
-    // normaliza PV/EV/base para fração do contrato (BAC), ou do próprio total planejado da curva
-    // sem BAC, para reaproveitar os gráficos da Curva S física (eixo 0–100%)
-    const base100 = bac || (pts ? pts.at(-1).previsto : null) || 1;
+    // escala do gráfico (eixo 0–100%): o valor do contrato (BAC) quando a Curva S financeira está na mesma base
+    // (198 e 208: total da curva ≈ contrato); senão, o total previsto da própria curva. Na 207 a curva do Prevision
+    // é o orçamento da obra (R$ 12 mi) e o contrato Machine é outro valor (R$ 1,15 mi): dividir por ele daria 700%.
+    const totalCurva = pts ? Math.max(pts.at(-1).previsto || 0, pts.at(-1).base || 0) : null;
+    const mesmaBase = !!(bac && totalCurva && Math.abs(totalCurva / bac - 1) <= 0.15);
+    const base100 = (mesmaBase ? bac : totalCurva) || bac || 1;
     const ptsFrac = pts ? pts.map(p => ({ data: p.data, base: (p.base || 0) / base100, previsto: (p.previsto || 0) / base100, realizado: (p.realizado || 0) / base100 })) : null;
     return { pv, ev, baseVA, bac, ac, spi, cpi, eac, vac, sem, pts: ptsFrac, pontos$: pts,
+      escala: pts ? (mesmaBase ? 'contrato' : 'orcamento') : null, totalCurva,
       pvFrac: pv !== null ? pv / base100 : null, evFrac: ev !== null ? ev / base100 : null, baseFrac: baseVA !== null ? baseVA / base100 : null,
-      faturamento: resumo ? { contratual: resumo.totalContrato, medido: resumo.medidoAcumulado, saldo: resumo.saldo, ultimaMedicao: resumo.ultimaMedicao } : null };
+      faturamento: resumo ? { contratual: resumo.totalContrato, medido: resumo.medidoAcumulado, saldo: resumo.saldo, ultimaMedicao: resumo.ultimaMedicao,
+        pctMedido: resumo.totalContrato && resumo.medidoAcumulado !== null ? resumo.medidoAcumulado / resumo.totalContrato : null } : null };
+  }
+  // R$ compacto para cartões: "R$ 12,84 mi" · "R$ 103,0 mil"
+  const moedaCurta = v => v === null || v === undefined || isNaN(v) ? '—' : Math.abs(v) >= 1e6 ? 'R$ ' + fmtNum(v / 1e6, 2) + ' mi' : Math.abs(v) >= 1e3 ? 'R$ ' + fmtNum(v / 1e3, 1) + ' mil' : 'R$ ' + fmtNum(v, 0);
+
+  // ---------- mapa de avanço (plantas demarcadas) ----------
+  // Cada zona desenhada na planta tem situação manual ou vinculada a uma linha do cronograma / Progresso por tarefas.
+  // Vinculada, a situação sai do realizado da atividade a cada carga: 100% = executado, >0 = executando, 0 = a executar.
+  const MAPA_ST = { executado: 'Executado', executando: 'Executando', 'a-executar': 'A executar' };
+  function atividadesParaMapa(r) {
+    if (r.crono && r.crono.linhas.length) return r.crono.linhas.filter(l => l.nivel > 1).map(l => ({ chave: 'c' + l.linha + '|' + normNome(l.nome), eap: l.eap, nivel: l.nivel, nome: l.nomeExib, feito: l.realizado || 0 }));
+    const nome = Object.fromEntries((r.lista || []).map(t => [t.eap, t]));
+    const vistos = new Set(); const out = [];
+    const add = p => { if (vistos.has(p.eap)) return; vistos.add(p.eap); out.push({ chave: 't' + p.eap + '|' + normNome(p.nome), eap: p.eap, nivel: p.nivel || p.eap.split('.').length, nome: p.nome, feito: p.pctPacote ?? p.pctTarefa ?? 0 }); };
+    (r.pacotes || []).forEach(p => { add(p); (r.subpacotes(p.eap) || []).forEach(add); });
+    Object.values(nome).forEach(add);
+    return out.sort((a, b) => a.eap.localeCompare(b.eap, 'pt-BR', { numeric: true }));
+  }
+  function statusZona(z, ativ) {
+    if (z.vinculo) {
+      const a = ativ.find(x => x.chave === z.vinculo.chave) || ativ.find(x => normNome(x.nome) === normNome(z.vinculo.nome) && x.eap === z.vinculo.eap) || ativ.find(x => normNome(x.nome) === normNome(z.vinculo.nome));
+      if (a) return { st: a.feito >= 0.9995 ? 'executado' : a.feito > 0.0005 ? 'executando' : 'a-executar', feito: a.feito, auto: true, ativ: a };
+    }
+    return { st: z.status || 'a-executar', feito: null, auto: false, ativ: null };
+  }
+  function mapasDaObra(obra, r) {
+    const ativ = atividadesParaMapa(r);
+    return (obra.mapas || []).filter(m => m.img).map(m => {
+      const zonas = (m.zonas || []).map((z, i) => ({ ...z, n: i + 1, ...statusZona(z, ativ) }));
+      const area = k => zonas.filter(z => z.st === k).reduce((s, z) => s + z.w * z.h, 0);
+      const tot = zonas.reduce((s, z) => s + z.w * z.h, 0) || 1;
+      const resumo = Object.keys(MAPA_ST).map(k => ({ k, t: MAPA_ST[k], n: zonas.filter(z => z.st === k).length, area: area(k) / tot }));
+      return { ...m, zonas, resumo };
+    });
   }
 
   // ---------- narrativa automática (painel e report) ----------
@@ -855,6 +897,6 @@
 
   root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, diaSemana, diff, addDias, nomeBonito, semaforo, FAIXAS,
     calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, nomeCurto, narrativa, resumoExecutivo, auditoria, marcos, motivoCurto, chartCurvaS, chartMensal, chartCombo, chartEfetivo, interp, fracTempo,
-    calcFinanceiro, moeda };
+    calcFinanceiro, moeda, moedaCurta, MAPA_ST, atividadesParaMapa, statusZona, mapasDaObra };
 })(typeof window !== 'undefined' ? window : globalThis);
 

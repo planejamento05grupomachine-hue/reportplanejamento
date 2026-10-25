@@ -500,6 +500,17 @@
       });
     },
 
+    // mapas de avanço (plantas demarcadas): sempre no rascunho — o cliente só vê depois de "Publicar para o cliente"
+    salvarMapas(id, mapas) {
+      return gravar(async () => {
+        const e = OB[id]; if (!e) throw erro('Obra não encontrada.');
+        if (!e.ras) { e.ras = { ...clone(e.pub), fotosProprias: false }; delete e.ras.publicadoEm; }
+        e.ras.mapas = mapas;
+        await commit({ [P.ras(id)]: await arqRas(e.ras) }, `Mapa de avanço da obra ${e.ras.codigo || id} (rascunho)`);
+        return paraApp(id);
+      });
+    },
+
     // ----- acessos -----
     listarAcessos() {
       if (!DIR) return [];

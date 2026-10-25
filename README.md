@@ -33,11 +33,17 @@ trocadas e os dados recifrados. Depois, **Publicação → Compactar histórico*
 1. **Publicação (GitHub)** — informe uma vez o token de publicação (fine-grained token com acesso só a este
    repositório e permissão *Contents: Read and write*). Ele fica só no seu navegador.
 2. **Cadastrar obra** — código, nome, cliente, prazo contratual.
-3. **Alimentar** — envie as exportações do Prevision (Curva S, Progresso mensal, Progresso por tarefas, Cronograma)
-   e o PDF dos diários de obra dos últimos 30 dias exportado da plataforma RDO. A carga entra como **rascunho**.
-4. Confira na tela da obra e clique em **Publicar para o cliente**.
-5. **Report → Baixar PDF** gera o report em uma página A4.
-6. **Acessos** — aprovado um pedido, crie o acesso: o painel gera a senha e prepara o e-mail de envio.
+3. **Alimentar** — envie as exportações do Prevision (Curva S, Progresso mensal ou o `progresso-semanal`, que o painel
+   soma por mês, Progresso por tarefas, Cronograma) e o PDF dos diários de obra exportado da plataforma RDO. O PDF
+   pode ser grande (60 MB ou mais): a tela mostra o andamento página a página e só libera o salvar no fim; das fotos,
+   ficam as dos últimos 35 dias do PDF. A carga entra como **rascunho**.
+4. **Mapa de avanço** (aba Obra) — envie a planta da obra (PDF, escolhendo a página, ou imagem), demarque as áreas
+   da frente de serviço e classifique cada uma em Executado, Executando ou A executar. Área vinculada a uma atividade
+   do cronograma muda de cor sozinha a cada carga. O mapa vai para o rascunho.
+5. Confira na tela da obra e clique em **Publicar para o cliente**.
+6. **Report → Baixar PDF** gera o report em folhas A4 retrato (uma página do PDF por folha); o mapa de avanço sai em
+   folha retrato (uma planta) ou paisagem (duas plantas), conforme escolhido no mapa.
+7. **Acessos** — aprovado um pedido, crie o acesso: o painel gera a senha e prepara o e-mail de envio.
 
 Cada gravação vira um commit neste repositório; o site atualiza em cerca de um minuto.
 

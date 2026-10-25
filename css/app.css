@@ -13,6 +13,8 @@
 @font-face { font-family: "Barlow Semi Condensed"; font-weight: 700; font-style: normal; font-display: swap; src: url("../assets/fonts/BarlowSemiCondensed-Bold.ttf") format("truetype"); }
 
 :root {
+  /* Todas as telas na largura de uma folha A4 retrato (rev. 24/10/2026): o que se vê é o que se imprime. */
+  --larg-a4: 210mm;
   /* Aura clara: cinza quente de fundo, cartões quase brancos com fio fino, títulos em caixa-alta leve.
      Azul do logo como marca; mostarda como contraponto nos gráficos (par validado para daltonismo). */
   --bg: #F3F2EF;
@@ -73,7 +75,7 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 500; letter-spacing: .0
 /* ---------- masthead ---------- */
 .mast { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--mast);
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-.mast-in { max-width: 1080px; margin: 0 auto; height: 64px; display: flex; align-items: center; gap: 16px; border-bottom: 2px solid var(--head-rule); }
+.mast-in { max-width: var(--larg-a4); margin: 0 auto; height: 64px; display: flex; align-items: center; gap: 16px; border-bottom: 2px solid var(--head-rule); }
 .mast .ttl { font-size: 15px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--ink); white-space: nowrap; padding-left: 16px; border-left: 1px solid var(--rule); }
 .mast img { height: 28px; width: auto; display: block; }
 .mast .crumb { color: var(--mast-ink); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -89,7 +91,7 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 500; letter-spacing: .0
 .menu button:hover { background: var(--soft); }
 
 /* ---------- página ---------- */
-.page { max-width: 1080px; margin: 0 auto; padding-block: 22px 120px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 18px; }
+.page { max-width: calc(var(--larg-a4) + 32px); margin: 0 auto; padding-block: 22px 120px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 18px; }
 .kicker { font-family: var(--f-body); font-weight: 600; font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--brand); }
 .h1 { font-size: clamp(26px, 4.6vw, 36px); line-height: 1.08; margin-top: 6px; text-transform: uppercase; letter-spacing: .04em; font-weight: 500; }
 .sub { color: var(--ink-2); margin-top: 6px; }
@@ -404,7 +406,7 @@ table.t td small { display: block; color: var(--muted); font-size: 12px; margin-
   .paper .manchete { font-size: 17px; }
 }
 @media print {
-  @page { size: A4; margin: 8mm; }
+  @page { size: A4 portrait; margin: 12mm; }
   .paper.exec { zoom: .61; }
   .paper.exec .ps { break-inside: auto; }
   .paper.exec .pb { gap: 12px; padding: 16px 20px 4px; }
@@ -603,3 +605,12 @@ table.t td small { display: block; color: var(--muted); }
 .senha-box code { flex: 1; font-size: 20px; letter-spacing: .08em; font-family: ui-monospace, "SF Mono", Consolas, monospace; color: var(--ink); user-select: all; word-break: break-all; }
 @media (max-width: 640px) { .sync { display: none; } table.t td.acoes .more { display: block; margin: 4px 0 0 auto; } }
 .steps > label.chk, .modal-card label.chk { justify-self: start; border: 0; padding: 0; background: none; border-radius: 0; gap: 8px; }
+
+/* ===== Folha A4 e leitura de arquivos (rev. 24/10/2026) ===== */
+.note-box.lendo { display: flex; align-items: center; gap: 10px; }
+.note-box.lendo .sync { display: inline-flex; }
+@media print {
+  /* telas comuns (Portfólio, Obra...) impressas em A4 retrato; o report usa as próprias folhas (report.css) */
+  @page { size: A4 portrait; margin: 12mm; }
+  .page { max-width: none; }
+}
