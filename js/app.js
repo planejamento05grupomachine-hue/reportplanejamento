@@ -340,15 +340,16 @@
 
     const rf = Core.calcFinanceiro(o, r.corte);
     const financeiro = rf ? sec('financeiro', 'Financeiro — Valor Agregado', rf.spi !== null ? `SPI ${fmtNum(rf.spi, 2)}` : (rf.faturamento ? moeda(rf.faturamento.medido) : ''), `
-      <p class="sec-lead">Valor agregado (EV) e valor planejado (PV) da Curva S financeira do Prevision, contra o valor do contrato apurado no Controle de Medição. Nomenclatura e fontes: ver GOVERNANCA.md.</p>
+      <p class="sec-lead">Valor agregado (EV) e valor planejado (PV) da Curva S financeira do Prevision; valor do contrato, medido e saldo do Controle de Medição.</p>
       <div class="kpis">
         ${rf.faturamento ? `<div class="kpi"><span>Valor do contrato</span><b>${moeda(rf.faturamento.contratual)}</b><small>BAC</small></div>
-        <div class="kpi"><span>Medido acumulado</span><b>${moeda(rf.faturamento.medido)}</b><small>última medição ${esc(rf.faturamento.ultimaMedicao || '—')}</small></div>
+        <div class="kpi"><span>Medido acumulado</span><b>${moeda(rf.faturamento.medido)}</b><small>${rf.faturamento.pctMedido !== null ? pct(rf.faturamento.pctMedido, 1) + ' do contrato · ' : ''}última medição ${esc(rf.faturamento.ultimaMedicao || '—')}</small></div>
         <div class="kpi"><span>Saldo de contrato</span><b>${moeda(rf.faturamento.saldo)}</b><small>a medir</small></div>` : ''}
-        <div class="kpi"><span>SPI</span><b>${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'}</b><small>EV ÷ PV</small></div>
+        <div class="kpi"><span>SPI</span><b>${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'}</b><small>${rf.spi !== null ? `EV ${Core.moedaCurta(rf.ev)} ÷ PV ${Core.moedaCurta(rf.pv)}` : 'EV ÷ PV'}</small></div>
         <div class="kpi"><span>CPI</span><b>${rf.cpi !== null ? fmtNum(rf.cpi, 2) : '—'}</b><small>${rf.cpi !== null ? 'EV ÷ AC' : 'sem dado de custo real (AC)'}</small></div>
       </div>
-      ${rf.pts ? `<div class="legend"><span><i class="sw sw-real"></i>Realizado (EV)</span><span><i class="sw sw-prev"></i>Previsto (PV)</span><span><i class="sw sw-base"></i>Base</span><span class="note">% do valor do contrato</span></div>
+      <div class="rx-tok">${GLOSSARIO_VA}</div>
+      ${rf.pts ? `<div class="legend"><span><i class="sw sw-real"></i>Realizado (EV)</span><span><i class="sw sw-prev"></i>Planejado (PV)</span><span><i class="sw sw-base"></i>Base</span><span class="note">${notaEscalaVA(rf)}</span></div>
       <div class="chart" id="ch-fin"></div>` : '<p class="sub" style="margin:0">Ainda sem Curva S financeira (Financeiro VA) carregada.</p>'}`) : '';
 
     const frentes = !r.pesosOk && r.crono && r.crono.completo ? sec('frentes', 'Avanço por frente', `${Core.atividades(r).length} frentes da EAP`, `
@@ -366,6 +367,8 @@
       ${!r.crono.completo && ehAdmin() ? `<div class="note-box">A exportação trouxe ${r.crono.linhas.length} de ${r.crono.total} linhas (árvore recolhida no Prevision). Para ver o cronograma inteiro aqui, exporte com todas as linhas expandidas.</div>` : ''}
       ${ganttHTML(r)}`) : '';
     const fotosSec = base.fotosPendentes ? sec('fotos', 'Fotos do diário de obra', 'carregando…', '<p class="sub" role="status" style="margin:0">Carregando as fotos…</p>') : r.fotos.length ? sec('fotos', 'Fotos do diário de obra', `${r.fotos.length} fotos · ${new Set(r.fotos.map(f => f.rdo)).size} RDOs`, blocoFotos(base, r)) : '';
+    const nMapas = (o.mapas || []).filter(m => m.img).length;
+    const mapaSec = ehAdmin() || nMapas ? sec('mapa', 'Mapa de avanço', S.mapaEd ? 'editando' : nMapas ? `${nMapas} ${nMapas === 1 ? 'planta' : 'plantas'}` : 'nenhum mapa', blocoMapas(base, o, r), !!S.mapaEd || nMapas > 0) : '';
     const restr = c ? sec('restricoes', 'Paralisações e restrições', c.paralisadas.length ? `<span class="pill critico">${c.paralisadas.length} abertas</span>` : 'nenhuma', blocoRestricoes(c)) : '';
     const conf = ehAdmin() ? sec('conferencia', 'Conferência dos dados', 'só administrador', blocoConferencia(o, r), false) : '';
 
@@ -377,7 +380,7 @@
         <p class="sub">${esc(o.cliente)} · contratante ${esc(o.contratante)}</p>
         <div class="meta">${o.contrato ? `<span>Contrato <b>${esc(o.contrato)}</b></span>` : ''}<span>Prazo contratual <b>${dBR(P.contrIni)} a ${dBR(P.contrFim)}</b> (${P.total} dias${P.contrFonte ? ' · ' + P.contrFonte : ''})</span><span>Decorridos <b>${P.decorrido}</b> · a vencer <b>${P.aVencer}</b></span>${o.responsavel ? `<span>Responsável <b>${esc(o.responsavel)}</b></span>` : ''}</div>
       </div>${ehAdmin() ? '<div class="bar-actions no-print"><button class="btn sec2" data-go="editar-obra">Editar cadastro</button></div>' : ''}</div>
-      ${situacao}${cronoSec}${curva}${mensal}${financeiro}${frentes}${tarefas}${campo}${fotosSec}${restr}${conf}`;
+      ${situacao}${cronoSec}${curva}${mensal}${financeiro}${frentes}${tarefas}${campo}${fotosSec}${mapaSec}${restr}${conf}`;
   }
 
   // Admin: o que o cliente está vendo e o botão de publicar
@@ -533,6 +536,146 @@
     return `<div class="gantt ${comp ? 'gantt-c' : ''}">${leg}<div class="gt-wrap"><div class="gt">${cab}<div class="gt-body">${grade}${linhas.map(row).join('')}</div></div></div></div>`;
   }
 
+  // ---------- mapa de avanço (aba Obra) ----------
+  // Planta da obra (imagem ou página de PDF) com áreas demarcadas: Executado · Executando · A executar.
+  // Área vinculada a uma atividade do cronograma muda de cor sozinha a cada carga; sem vínculo, a situação é a escolhida aqui.
+  // O mapa salvo vai para o rascunho da obra e entra no report (folha A4 retrato, ou duas plantas numa folha paisagem).
+  const PAGINA_MAPA = { retrato: 'A4 retrato · 1 planta por folha', paisagem: 'A4 paisagem · 2 plantas por folha' };
+  const novoId = () => Math.random().toString(36).slice(2, 9);
+  function blocoMapas(base, o, r) {
+    const ed = S.mapaEd;
+    if (ed && ehAdmin()) return editorMapa(ed, r);
+    const mapas = Core.mapasDaObra(o, r);
+    return `<p class="sec-lead">Planta da obra com as áreas de cada frente de serviço classificadas em <b>Executado</b>, <b>Executando</b> e <b>A executar</b>. Área vinculada a uma atividade do cronograma muda de cor sozinha a cada carga.${ehAdmin() ? ' O mapa salvo vai para o rascunho e entra no report depois de publicado.' : ''}</p>
+      ${mapas.length ? `<div class="mp-lista">${mapas.map((m, i) => `<figure class="mp-card"><figcaption><b>${esc(m.titulo || 'Sem título')}</b><small>${PAGINA_MAPA[m.pagina || 'retrato']} · ${m.zonas.length} ${m.zonas.length === 1 ? 'área' : 'áreas'}</small></figcaption>
+        ${plantaHTML(m)}${legMapa(m)}
+        ${ehAdmin() ? `<div class="bar-actions"><button class="btn sec2" data-mapaed="${i}">Editar</button><button class="more neg" data-mapadel="${i}">Remover</button></div>` : ''}</figure>`).join('')}</div>`
+      : `<p class="sub" style="margin:0">${ehAdmin() ? 'Nenhum mapa ainda. Envie a planta (PDF ou imagem) e demarque as áreas.' : 'Nenhum mapa de avanço publicado.'}</p>`}
+      ${ehAdmin() ? '<div class="bar-actions"><button class="btn" data-mapaed="novo">+ Novo mapa de avanço</button></div>' : ''}`;
+  }
+  function editorMapa(ed, r) {
+    const ativ = Core.atividadesParaMapa(r), m = ed.m;
+    const vis = m.img ? Core.mapasDaObra({ mapas: [m] }, r)[0] : { ...m, zonas: [], resumo: [] }, zonas = vis.zonas;
+    const z = zonas.find(x => x.id === ed.sel);
+    const painel = z ? `<div class="mp-painel card-pad">
+        <div class="step-t">Área ${z.n}</div>
+        <div class="field"><label for="mp-rot">Nome da área</label><input class="inp" id="mp-rot" value="${esc(z.rotulo || '')}" placeholder="ex.: Galpão A · eixo 1–5"></div>
+        <div class="field"><label for="mp-vinc">Atividade do cronograma</label><select class="inp" id="mp-vinc"><option value="">— sem vínculo (situação escolhida abaixo) —</option>
+          ${ativ.map(a => `<option value="${esc(a.chave)}" ${z.vinculo && z.vinculo.chave === a.chave ? 'selected' : ''}>${'  '.repeat(Math.max(0, a.nivel - 2))}${esc(a.eap)} · ${esc(a.nome)} (${pct(a.feito, 0)})</option>`).join('')}</select>
+          <small class="hint">${z.auto ? `Situação automática: <b>${Core.MAPA_ST[z.st]}</b> (${pct(z.feito, 0)} realizado).` : 'Sem vínculo, a situação é a escolhida abaixo e não muda sozinha.'}</small></div>
+        <div class="seg" role="group" aria-label="Situação da área">${Object.entries(Core.MAPA_ST).map(([k, t]) => `<button data-mpst="${k}" aria-pressed="${z.st === k}" ${z.auto ? 'disabled' : ''}><i class="mp-sw ${COR_MAPA[k]}"></i>${t}</button>`).join('')}</div>
+        <div class="bar-actions"><button class="more neg" data-mpzdel="1">Remover área</button><button class="more" data-mpsel="">Fechar</button></div>
+      </div>` : `<p class="hint" style="margin:0">${m.img ? 'Arraste sobre a planta para demarcar uma área. Toque numa área para editar.' : ''}</p>`;
+    return `<div class="mp-editor steps">
+      <div class="two"><div class="field"><label for="mp-titulo">Frente de serviço</label><input class="inp" id="mp-titulo" value="${esc(m.titulo || '')}" placeholder="ex.: Cobertura · Armazém Praia do Forte"></div>
+        <div class="field"><label for="mp-pagina">Folha no report</label><select class="inp" id="mp-pagina">${Object.entries(PAGINA_MAPA).map(([k, t]) => `<option value="${k}" ${(m.pagina || 'retrato') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+          ${m.img && m.w / m.h >= 1.6 && (m.pagina || 'retrato') === 'retrato' ? '<small class="hint">Planta larga: a folha paisagem (duas plantas, uma sobre a outra) aproveita melhor o papel.</small>' : ''}</div></div>
+      <div class="field"><label for="mp-arq">Planta (PDF ou imagem)</label><input class="inp" type="file" id="mp-arq" accept=".pdf,image/png,image/jpeg">
+        ${ed.pdfPaginas > 1 ? `<div class="bar-actions" style="margin-top:6px"><label for="mp-pag" class="hint">O PDF tem ${ed.pdfPaginas} páginas. Página:</label><input class="inp" id="mp-pag" type="number" min="1" max="${ed.pdfPaginas}" value="${ed.pdfPagina || 1}" style="width:90px"><button class="btn sec2" type="button" id="mp-usapag">Usar esta página</button></div>` : ''}
+        ${ed.lendo ? `<small class="hint" role="status">${esc(ed.lendo)}</small>` : ''}</div>
+      ${m.img ? `<div class="mp-edit">${plantaHTML(vis, { sel: ed.sel })}</div>${legMapa(vis)}` : ''}
+      ${painel}
+      ${zonas.length ? `<div class="tw">${tabelaMapa(vis, false).replace(/<tr><td class="mp-n">/g, '<tr class="mp-linha"><td class="mp-n">')}</div>` : ''}
+      <div class="bar-actions"><button class="btn" id="mp-salvar" ${m.img ? '' : 'disabled'}>Salvar mapa</button><button class="btn sec2" id="mp-cancelar">Cancelar</button></div>
+    </div>`;
+  }
+  // planta → JPEG de até 2000 px no lado maior (PDF: renderiza a página escolhida)
+  let mapaPdf = null;
+  async function plantaDeCanvas(cv) {
+    const k = Math.min(1, 2000 / Math.max(cv.width, cv.height));
+    const c2 = document.createElement('canvas'); c2.width = Math.round(cv.width * k); c2.height = Math.round(cv.height * k);
+    const g = c2.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c2.width, c2.height); g.drawImage(cv, 0, 0, c2.width, c2.height);
+    return { img: c2.toDataURL('image/jpeg', 0.82), w: c2.width, h: c2.height };
+  }
+  async function plantaDoPdf(n) {
+    const pg = await mapaPdf.getPage(n);
+    const v1 = pg.getViewport({ scale: 1 }), vp = pg.getViewport({ scale: Math.min(6, 2000 / Math.max(v1.width, v1.height)) });
+    const cv = document.createElement('canvas'); cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+    const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+    await pg.render({ canvasContext: g, viewport: vp }).promise;
+    return plantaDeCanvas(cv);
+  }
+  async function lerPlanta(f) {
+    const ed = S.mapaEd; if (!ed) return;
+    ed.lendo = 'Lendo a planta…'; render();
+    try {
+      let p;
+      if (/\.pdf$/i.test(f.name)) {
+        await carregaLibs();
+        mapaPdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()), isEvalSupported: false }).promise;
+        ed.pdfPaginas = mapaPdf.numPages; ed.pdfPagina = 1;
+        p = await plantaDoPdf(1);
+      } else {
+        const bmp = await createImageBitmap(f);
+        const cv = document.createElement('canvas'); cv.width = bmp.width; cv.height = bmp.height; cv.getContext('2d').drawImage(bmp, 0, 0);
+        mapaPdf = null; ed.pdfPaginas = 0;
+        p = await plantaDeCanvas(cv);
+      }
+      Object.assign(ed.m, p); ed.lendo = null;
+    } catch (e) { ed.lendo = 'Não consegui ler a planta: ' + e.message; }
+    render();
+  }
+  function bindMapa() {
+    const ed = S.mapaEd;
+    $$('[data-mapaed]').forEach(b => b.onclick = () => {
+      const base = DB.obras.find(x => x.id === S.obraId), lista = base.mapas || [];
+      const i = b.dataset.mapaed === 'novo' ? -1 : +b.dataset.mapaed;
+      S.mapaEd = { idx: i, m: i < 0 ? { id: novoId(), titulo: '', pagina: 'retrato', zonas: [] } : JSON.parse(JSON.stringify(lista[i])), sel: null };
+      mapaPdf = null; render();
+    });
+    $$('[data-mapadel]').forEach(b => b.onclick = () => {
+      const base = DB.obras.find(x => x.id === S.obraId), i = +b.dataset.mapadel, m = (base.mapas || [])[i];
+      confirma({ titulo: 'Remover mapa de avanço', texto: `O mapa <b>${esc(m.titulo || 'sem título')}</b> sai do rascunho e, depois de publicar, do report.`, ok: 'Remover', perigo: true },
+        () => salvarMapas(base, (base.mapas || []).filter((_, k) => k !== i)));
+    });
+    if (!ed) return;
+    const m = ed.m;
+    const t = $('#mp-titulo'); if (t) t.oninput = () => { m.titulo = t.value; };
+    const pg = $('#mp-pagina'); if (pg) pg.onchange = () => { m.pagina = pg.value; render(); };
+    const fa = $('#mp-arq'); if (fa) fa.onchange = () => { if (fa.files[0]) lerPlanta(fa.files[0]); };
+    const up = $('#mp-usapag'); if (up) up.onclick = async () => { const n = Math.max(1, Math.min(ed.pdfPaginas, +$('#mp-pag').value || 1)); ed.pdfPagina = n; ed.lendo = `Lendo a página ${n}…`; render(); try { Object.assign(m, await plantaDoPdf(n)); ed.lendo = null; } catch (e) { ed.lendo = 'Não consegui ler a página: ' + e.message; } render(); };
+    const zona = () => m.zonas.find(z => z.id === ed.sel);
+    const rot = $('#mp-rot'); if (rot) rot.oninput = () => { const z = zona(); if (z) z.rotulo = rot.value; };
+    const vc = $('#mp-vinc'); if (vc) vc.onchange = () => { const z = zona(); if (!z) return; const base = DB.obras.find(x => x.id === S.obraId); const a = Core.atividadesParaMapa(Core.calc(visaoDaObra(base))).find(x => x.chave === vc.value); z.vinculo = a ? { chave: a.chave, eap: a.eap, nome: a.nome } : null; render(); };
+    $$('[data-mpst]').forEach(b => b.onclick = () => { const z = zona(); if (z) { z.status = b.dataset.mpst; render(); } });
+    $$('[data-mpzdel]').forEach(b => b.onclick = () => { m.zonas = m.zonas.filter(z => z.id !== ed.sel); ed.sel = null; render(); });
+    $$('[data-mpsel]').forEach(b => b.onclick = () => { ed.sel = b.dataset.mpsel || null; render(); });
+    $$('.mp-linha').forEach((tr, i) => tr.onclick = () => { ed.sel = m.zonas[i] && m.zonas[i].id; render(); });
+    const cn = $('#mp-cancelar'); if (cn) cn.onclick = () => { S.mapaEd = null; mapaPdf = null; render(); };
+    const sv = $('#mp-salvar'); if (sv) sv.onclick = async () => {
+      const base = DB.obras.find(x => x.id === S.obraId), lista = [...(base.mapas || [])];
+      const limpo = { ...m, zonas: m.zonas.map(({ id, x, y, w, h, rotulo, status, vinculo }) => ({ id, x, y, w, h, rotulo: rotulo || '', status: status || 'a-executar', vinculo: vinculo || null })), atualizadoEm: new Date().toISOString().slice(0, 10) };
+      if (ed.idx < 0) lista.push(limpo); else lista[ed.idx] = limpo;
+      if (await salvarMapas(base, lista)) { S.mapaEd = null; mapaPdf = null; render(); }
+    };
+    // desenhar área: arrastar sobre a planta; tocar numa área seleciona
+    const pl = $('.mp-edit .mp-planta'); if (!pl) return;
+    pl.onpointerdown = ev => {
+      const zEl = ev.target.closest('.mp-z');
+      if (zEl) { ed.sel = zEl.dataset.zona; render(); return; }
+      ev.preventDefault();
+      const bb = pl.getBoundingClientRect(), fx = x => Math.max(0, Math.min(1, (x - bb.left) / bb.width)), fy = y => Math.max(0, Math.min(1, (y - bb.top) / bb.height));
+      const x0 = fx(ev.clientX), y0 = fy(ev.clientY);
+      const tmp = document.createElement('i'); tmp.className = 'mp-z novo'; pl.appendChild(tmp);
+      const ret = e => { const x1 = fx(e.clientX), y1 = fy(e.clientY); return { x: Math.min(x0, x1), y: Math.min(y0, y1), w: Math.abs(x1 - x0), h: Math.abs(y1 - y0) }; };
+      const move = e => { const q = ret(e); Object.assign(tmp.style, { left: q.x * 100 + '%', top: q.y * 100 + '%', width: q.w * 100 + '%', height: q.h * 100 + '%' }); };
+      const fim = e => {
+        pl.removeEventListener('pointermove', move); pl.removeEventListener('pointerup', fim); pl.removeEventListener('pointercancel', fim);
+        const q = ret(e); tmp.remove();
+        if (q.w < 0.01 || q.h < 0.01) return;
+        const z = { id: novoId(), ...q, rotulo: '', status: 'a-executar', vinculo: null };
+        m.zonas.push(z); ed.sel = z.id; render();
+      };
+      try { pl.setPointerCapture(ev.pointerId); } catch (e) { /* sem captura: o arraste ainda funciona dentro da planta */ }
+      pl.addEventListener('pointermove', move); pl.addEventListener('pointerup', fim); pl.addEventListener('pointercancel', fim);
+    };
+  }
+  async function salvarMapas(base, lista) {
+    const ok = await gravando('Salvando o mapa de avanço…', () => API.salvarMapas(base.id, lista).then(() => true));
+    if (ok) toast('Mapa salvo no rascunho. Publique para o cliente ver no report.');
+    return ok;
+  }
+
   function blocoRestricoes(c) {
     if (!c.paralisadas.length) return `<p class="sec-lead" style="margin:0">Nenhuma frente paralisada no último RDO.</p>`;
     return `<p class="sec-lead">Frentes marcadas como paralisadas no RDO. Cada uma vira uma restrição a remover, com responsável e prazo.</p>
@@ -566,14 +709,14 @@
   // físicos — a única forma confiável de separar é o usuário dizer qual lote está enviando.
   const TIPOS_FISICO = [
     ['curva', 'Curva S', 'Prevision · .xls'],
-    ['mensal', 'Progresso mensal', 'Prevision · .xls'],
+    ['mensal', 'Progresso mensal ou semanal', 'Prevision · .xls'],
     ['tarefas', 'Progresso por tarefas', 'Prevision · .xlsx'],
     ['cronograma', 'Cronograma', 'Prevision · .xlsx'],
     ['rdos', 'RDOs do período', 'PDF compilado'],
   ];
   const TIPOS_FINANCEIRO = [
     ['financeiro.curva', 'Curva S financeira (VA)', 'Prevision · .xls'],
-    ['financeiro.mensal', 'Progresso mensal financeiro', 'Prevision · .xls'],
+    ['financeiro.mensal', 'Progresso mensal/semanal financeiro', 'Prevision · .xls'],
     ['financeiro.tarefas', 'Progresso por tarefas financeiro', 'Prevision · .xlsx'],
   ];
   const TIPOS_CONTRATO = [['medicao', 'Controle de Medição', 'Machine · .xlsx']];
@@ -599,6 +742,7 @@
         <div class="field" style="max-width:420px"><select class="inp" id="imp-obra">${DB.obras.map(x => `<option value="${x.id}" ${x.id === o.id ? 'selected' : ''}>${esc(x.codigo)} · ${esc(x.nome)}</option>`).join('')}</select></div>
         <div class="step-t">3 · Arquivos</div>
         <div class="tipos">${tiposMostrar.map(([k, t, s]) => `<div class="tipo ${val(k) ? 'on' : ''}"><b>${t}</b><small>${s}</small><div class="st">${val(k) ? '✓ ' + resumoTipo(k, val(k)) : 'aguardando'}</div></div>`).join('')}</div>
+        ${imp.lendo ? `<div class="note-box lendo" id="imp-lendo" role="status"><span class="sync"><i></i></span>${esc(imp.lendo)}</div>` : ''}
         <label class="drop" id="drop" for="imp-file">
           ${IC.up}<b>Toque para escolher ou arraste os arquivos aqui</b>
           <small>Planilhas do Prevision (.xls/.xlsx), o Controle de Medição (.xlsx) e o PDF dos RDOs (últimos 30 dias). Podem ser enviados todos de uma vez.</small>
@@ -608,7 +752,7 @@
         ${Object.keys(imp.dados).length ? `<div class="step-t">4 · Conferência</div><div class="check">${conferenciaImport(o, imp).map(([k, t]) => `<div class="${k}"><i>${k === 'ok' ? '✓' : k === 'av' ? '!' : '×'}</i><span>${t}</span></div>`).join('')}</div>
           <div class="field" style="max-width:260px"><label for="imp-corte">Data de corte</label><input class="inp" type="date" id="imp-corte" value="${imp.corte || o.dataCorte}"></div>
           <div class="step-t">5 · Atualizar</div>
-          <div class="bar-actions"><button class="btn" id="imp-aplicar">Salvar rascunho da obra ${esc(o.codigo)}</button><button class="btn sec2" id="imp-limpar">Descartar</button></div>
+          <div class="bar-actions"><button class="btn" id="imp-aplicar" ${imp.lendo ? 'disabled' : ''}>Salvar rascunho da obra ${esc(o.codigo)}</button><button class="btn sec2" id="imp-limpar">Descartar</button></div>
           <div class="note-box">A carga é gravada como <b>rascunho</b>: Planejamento e Diretoria veem em seguida; o cliente só depois de <b>Publicar para o cliente</b> na tela da obra.</div>` : ''}
       </div>
       <div class="card card-pad steps">
@@ -618,11 +762,11 @@
   }
   function resumoTipo(k, d) {
     if (k === 'curva' || k === 'financeiro.curva') return `${d.length} meses`;
-    if (k === 'mensal' || k === 'financeiro.mensal') return `${d.length} meses`;
+    if (k === 'mensal' || k === 'financeiro.mensal') return `${d.length} meses${d[0] && d[0].origem === 'semanal' ? ' (somando as semanas)' : ''}`;
     if (k === 'tarefas' || k === 'financeiro.tarefas') return `${d.length} tarefas`;
     if (k === 'cronograma') return `${d.length} linhas`;
-    if (k === 'rdos') return `${d.length} RDOs${S.imp && S.imp.dados.fotos ? ' · ' + S.imp.dados.fotos.length + ' fotos' : ''}`;
-    if (k === 'medicao') return `${d.resumo && d.resumo.totalContrato ? moeda(d.resumo.totalContrato) + ' · ' : ''}${d.boletins.length} boletim${d.boletins.length === 1 ? '' : 'ns'}`;
+    if (k === 'rdos') return `${d.length} RDOs${S.imp && S.imp.dados.fotos ? ' · ' + S.imp.dados.fotos.length + ' fotos' : S.imp && S.imp.lendo ? ' · lendo as fotos…' : ''}`;
+    if (k === 'medicao') return `${d.resumo && d.resumo.totalContrato ? moeda(d.resumo.totalContrato) + ' · ' : ''}${d.boletins.length} ${d.boletins.length === 1 ? 'boletim' : 'boletins'}`;
     return '';
   }
   // Código da obra pelo nome do arquivo ("Curva S - 207 - ...", "Cronograma_-_208_-_...") ou pelo nome da raiz ("208 - Fibrasa ...")
@@ -645,12 +789,14 @@
     });
     if (raizT && raizC && n(raizT.tarefa) !== n(raizC.nome)) out.push(['er', 'Cronograma e Progresso por tarefas têm tarefas raiz diferentes: são de obras ou versões diferentes.']);
     if (d.rdos && d.rdos.length) { const c = codigoEm((d.rdos.at(-1).obra || '').replace(/^(\d{3,4})\s+(?!-)/, '$1 - ')); if (c) confere('PDF de RDOs', c, 'pelo cabeçalho do RDO'); }
-    // Progresso mensal não traz identificação: confere com a Curva S (base acumulada mês a mês)
+    // Progresso mensal não traz identificação: confere com a Curva S (base acumulada mês a mês).
+    // O semanal somado em meses reparte as semanas da virada do mês pelos dias: tolerância maior (até ~1,5 ponto na 207).
     const curva = d.curva || o.curva || [];
     if (d.mensal && curva.length) {
+      const sem = d.mensal.some(m => m.origem === 'semanal'), tol = sem ? 0.02 : 0.002, nome = sem ? 'Progresso semanal' : 'Progresso mensal';
       let acc = 0, ruins = 0, comp = 0;
-      d.mensal.forEach(m => { acc += m.base || 0; const p = curva.find(x => x.data.slice(0, 7) === m.mes); if (p) { comp++; if (Math.abs((p.base || 0) - acc) > 0.002) ruins++; } });
-      out.push(comp && !ruins ? ['ok', `Progresso mensal confere com a Curva S (base acumulada igual em ${comp} meses).`] : ['er', `Progresso mensal não confere com a Curva S${d.curva ? ' enviada' : ' da obra'} (${ruins} de ${comp} meses com base diferente): pode ser de outra obra ou de outra linha de base.`]);
+      d.mensal.forEach(m => { acc += m.base || 0; const p = curva.find(x => x.data.slice(0, 7) === m.mes); if (p) { comp++; if (Math.abs((p.base || 0) - acc) > tol) ruins++; } });
+      out.push(comp && !ruins ? ['ok', `${nome} confere com a Curva S (base acumulada ${sem ? 'equivalente' : 'igual'} em ${comp} meses).`] : ['er', `${nome} não confere com a Curva S${d.curva ? ' enviada' : ' da obra'} (${ruins} de ${comp} meses com base diferente): pode ser de outra obra ou de outra linha de base.`]);
     }
     if (d.cronograma && d.tarefas) {
       const rc = raizC, rt = raizT;
@@ -669,7 +815,7 @@
     }
     if (d.mensal) {
       const soma = d.mensal.reduce((s, m) => s + (m.base || 0), 0);
-      out.push([Math.abs(soma - 1) < 0.002 ? 'ok' : 'av', `Progresso mensal: ${d.mensal.length} meses; a base soma ${pct(soma, 2)}.`]);
+      out.push([Math.abs(soma - 1) < 0.002 ? 'ok' : 'av', `Progresso ${d.mensal.some(m => m.origem === 'semanal') ? 'semanal (somado por mês)' : 'mensal'}: ${d.mensal.length} meses; a base soma ${pct(soma, 2)}.`]);
       if (d.mensal.every(m => !m.idpm)) out.push(['av', 'IDPM veio zerado no arquivo; o painel calcula o IDP.']);
     }
     if (d.tarefas) {
@@ -699,8 +845,10 @@
       const r = d.rdos;
       const par = r.at(-1)?.atividades.filter(a => /paralis/i.test(a.situacao)).length || 0;
       out.push(['ok', `RDOs: ${r.length} relatórios (nº ${r[0].numero} a ${r.at(-1).numero}), de ${dBR(r[0].data)} a ${dBR(r.at(-1).data)}. ${r.filter(x => x.status === 'aprovado').length} aprovados, ${r.filter(x => x.status !== 'aprovado').length} em preenchimento.`]);
-      const contr = r.at(-1).contrato;
-      if (contr && o.contrato && contr !== o.contrato) out.push(['er', `O contrato do RDO (${contr}) é diferente do contrato da obra (${o.contrato}).`]);
+      // "207/2026" no RDO e "CT/207/2026" no cadastro são o mesmo contrato: compara só os dígitos. A obra já foi
+      // conferida pelo cabeçalho do RDO; contrato diferente é aviso, não bloqueia a carga.
+      const contr = r.at(-1).contrato, dig = s => String(s || '').replace(/\D/g, '');
+      if (dig(contr) && dig(o.contrato) && dig(contr) !== dig(o.contrato)) out.push(['av', `O contrato do RDO (${contr}) não coincide com o do cadastro da obra (${o.contrato}). Confira o cadastro.`]);
       out.push([par ? 'av' : 'ok', par ? `${par} frentes paralisadas no último RDO; vão para Paralisações e restrições.` : 'Nenhuma frente paralisada no último RDO.']);
     }
     return out;
@@ -721,22 +869,43 @@
     ]);
     return libs;
   }
+  // Andamento da leitura: atualiza só a faixa de status (sem redesenhar a tela a cada página do PDF)
+  function statusLeitura(txt) {
+    if (!S.imp) return;
+    S.imp.lendo = txt;
+    const el = $('#imp-lendo');
+    if (el && txt) el.lastChild.textContent = txt; else render();
+  }
+  // Fotos: só as dos RDOs dos últimos dias do PDF (o report usa 30 dias). O PDF exportado costuma trazer mais
+  // de um mês; todas as fotos tornariam a carga pesada para quem abre o painel (472 fotos, 24 MB na 207).
+  const JANELA_FOTOS = 35;
   async function lerArquivos(files) {
     S.imp = S.imp || { arquivos: [], dados: {}, avisos: {} };
-    toast('Lendo arquivos…');
-    try { await carregaLibs(); } catch (e) { toast(e.message + '. Confira a conexão e tente de novo.'); return; }
+    statusLeitura('Preparando a leitura…');
+    try { await carregaLibs(); } catch (e) { statusLeitura(null); toast(e.message + '. Confira a conexão e tente de novo.'); return; }
     for (const f of files) {
       const reg = { nome: f.name };
+      statusLeitura(`Lendo ${f.name}…`);
       try {
         const buf = new Uint8Array(await f.arrayBuffer());
         if (/\.pdf$/i.test(f.name)) {
           const pags = await Parsers.pdfItens(window.pdfjsLib, buf);
           const rdos = Parsers.parseRDOs(pags);
           if (!rdos.length) throw new Error('não encontrei relatórios diários neste PDF');
-          toast('Lendo as fotos do PDF…');
-          const fotos = await Parsers.pdfFotos(window.pdfjsLib, pags, { larguraMax: 720, qualidade: 0.68 });
-          S.imp.dados.rdos = rdos; S.imp.dados.fotos = fotos; reg.tipoNome = `RDOs (${rdos.length}) e ${fotos.length} fotos`;
+          // os RDOs entram já: se as fotos falharem, o texto dos relatórios não se perde
+          S.imp.dados.rdos = rdos; delete S.imp.dados.fotos;
           S.imp.nomes = { ...(S.imp.nomes || {}), rdos: f.name };
+          reg.tipoNome = `RDOs (${rdos.length})`;
+          S.imp.arquivos = S.imp.arquivos.filter(a => a.nome !== reg.nome).concat(reg);
+          S.imp.lendo = 'Lendo as fotos do PDF…'; render();
+          const ultData = rdos.map(x => x.data).filter(Boolean).sort().at(-1);
+          const desde = ultData ? Core.addDias(ultData, -JANELA_FOTOS) : null;
+          try {
+            const fotos = await Parsers.pdfFotos(window.pdfjsLib, pags, { larguraMax: 720, qualidade: 0.68, desde,
+              progresso: (p, n) => statusLeitura(`Lendo as fotos do PDF: página ${p} de ${n}`) });
+            S.imp.dados.fotos = fotos;
+            reg.tipoNome = `RDOs (${rdos.length}) e ${fotos.length} fotos${desde && rdos.some(x => x.data < desde) ? ` dos últimos ${JANELA_FOTOS} dias` : ''}`;
+          } catch (e) { reg.tipoNome = `RDOs (${rdos.length}); as fotos não puderam ser lidas (${e.message})`; }
         } else {
           const wb = Parsers.wbDe(window.XLSX, buf);
           if (Parsers.ehMedicao(wb)) {
@@ -764,8 +933,9 @@
         }
       } catch (e) { reg.erro = e.message; }
       S.imp.arquivos = S.imp.arquivos.filter(a => a.nome !== reg.nome).concat(reg);
+      S.imp.lendo = null; render();
     }
-    if (S.imp.dados.rdos) S.imp.corte = S.imp.dados.rdos.at(-1).data;
+    if (S.imp.dados.rdos) S.imp.corte = S.imp.dados.rdos.map(x => x.data).filter(Boolean).sort().at(-1);
     if (S.imp.dados.cronograma) {
       // posição do cronograma: estimada pelo "Previsto (%)" da raiz contra a curva S, nunca depois de hoje
       const o = DB.obras.find(x => x.id === ($('#imp-obra') ? $('#imp-obra').value : S.obraId)) || DB.obras[0];
@@ -776,10 +946,12 @@
       S.imp.corte = est ? (est > hoje ? hoje : est) : (S.imp.corte || hoje);
       S.imp.dataEstimada = est;
     }
+    S.imp.lendo = null;
     render();
     toast('Arquivos lidos. Confira e atualize o painel.');
   }
   async function aplicarImport() {
+    if (S.imp && S.imp.lendo) { toast('Aguarde terminar a leitura dos arquivos.'); return; }
     const obraId = $('#imp-obra').value;
     const oSel = DB.obras.find(x => x.id === obraId);
     const erros = oSel ? conferenciaImport(oSel, S.imp).filter(x => x[0] === 'er') : [];
@@ -858,8 +1030,9 @@
   }
 
   // ---------- PDF do report ----------
-  // Fora do visualizador: impressão do navegador (CSS @media print). Dentro do claude.ai: gera o PDF
-  // na página (html2canvas + jsPDF), em A4, quebrando entre blocos, e entrega pelo recurso de download.
+  // O report já é desenhado em folhas A4 (retrato e, para o mapa de avanço em dupla, paisagem): cada folha da
+  // tela vira uma página do PDF, do mesmo tamanho (html2canvas + jsPDF). Dentro do claude.ai entrega pelo
+  // recurso de download; no site, baixa direto. A impressão do navegador segue o mesmo desenho (CSS @page).
   let libsPdf = null;
   function carregaLibsPdf() {
     if (libsPdf) return libsPdf;
@@ -882,39 +1055,24 @@
     try {
       await carregaLibsPdf();
       try { await document.fonts.ready; } catch (e) {}
-      const paper = $('#paper'), LARG = 860; let quebras = [];
-      const canvas = await window.html2canvas(paper, { scale: 2, backgroundColor: '#FFFFFF', useCORS: true, logging: false, windowWidth: 1100,
-        onclone: doc => {
-          const p = doc.getElementById('paper');
-          Object.assign(p.style, { width: LARG + 'px', maxWidth: LARG + 'px', borderRadius: '0', boxShadow: 'none', border: '0', margin: '0' });
-          // html2canvas desenha o conteúdo de <details> fechado: tira antes de capturar
-          p.querySelectorAll('details:not([open]) > :not(summary)').forEach(e => e.remove());
-          const t = p.getBoundingClientRect().top;
-          quebras = [...p.querySelectorAll(':scope > .rx-hd, :scope > .pb > *, :scope > .rx-notas, :scope > .rx-pf')].map(e => e.getBoundingClientRect().top - t);
-        } });
+      const paper = $('#paper');
       const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-      const M = 10, LW = 210 - 2 * M, LH = 297 - 2 * M;
-      const pxMm = canvas.width / LW, pagPx = Math.floor(LH * pxMm), k = canvas.width / LARG;
-      const brks = quebras.map(q => q * k).filter(q => q > 0).sort((a, b) => a - b);
-      let y = 0, pag = 0;
-      // o report foi desenhado para uma página: se couber reduzido (até ~50%), vai inteiro numa A4
-      const altMm = canvas.height / pxMm;
-      if (altMm <= LH * 2) {
-        const f = Math.min(1, LH / altMm), w = LW * f;
-        pdf.setFillColor(255, 255, 255); pdf.rect(0, 0, 210, 297, 'F');
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', M + (LW - w) / 2, M, w, altMm * f);
-        y = canvas.height;
-      }
-      while (y < canvas.height - 4) {
-        let fim = Math.min(canvas.height, y + pagPx);
-        if (fim < canvas.height) { const b = brks.filter(q => q > y + pagPx * 0.25 && q <= fim).pop(); if (b) fim = Math.floor(b); }
-        const h = fim - y, c = document.createElement('canvas'); c.width = canvas.width; c.height = h;
-        const g = c.getContext('2d'); g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, c.width, h); g.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
-        if (pag++) pdf.addPage();
-        pdf.setFillColor(255, 255, 255); pdf.rect(0, 0, 210, 297, 'F');
-        pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', M, M, LW, h / pxMm);
-        y = fim;
+      let pdf = null;
+      const folhas = $$('.folha', paper);
+      for (let i = 0; i < folhas.length; i++) {
+        btn.textContent = `Gerando PDF… ${i + 1}/${folhas.length}`;
+        const land = folhas[i].classList.contains('paisagem');
+        const canvas = await window.html2canvas(folhas[i], { scale: 2, backgroundColor: '#FFFFFF', useCORS: true, logging: false,
+          onclone: doc => {
+            // na tela a folha pode estar reduzida (zoom) para caber; no PDF vai em tamanho real
+            doc.querySelectorAll('.folha').forEach(f => { f.style.zoom = '1'; f.style.boxShadow = 'none'; });
+            // html2canvas desenha o conteúdo de <details> fechado: tira antes de capturar
+            doc.querySelectorAll('details:not([open]) > :not(summary)').forEach(e => e.remove());
+          } });
+        const W = land ? 297 : 210, H = land ? 210 : 297;
+        if (!pdf) pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: land ? 'landscape' : 'portrait' });
+        else pdf.addPage('a4', land ? 'landscape' : 'portrait');
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, W, H);
       }
       const o = DB.obras.find(x => x.id === S.obraId) || obrasDoUsuario()[0];
       const corte = (paper.dataset.corte || new Date().toISOString().slice(0, 10));
@@ -925,10 +1083,36 @@
     } finally { btn.disabled = false; btn.textContent = rotulo; }
   }
 
+  // ---------- Valor agregado: cartões e legenda dos termos (report e aba Obra) ----------
+  const GLOSSARIO_VA = `<dl class="rx-glos" aria-label="O que significam SPI, EV e PV">
+      <div><dt>SPI</dt><dd>Índice de desempenho de prazo = <b>EV ÷ PV</b>. 1,00 = no ritmo do plano; abaixo de 1,00 = atrasado; acima = adiantado.</dd></div>
+      <div><dt>EV</dt><dd>Valor agregado: quanto vale, em R$, o serviço <b>efetivamente executado</b> até a data de corte.</dd></div>
+      <div><dt>PV</dt><dd>Valor planejado: quanto valeria, em R$, o serviço que o cronograma <b>previa executar</b> até a data de corte.</dd></div>
+    </dl>`;
+  function cartoesVA(rf, o) {
+    const F = rf.faturamento, cls = rf.spi === null ? '' : rf.sem.k === 'critico' ? 'crit' : rf.sem.k === 'atencao' ? 'warn' : 'ok';
+    const spi = `<div class="rx-card ac-${cls || 'real'}"><small>SPI (EV ÷ PV)</small><b class="rx-card-v ${cls}">${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'}</b>
+      <span class="rx-card-s">${rf.spi !== null ? `EV ${Core.moedaCurta(rf.ev)} ÷ PV ${Core.moedaCurta(rf.pv)}` : 'envie a Curva S financeira (Prevision · Financeiro VA)'}</span></div>`;
+    const cards = F ? [
+      `<div class="rx-card ac-base"><small>Valor do contrato</small><b class="rx-card-v">${Core.moedaCurta(F.contratual)}</b><span class="rx-card-s">BAC · Controle de Medição</span></div>`,
+      `<div class="rx-card ac-plan"><small>Medido acumulado</small><b class="rx-card-v">${Core.moedaCurta(F.medido)}</b><span class="rx-card-s">${F.pctMedido !== null ? pct(F.pctMedido, 1) + ' do contrato' : ''}${F.ultimaMedicao ? ` · última: ${esc(F.ultimaMedicao.replace(/\s*\(.*$/, ''))}` : ''}</span></div>`,
+      `<div class="rx-card ac-base"><small>Saldo a medir</small><b class="rx-card-v">${Core.moedaCurta(F.saldo)}</b><span class="rx-card-s">${F.pctMedido !== null ? pct(1 - F.pctMedido, 1) + ' do contrato' : 'contrato − medido'}</span></div>`,
+      spi,
+    ] : [
+      `<div class="rx-card ac-real"><small>EV · valor agregado</small><b class="rx-card-v">${Core.moedaCurta(rf.ev)}</b><span class="rx-card-s">executado até ${dCurto(o.dataCorteFinanceiro || o.dataCorte)}</span></div>`,
+      `<div class="rx-card ac-plan"><small>PV · valor planejado</small><b class="rx-card-v">${Core.moedaCurta(rf.pv)}</b><span class="rx-card-s">previsto para a data</span></div>`,
+      spi,
+    ];
+    return `<div class="rx-cards${cards.length === 3 ? ' c3' : ''}">${cards.join('')}</div>`;
+  }
+  // a Curva S financeira do Prevision nem sempre está na base do contrato (207: orçamento da obra × contrato Machine)
+  const notaEscalaVA = rf => rf.escala === 'orcamento' ? `% do orçamento no Prevision (${Core.moedaCurta(rf.totalCurva)}), não do contrato` : '% do valor do contrato';
+
   // Avanço por atividade (report e aba Obra): farol (realizado ÷ planejado da própria atividade, faixas da obra)
   // e barra de % com a marca do planejado na data. Coluna de peso só quando os pesos são válidos.
   const legFarol = '<em class="rx-fa-lg"><span><i class="rx-fa ok"></i>No prazo</span><span><i class="rx-fa atencao"></i>Atenção</span><span><i class="rx-fa critico"></i>Crítico</span><span><i class="rx-fa neutro"></i>A iniciar</span></em>';
-  function atividadesHTML(ativ, o) {
+  // partes = true (report): cada frente de 1º nível é uma parte que a paginação pode levar para a folha seguinte
+  function atividadesHTML(ativ, o, partes) {
     const lim = v => Math.max(0, Math.min(100, (v || 0) * 100));
     const comPeso = ativ.every(a => a.peso !== null && a.peso !== undefined);
     const farol = a => {
@@ -943,11 +1127,12 @@
         ${comPeso ? `<span class="rx-av-ps">${a.peso === null || a.peso === undefined ? '—' : pct(a.peso, 1)}</span>` : ''}
         <span class="rx-av-fa"><i class="rx-fa ${f.k}" title="${esc(f.t)}"></i></span>
         <span class="rx-av-br"><span class="rx-pb"><i style="width:${lim(a.feito)}%"></i><em style="left:${lim(a.plan)}%"></em></span><b>${fmtNum(lim(a.feito), 0)}%</b></span>`;
+      const p = partes && nv === 0 ? ' data-parte' : '';
       return fs.length
-        ? `<details class="rx-av-n" data-k="${id}"${S.abertos[id] ? ' open' : ''}><summary class="rx-av-r n${nv}">${cel}</summary><div class="rx-av-k">${fs.map(c => linha(c, nv + 1)).join('')}</div></details>`
-        : `<div class="rx-av-r n${nv}">${cel}</div>`;
+        ? `<details class="rx-av-n" data-k="${id}"${p}${S.abertos[id] ? ' open' : ''}><summary class="rx-av-r n${nv}">${cel}</summary><div class="rx-av-k">${fs.map(c => linha(c, nv + 1)).join('')}</div></details>`
+        : `<div class="rx-av-r n${nv}"${p}>${cel}</div>`;
     };
-    return `<div class="rx-av${comPeso ? '' : ' sem-peso'}">
+    return `<div class="rx-av${comPeso ? '' : ' sem-peso'}"${partes ? ' data-partes-box' : ''}>
       <div class="rx-av-r rx-av-h"><span>Atividade</span>${comPeso ? '<span class="rx-av-ps">Peso</span>' : ''}<span class="rx-av-fa">Status</span><span class="rx-av-br">Realizado <i class="rx-av-tk"></i> planejado na data</span></div>
       ${ativ.map(a => linha(a, 0)).join('')}</div>`;
   }
@@ -984,13 +1169,10 @@
               <ul class="rx-ms">${X.marcos.lista.slice(0, 4).map(m => `<li class="${m.situacao}"><span class="rx-ms-d">${m.data ? dCurto(m.data) : 'a definir'}</span><span class="rx-ms-n">${m.codigo ? `<em>${esc(m.codigo)}</em> ` : ''}${esc(m.nome)}${m.interface ? ' <i title="Interface com o cliente">cliente</i>' : ''}</span><span class="rx-ms-v ${m.slip > 0 ? 'neg' : ''}">${m.situacao === 'vencido' ? 'vencido' : m.slip ? dias(m.slip) : ''}</span></li>`).join('')}${fimMs}</ul>
             </section>`;
     const rf = Core.calcFinanceiro(o, r.corte);
-    const financeiroSec = rf ? `<section class="rx-s rx-box"><h2><i class="rx-ic">${IC.search}</i>Valor Agregado<em>SPI ${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'} · CPI ${rf.cpi !== null ? fmtNum(rf.cpi, 2) : 'sem custo'}</em></h2>
-              <div class="rx-cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-                ${rf.faturamento ? `<div class="rx-card ac-base"><small>Valor do contrato</small><b class="rx-card-v">${moeda(rf.faturamento.contratual)}</b><span class="rx-card-s">BAC</span></div>
-                <div class="rx-card ac-plan"><small>Medido acumulado</small><b class="rx-card-v">${moeda(rf.faturamento.medido)}</b><span class="rx-card-s">saldo ${moeda(rf.faturamento.saldo)}</span></div>` : ''}
-                <div class="rx-card ac-real"><small>SPI (EV ÷ PV)</small><b class="rx-card-v">${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'}</b><span class="rx-card-s">1,00 = em linha com o plano</span></div>
-              </div>
-              ${rf.pts ? `<div class="legend rx-leg" style="margin-top:8px"><span><i class="sw sw-real"></i>Realizado (EV)</span><span><i class="sw sw-prev"></i>Previsto (PV)</span><span><i class="sw sw-base"></i>Base</span><span class="note">% do valor do contrato</span></div>
+    const financeiroSec = rf ? `<section class="rx-s rx-box" data-bloco="va"><h2><i class="rx-ic">${IC.search}</i>Valor Agregado<em>SPI ${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'} · CPI ${rf.cpi !== null ? fmtNum(rf.cpi, 2) : 'sem custo real'}</em></h2>
+              ${cartoesVA(rf, o)}
+              ${GLOSSARIO_VA}
+              ${rf.pts ? `<div class="legend rx-leg"><span><i class="sw sw-real"></i>Realizado (EV)</span><span><i class="sw sw-prev"></i>Planejado (PV)</span><span><i class="sw sw-base"></i>Base</span><span class="note">${notaEscalaVA(rf)}</span></div>
               <div class="chart" id="ch-fin-r"></div>` : ''}
             </section>` : '';
     const corta = (t, n) => (t || '').length > n ? t.slice(0, n - 3).replace(/\s+\S*$/, '') + '…' : (t || '');
@@ -998,11 +1180,15 @@
     const atencaoSec = X.atencao.length ? `<section class="rx-s rx-box${temCritico ? ' rx-alert' : ''}"><h2><i class="rx-ic">${IC.alert}</i>Pontos de atenção${X.atencaoMais ? `<em>+${X.atencaoMais} na aba Obra</em>` : ''}<em><button class="rx-see" type="button" data-go="obra">Ver todos →</button></em></h2>
               <ul class="rx-at">${X.atencao.map(a => `<li><span class="rx-dot ${/paralis|atras/i.test(a.tag) ? 'crit' : 'warn'}">${a.tag}</span><span class="rx-at-t"><b>${esc(a.titulo)}</b><small>${esc(corta(a.det, 96))}</small></span></li>`).join('')}</ul>
             </section>` : '';
+    const mapas = Core.mapasDaObra(o, r);
+    const folhasMapa = folhasDoMapa(mapas, o, r);
+    const rodape = `<footer class="fl-pe"><span>Machine · Planejamento e Controle</span><span>Report · Obra ${esc(o.codigo)} · posição de ${dBR(r.corte)}</span><span class="fl-n"></span></footer>`;
     return `
       <div class="head-row no-print"><div><div class="kicker">Report</div><h1 class="h1">Obra ${esc(o.codigo)} · ${dBR(r.corte)}</h1>
-        <p class="sub">Uma página, sempre os mesmos blocos na mesma ordem. O detalhe completo fica na aba Obra.</p></div>
+        <p class="sub">Folhas A4 retrato, sempre os mesmos blocos na mesma ordem${mapas.length ? ', com o mapa de avanço no fim' : ''}. O detalhe completo fica na aba Obra.</p></div>
         <div class="bar-actions"><button class="btn" id="bt-pdf">Baixar PDF</button><a class="btn sec2" href="${mailto('', `Report de planejamento · Obra ${o.codigo} · ${dBR(r.corte)}`, `Prezados,\n\nSegue o report de planejamento da obra ${o.codigo} · ${o.nome}, com posição de ${dBR(r.corte)}.\n\nO painel completo está disponível em ${SITE()} (acesso com e-mail e senha).\n\nAtenciosamente,\nPlanejamento · Machine`)}">Enviar por e-mail</a></div></div>
-      <article class="paper exec" id="paper" data-corte="${r.corte}">
+      <div class="folhas" id="paper" data-corte="${r.corte}" data-obra="${esc(o.codigo)}">
+      <article class="folha retrato exec" data-fluxo="1">
         <header class="rx-hd">
           <div class="rx-hd-top">
             <div class="rx-brand"><img src="${LOGO}" alt="Machine"><i></i><span>Report</span><i></i><span>Obra ${esc(o.codigo)}</span></div>
@@ -1019,13 +1205,13 @@
             </dl>
           </div>
         </header>
-        <div class="pb">
-          <div class="rx-top">
+        <div class="fl-corpo">
+          <div class="rx-top" data-bloco="topo">
             ${X.manchete ? `<div class="rx-lead"><i class="rx-lead-ic">${IC.trend}</i><p>${esc(X.manchete)}</p></div>` : ''}
             <div class="rx-cards">${cards.map(k => `<div class="rx-card ac-${k.ac}"><small>${k.k}</small><b class="rx-card-v ${k.cls || ''}">${k.v}</b>${k.x || ''}<span class="rx-card-s">${k.html ? k.s : esc(k.s)}</span></div>`).join('')}</div>
           </div>
 
-          <section class="rx-s rx-box"><h2><i class="rx-ic">${IC.search}</i>Curva S física e avanço mensal<em>% do total da obra</em></h2>
+          <section class="rx-s rx-box" data-bloco="curva"><h2><i class="rx-ic">${IC.search}</i>Curva S física e avanço mensal<em>% do total da obra</em></h2>
             <div class="legend rx-leg"><span class="rx-leg-g">Acumulado</span><span><i class="sw sw-real"></i>Realizado</span><span><i class="sw sw-prev"></i>Planejado</span><span><i class="sw sw-base"></i>Base</span>
               <span class="rx-leg-g">No mês</span><span><i class="sw sw-breal"></i>Realizado</span><span><i class="sw sw-bplan"></i>Planejado</span><span class="note">${Core.mesCurto(r.corte)} parcial até ${dCurto(r.corte)}</span></div>
             <div class="chart" id="ch-combo-r"></div>
@@ -1033,15 +1219,111 @@
 
           ${financeiroSec}
 
-          <div class="rx-row half">${marcosSec}${atencaoSec}</div>
+          <div class="rx-row half" data-bloco="marcos">${marcosSec}${atencaoSec}</div>
 
-          ${ativ.length ? `<section class="rx-s"><h2><i class="rx-ic">${IC.rlist}</i>Avanço por atividade${legFarol}</h2>${atividadesHTML(ativ, o)}</section>` : ''}
+          ${ativ.length ? `<section class="rx-s" data-bloco="atividades" data-partes><h2><i class="rx-ic">${IC.rlist}</i>Avanço por atividade${legFarol}</h2>${atividadesHTML(ativ, o, true)}</section>` : ''}
 
-          ${X.fotos.length ? `<section class="rx-s"><h2><i class="rx-ic">${IC.photo}</i>Registro fotográfico<em>${X.fotos.length} ${X.fotos.length === 1 ? 'foto' : 'fotos'} · ${dCurto(X.fotos[0].data)} a ${dCurto(X.fotos[X.fotos.length - 1].data)}</em></h2>
-            <div class="rx-fotos">${X.fotos.map(f => `<figure><img src="${f.src}" alt="${esc(legendaCurta(f) || `Foto do RDO nº ${f.rdo}, ${dBR(f.data)}`)}"><figcaption><small>${dCurto(f.data)} · RDO ${f.rdo}</small>${legendaCurta(f) ? `<span>${esc(legendaCurta(f))}</span>` : ''}</figcaption></figure>`).join('')}</div>
+          ${X.fotos.length ? `<section class="rx-s" data-bloco="fotos" data-partes><h2><i class="rx-ic">${IC.photo}</i>Registro fotográfico<em>${X.fotos.length} ${X.fotos.length === 1 ? 'foto' : 'fotos'} · ${dCurto(X.fotos[0].data)} a ${dCurto(X.fotos[X.fotos.length - 1].data)}</em></h2>
+            <div class="rx-fotos" data-partes-box>${X.fotos.map(f => `<figure data-parte><img src="${f.src}" alt="${esc(legendaCurta(f) || `Foto do RDO nº ${f.rdo}, ${dBR(f.data)}`)}"><figcaption><small>${dCurto(f.data)} · RDO ${f.rdo}</small>${legendaCurta(f) ? `<span>${esc(legendaCurta(f))}</span>` : ''}</figcaption></figure>`).join('')}</div>
           </section>` : ''}
         </div>
-      </article>`;
+        ${rodape}
+      </article>
+      ${folhasMapa}
+      </div>`;
+  }
+
+  // ---------- folhas A4 do report ----------
+  // O conteúdo entra todo na 1ª folha; depois de desenhado (gráficos prontos), paginar() move para folhas novas os
+  // blocos que não couberam. Blocos com data-partes (atividades, fotos) podem ser divididos entre folhas pelas suas
+  // partes (data-parte). As folhas do mapa de avanço já nascem prontas (uma planta por folha retrato, ou duas por
+  // folha paisagem). No fim, numera "página x de y".
+  function cabCurto(fl) {
+    return `<header class="fl-hd2"><div class="rx-brand"><img src="${LOGO}" alt="Machine"><i></i><span>Report</span><i></i><span>Obra ${esc(fl.dataset.obra)}</span></div><span>Posição de ${dBR(fl.dataset.corte)}</span></header>`;
+  }
+  let fontesProntas = false;
+  // graf: { id do gráfico: altura => redesenha } — para o gráfico ocupar a sobra da folha
+  function paginar(graf) {
+    const fl = $('#paper.folhas'); if (!fl || fl.dataset.paginado) return;
+    // medida só com as fontes finais; quando carregarem, redesenha o report uma vez
+    if (!fontesProntas && document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(() => { fontesProntas = true; if (S.view === 'report') render(); });
+    else fontesProntas = true;
+    const rod = fl.querySelector('.fl-pe').outerHTML;
+    const nova = () => { const a = document.createElement('article'); a.className = 'folha retrato exec'; a.dataset.fluxo = '1'; a.innerHTML = cabCurto(fl) + '<div class="fl-corpo"></div>' + rod; return a; };
+    let folha = fl.querySelector('.folha[data-fluxo]');
+    for (let guarda = 0; folha && guarda < 30; guarda++) {
+      const corpo = folha.querySelector('.fl-corpo');
+      if (corpo.scrollHeight <= corpo.clientHeight + 1) { const prox = folha.nextElementSibling; folha = prox && prox.dataset.fluxo ? prox : null; continue; }
+      const lim = corpo.getBoundingClientRect().top + corpo.clientHeight;
+      const blocos = [...corpo.children];
+      let i = blocos.findIndex(b => b.getBoundingClientRect().bottom > lim + 0.5);
+      if (i < 0) { folha = null; break; }
+      const b = blocos[i], seguinte = nova();
+      folha.after(seguinte);
+      const destino = seguinte.querySelector('.fl-corpo');
+      let mover = blocos.slice(i);
+      if (b.hasAttribute('data-partes')) {
+        const box = b.querySelector('[data-partes-box]'), partes = box ? [...box.querySelectorAll(':scope > [data-parte]')] : [];
+        let k = partes.findIndex(p => p.getBoundingClientRect().bottom > lim + 0.5);
+        // fotos em grade: corta no começo da linha
+        while (k > 0 && Math.abs(partes[k - 1].getBoundingClientRect().top - partes[k].getBoundingClientRect().top) < 2) k--;
+        if (k === 0 && i === 0 && partes.length > 1) k = 1; // nada coube e não há para onde empurrar: leva ao menos uma parte
+        if (k > 0) {
+          const cont = b.cloneNode(true);
+          const h = cont.querySelector('h2'); if (h && !h.querySelector('.fl-cont')) h.insertAdjacentHTML('beforeend', '<em class="fl-cont">continuação</em>');
+          [...cont.querySelector('[data-partes-box]').querySelectorAll(':scope > [data-parte]')].slice(0, k).forEach(p => p.remove());
+          partes.slice(k).forEach(p => p.remove());
+          mover = [cont, ...blocos.slice(i + 1)];
+        }
+      } else if (i === 0) { seguinte.remove(); folha = null; break; } // bloco maior que a folha: fica (não há como dividir)
+      destino.append(...mover);
+      folha = seguinte;
+    }
+    const todas = $$('.folha', fl);
+    // folha com sobra embaixo e um gráfico: o gráfico cresce para ocupar parte da sobra (até 460 px de altura)
+    todas.forEach(f => {
+      const corpo = f.querySelector('.fl-corpo'), ult = corpo && corpo.lastElementChild; if (!ult) return;
+      const sobra = corpo.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(corpo).paddingBottom) || 0) - ult.getBoundingClientRect().bottom;
+      const ch = $$('.chart[id]', corpo).find(c => graf && graf[c.id]);
+      if (ch && sobra > 40) { const h = ch.getBoundingClientRect().height; graf[ch.id](Math.round(Math.min(460, h + sobra - 16))); }
+    });
+    todas.forEach((f, k) => { const n = f.querySelector('.fl-n'); if (n) n.textContent = `Página ${k + 1} de ${todas.length}`; });
+    fl.dataset.paginado = '1';
+    ajustaZoomFolhas();
+  }
+  // Na tela, a folha A4 é reduzida para caber na largura disponível (celular, folha paisagem); impressa e no PDF, tamanho real
+  function ajustaZoomFolhas() {
+    const fl = $('#paper.folhas'); if (!fl) return;
+    const disp = fl.clientWidth;
+    $$('.folha', fl).forEach(f => { f.style.zoom = ''; const w = f.offsetWidth; f.style.zoom = w > disp ? String(Math.floor(disp / w * 1000) / 1000) : ''; });
+  }
+
+  // ---------- mapa de avanço: folhas do report ----------
+  const COR_MAPA = { executado: 'ok', executando: 'andamento', 'a-executar': 'pendente' };
+  // opts.maxH (px): altura máxima da planta na folha — a largura encolhe junto, para as áreas (em %) seguirem a imagem
+  function plantaHTML(m, opts = {}) {
+    const larg = opts.maxH ? `;width:min(100%, ${Math.round(opts.maxH * m.w / m.h)}px)` : '';
+    return `<div class="mp-planta" style="aspect-ratio:${m.w} / ${m.h}${larg}"><img src="${m.img}" alt="Planta: ${esc(m.titulo || 'mapa de avanço')}" width="${m.w}" height="${m.h}">
+      ${m.zonas.map(z => `<i class="mp-z ${COR_MAPA[z.st]}${opts.sel === z.id ? ' sel' : ''}" data-zona="${esc(z.id)}" style="left:${z.x * 100}%;top:${z.y * 100}%;width:${z.w * 100}%;height:${z.h * 100}%"><b>${z.n}</b></i>`).join('')}</div>`;
+  }
+  const legMapa = m => `<div class="mp-leg">${m.resumo.map(x => `<span><i class="mp-sw ${COR_MAPA[x.k]}"></i>${x.t}${m.zonas.length ? ` <small>${x.n} ${x.n === 1 ? 'área' : 'áreas'} · ${pct(x.area, 0)}</small>` : ''}</span>`).join('')}</div>`;
+  const tabelaMapa = (m, comp) => m.zonas.length ? `<table class="mp-tab${comp ? ' comp' : ''}"><thead><tr><th>Nº</th><th>Área</th>${comp ? '' : '<th>Atividade</th>'}<th class="n">Avanço</th><th>Situação</th></tr></thead><tbody>
+    ${m.zonas.map(z => `<tr><td class="mp-n"><i class="mp-sw ${COR_MAPA[z.st]}"></i>${z.n}</td><td>${esc(z.rotulo || '—')}</td>${comp ? '' : `<td>${z.ativ ? esc(z.ativ.nome) : '<small>situação informada no painel</small>'}</td>`}<td class="n">${z.feito === null ? '—' : pct(z.feito, 0)}</td><td>${Core.MAPA_ST[z.st]}</td></tr>`).join('')}</tbody></table>` : '';
+  function folhasDoMapa(mapas, o, r) {
+    if (!mapas.length) return '';
+    const cab = `<header class="rx-hd mp-hd"><div class="rx-hd-top"><div class="rx-brand"><img src="${LOGO}" alt="Machine"><i></i><span>Mapa de avanço físico</span><i></i><span>Obra ${esc(o.codigo)}</span></div>
+      <div class="rx-hd-label">Posição de ${dBR(r.corte)}</div></div></header>`;
+    const rod = `<footer class="fl-pe"><span>Machine · Planejamento e Controle</span><span>Mapa de avanço · Obra ${esc(o.codigo)} · ${esc(o.nome)}</span><span class="fl-n"></span></footer>`;
+    const titulo = m => `<h2 class="mp-tt"><small>Frente de serviço</small>${esc(m.titulo || 'Sem título')}</h2>`;
+    // alturas máximas da planta (px na folha): retrato desconta a tabela de áreas; paisagem, lado a lado ou empilhadas
+    const ret = mapas.filter(m => m.pagina !== 'paisagem').map(m => `<article class="folha retrato exec mp-folha">${cab}
+      <div class="fl-corpo">${titulo(m)}${plantaHTML(m, { maxH: Math.max(380, 820 - 29 * m.zonas.length) })}${legMapa(m)}${tabelaMapa(m, false)}</div>${rod}</article>`);
+    const pais = mapas.filter(m => m.pagina === 'paisagem'), pares = [];
+    for (let i = 0; i < pais.length; i += 2) pares.push(pais.slice(i, i + 2));
+    // plantas largas (mais de 1,6 × a altura) ficam uma sobre a outra, ocupando a largura da folha deitada
+    const land = pares.map(par => { const emp = par.every(m => m.w / m.h >= 1.6); return `<article class="folha paisagem exec mp-folha">${cab}
+      <div class="fl-corpo"><div class="mp-dupla${emp ? ' empilha' : ''}">${par.map(m => `<div class="mp-meia">${titulo(m)}${plantaHTML(m, { maxH: emp ? (par.length > 1 ? 235 : 520) : 520 })}${legMapa(m)}</div>`).join('')}</div></div>${rod}</article>`; });
+    return ret.concat(land).join('');
   }
 
   // ---------- render ----------
@@ -1080,11 +1362,16 @@
     const el1 = $('#ch-curva'); if (el1 && el1.closest('details').open) Core.chartCurvaS(el1, o, r);
     const el2 = $('#ch-mensal'); if (el2 && el2.closest('details').open) Core.chartMensal(el2, o, r);
     const el3 = $('#ch-efetivo'); if (el3 && r.campo && el3.closest('details').open) Core.chartEfetivo(el3, r.campo);
-    const el4 = $('#ch-combo-r'); if (el4) Core.chartCombo(el4, o, r);
+    // report: as folhas têm largura fixa (A4), os gráficos são desenhados uma vez, antes da paginação
+    const el4 = $('#ch-combo-r'); if (el4 && !el4.firstChild) Core.chartCombo(el4, o, r);
     const rf = Core.calcFinanceiro(o, r.corte);
     const rFin = rf && rf.pts ? { pts: rf.pts, corte: r.corte, real: rf.evFrac, prevCorte: rf.pvFrac, baseCorte: rf.baseFrac, desvio: (rf.evFrac || 0) - (rf.pvFrac || 0) } : null;
     const el5 = $('#ch-fin'); if (el5 && rFin && el5.closest('details').open) Core.chartCurvaS(el5, o, rFin);
-    const el6 = $('#ch-fin-r'); if (el6 && rFin) Core.chartCurvaS(el6, o, rFin, { compacto: true });
+    const el6 = $('#ch-fin-r'); if (el6 && rFin && !el6.firstChild) Core.chartCurvaS(el6, o, rFin, { compacto: true });
+    const graf = {};
+    if (el4) graf['ch-combo-r'] = h => Core.chartCombo(el4, o, r, { altura: h });
+    if (el6 && rFin) graf['ch-fin-r'] = h => Core.chartCurvaS(el6, o, rFin, { compacto: true, altura: h });
+    if (S.view === 'report') { paginar(graf); ajustaZoomFolhas(); }
   }
 
   let tt;
@@ -1096,7 +1383,7 @@
   function bind() {
     const atualiza = () => { if (S.user) DB.obras = API.listar(); };
     $$('[data-go]').forEach(b => b.onclick = () => { atualiza(); S.view = b.dataset.go; S.menu = false; S.loginErro = null; S.loginMsg = null; S.editAcesso = null; render(); window.scrollTo(0, 0); });
-    $$('[data-obra]').forEach(b => b.onclick = () => { atualiza(); S.obraId = b.dataset.obra; S.view = 'obra'; render(); window.scrollTo(0, 0); });
+    $$('[data-obra]').forEach(b => b.onclick = () => { atualiza(); if (S.obraId !== b.dataset.obra) S.mapaEd = null; S.obraId = b.dataset.obra; S.view = 'obra'; render(); window.scrollTo(0, 0); });
     $$('[data-toast]').forEach(b => b.onclick = () => toast(b.dataset.toast));
     const bt = $('#bt-tema'); if (bt) bt.onclick = () => { tema = TEMAS[(TEMAS.indexOf(tema) + 1) % 3]; lsSet('mp_tema', tema); aplicaTema(tema); render(); };
     const bu = $('#bt-user'); if (bu) bu.onclick = e => { e.stopPropagation(); S.menu = !S.menu; render(); };
@@ -1219,7 +1506,9 @@
       toast(novo ? 'Obra cadastrada. Agora envie os arquivos do período.' : 'Cadastro atualizado.');
     };
     $$('details.sec').forEach(d => d.addEventListener('toggle', () => { S.abertos[d.dataset.sec] = d.open; if (d.open) desenha(); }));
-    $$('details.rx-av-n').forEach(d => d.addEventListener('toggle', () => { S.abertos[d.dataset.k] = d.open; }));
+    // no report, abrir uma frente muda a altura da folha: redesenha para repaginar
+    $$('details.rx-av-n').forEach(d => d.addEventListener('toggle', () => { const antes = !!S.abertos[d.dataset.k]; S.abertos[d.dataset.k] = d.open; if (S.view === 'report' && antes !== d.open) render(); }));
+    bindMapa();
     $$('[data-abre]').forEach(b => b.onclick = () => { const id = b.dataset.abre; S.abertos[id] = !S.abertos[id]; render(); });
     $$('[data-filtro]').forEach(b => b.onclick = () => { S.filtroTarefas = b.dataset.filtro; S.verTodas = false; render(); });
     $$('[data-modo]').forEach(b => b.onclick = () => { S.impModo = b.dataset.modo; render(); });
