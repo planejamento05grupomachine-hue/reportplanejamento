@@ -964,8 +964,8 @@
     });
   }
 
-  root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, diaSemana, diff, addDias, nomeBonito, semaforo, FAIXAS,
-    calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, nomeCurto, narrativa, resumoExecutivo, auditoria, marcos, motivoCurto, chartCurvaS, chartMensal, chartCombo, chartEfetivo, interp, fracTempo,
-    calcFinanceiro, moeda, moedaCurta, vaNoReport, empresasFrente, qualidadeRdo, MAPA_ST, atividadesParaMapa, statusZona, ptsZona, geoZona, mapasDaObra, fotoNoMapa };
+  root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, diaSemana, diff, addDias, semaforo, FAIXAS,
+    calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, narrativa, resumoExecutivo, chartCurvaS, chartMensal, chartCombo, chartEfetivo,
+    LIM_FOTOS: LIM.fotos, calcFinanceiro, moeda, moedaCurta, vaNoReport, empresasFrente, qualidadeRdo, MAPA_ST, atividadesParaMapa, ptsZona, geoZona, mapasDaObra, fotoNoMapa };
 })(typeof window !== 'undefined' ? window : globalThis);
 

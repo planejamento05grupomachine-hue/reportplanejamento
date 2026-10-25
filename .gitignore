@@ -1,8 +1,8 @@
 # Dependências
 node_modules/
 
-# Dados de origem (contratos, planilhas financeiras, relatórios por obra)
-# Entrada bruta usada para gerar os dados cifrados em data/ via tools/gerar.cjs
+# Dados de origem (contratos, planilhas financeiras, relatórios por obra): enviados pelo painel em Alimentar,
+# que grava só a versão cifrada em data/
 tipos e arquivos/
 
 # Segredos e configuração local
