@@ -88,7 +88,7 @@
   aplicaTema(tema);
 
   // ---------- moldura ----------
-  const TITULO_TELA = { alimentar: 'Alimentar dados', acessos: 'Acessos', 'nova-obra': 'Nova obra', 'editar-obra': 'Cadastro da obra', senha: 'Senha', github: 'Publicação', manual: 'Manual do RDO', portfolio: 'Portfólio' };
+  const TITULO_TELA = { alimentar: 'Alimentar dados', acessos: 'Acessos', 'nova-obra': 'Nova obra', 'editar-obra': 'Cadastro da obra', senha: 'Senha', github: 'Publicação', manual: 'Manual de alimentação', portfolio: 'Portfólio' };
   function shell(conteudo) {
     const u = S.user;
     const o = S.obraId ? DB.obras.find(x => x.id === S.obraId) : null;
@@ -101,7 +101,7 @@
       ['acessos', 'Acessos', IC.users, ehAdmin()],
     ].filter(i => i[3]);
     // portfólio e report na largura da folha A4 paisagem; as demais telas na largura A4 retrato
-    const larga = ['report', 'portfolio'].includes(S.view) ? ' larga' : '';
+    const larga = ['report', 'portfolio', 'manual'].includes(S.view) ? ' larga' : '';
     const botoes = itens.map(([k, t, ic]) => `<button data-go="${k}" ${S.view === k ? 'aria-current="page"' : ''}>${ic}<span>${t}</span></button>`).join('');
     return `
       <header class="mast"><div class="mast-in">
@@ -114,7 +114,7 @@
         <button class="avatar" id="bt-user" aria-haspopup="menu" aria-expanded="${S.menu}" aria-label="Conta: ${esc(u.nome)}">${esc(u.ini)}</button>
       </div></header>
       ${S.menu ? `<div class="menu" role="menu"><div class="who"><b>${esc(u.nome)}</b><small>${esc(u.rotulo)}</small></div>
-        ${!ehCliente() ? '<button role="menuitem" data-go="manual">Manual do RDO (interno)</button>' : ''}${ehAdmin() ? `<button role="menuitem" data-go="senha">Trocar minha senha</button><button role="menuitem" data-go="github">Publicação (GitHub)</button>` : `<a role="menuitem" href="${mailtoSenha(u.email)}">Solicitar nova senha</a>`}<button role="menuitem" data-act="sair">Sair</button></div>` : ''}
+        ${!ehCliente() ? '<button role="menuitem" data-go="manual">Manual de alimentação (interno)</button>' : ''}${ehAdmin() ? `<button role="menuitem" data-go="senha">Trocar minha senha</button><button role="menuitem" data-go="github">Publicação (GitHub)</button>` : `<a role="menuitem" href="${mailtoSenha(u.email)}">Solicitar nova senha</a>`}<button role="menuitem" data-act="sair">Sair</button></div>` : ''}
       <main class="page${larga}" id="main">${conteudo}</main>
       <nav class="nav" aria-label="Navegação principal"><div class="nav-in">${botoes}</div></nav>`;
   }
@@ -894,7 +894,7 @@
           <small>Planilhas do Prevision (.xls/.xlsx), o Controle de Medição (.xlsx) e o PDF dos RDOs (últimos 30 dias). Podem ser enviados todos de uma vez.</small>
         </label>
         <input type="file" id="imp-file" multiple accept=".xls,.xlsx,.csv,.pdf" hidden>
-        <small class="hint">O que cada RDO precisa trazer para o painel e o report: <button class="btn sec2" type="button" data-go="manual" style="padding:2px 10px;min-height:0">Manual do RDO</button></small>
+        <small class="hint">O que cada arquivo precisa trazer e quando enviar: <button class="btn sec2" type="button" data-go="manual" style="padding:2px 10px;min-height:0">Manual de alimentação</button></small>
         ${imp.arquivos.length ? `<div class="check">${imp.arquivos.map(a => `<div class="${a.erro ? 'er' : 'ok'}"><i>${a.erro ? '×' : '✓'}</i><span><b>${esc(a.nome)}</b> → ${a.erro ? esc(a.erro) : esc(a.tipoNome)}</span></div>`).join('')}</div>` : ''}
         ${Object.keys(imp.dados).length ? `<div class="step-t">4 · Conferência</div><div class="check">${conferenciaImport(o, imp).map(([k, t]) => `<div class="${k}"><i>${k === 'ok' ? '✓' : k === 'av' ? '!' : '×'}</i><span>${t}</span></div>`).join('')}</div>
           <div class="field" style="max-width:260px"><label for="imp-corte">Data de corte</label><input class="inp" type="date" id="imp-corte" value="${imp.corte || o.dataCorte}"></div>
@@ -1106,9 +1106,63 @@
     toast('Rascunho salvo. Confira e publique para o cliente.');
   }
 
-  // ---------- manual de preenchimento do RDO (uso interno: administrador e diretoria) ----------
-  // O padrão junta o que cada obra já faz melhor; a tabela mede, nos RDOs carregados, quanto de cada campo aparece, e
-  // os exemplos saem do diário da obra de referência de cada bloco (a que mais preenche aquele bloco).
+  // ---------- manual de alimentação do painel (uso interno: administrador e diretoria) ----------
+  // Um padrão para cada documento que alimenta o painel e o report: de onde vem, quando enviar, como gerar e o que precisa
+  // trazer. As tabelas medem, na carga de cada obra, quanto do padrão aparece (Core.qualidadeDocs e Core.qualidadeRdo); a
+  // obra de referência de cada item é a que mais cumpre o padrão, e os exemplos do RDO saem do diário dela.
+  const DOCS = [
+    { k: 'cadastro', t: 'Cadastro da obra', de: 'Painel · Cadastro da obra', quando: 'Na abertura da obra e a cada aditivo',
+      como: ['Código da obra igual ao do Prevision, do RDO e do Controle de Medição (ex.: 208).', 'Contrato no mesmo número do RDO e do Controle de Medição (ex.: CT/208/2026): o painel compara os dois.',
+        'Cliente, contratante, cidade, endereço e responsável em campo: aparecem no cabeçalho do painel e do report.', 'Prazo contratual com as datas do contrato e dos aditivos aprovados.'],
+      usa: 'cabeçalho do painel e do report, prazo no portfólio e conferência de que cada arquivo enviado é da obra certa' },
+    { k: 'cronograma', t: 'Cronograma', de: 'Prevision · Gantt em .xlsx', quando: 'Toda semana, na data de corte', pasta: 'planejamento/Físico',
+      como: ['Lance no Prevision o avanço da semana, a partir dos RDOs aprovados, antes de exportar.', 'Exporte o Gantt com todas as linhas expandidas: árvore recolhida tira tarefas do painel.',
+        'Linha de base salva no Prevision: dela saem o término de base e o desvio de prazo.', 'Responsável de cada tarefa: a empresa executora, ou "Pendente de contratação" enquanto não houver empresa.',
+        'Exporte no mesmo dia do Progresso por tarefas e da Curva S.'],
+      cols: 'Linha, EAP, Nome, Início, Fim, Duração, Predecessoras, Sucessoras, Início (base), Fim (base), Responsáveis, Previsto (%), Realizado (%), Base (%)',
+      usa: 'Gantt da aba Obra, término previsto × base, tarefas atrasadas e próximas, "a contratar" nos pontos de atenção e cor das áreas vinculadas no mapa' },
+    { k: 'tarefas', t: 'Progresso por tarefas', de: 'Prevision · .xlsx', quando: 'Toda semana, com o Cronograma', pasta: 'planejamento/Físico',
+      como: ['Exporte sem filtro de datas e com a árvore toda aberta: com filtro, a raiz não soma 100% e os pesos das frentes deixam de valer.',
+        'Mesmo dia do Cronograma: o painel liga as duas planilhas pela posição na árvore e pelo nome da tarefa.'],
+      cols: 'EAP, Tarefa, Início, Fim, Base, Previsto, Realizado, Atraso',
+      usa: 'avanço por atividade e por etapa, peso de cada frente e maior diferença para o plano na leitura do período' },
+    { k: 'curva', t: 'Curva S', de: 'Prevision · .xls', quando: 'Toda semana', pasta: 'planejamento/Físico',
+      como: ['Exporte a Curva S física da obra inteira, do início ao término, e não só o período.', 'A linha de base precisa fechar em 100% e nunca diminuir.'],
+      cols: 'Dia, Base, Previsto, Realizado',
+      usa: 'Curva S do painel e do report, avanço na data de corte e índice de prazo (IDP)' },
+    { k: 'mensal', t: 'Progresso mensal ou semanal', de: 'Prevision · .xls', quando: 'Toda semana', pasta: 'planejamento/Físico',
+      como: ['Vale o progresso mensal ou o semanal: o semanal é somado por mês, repartindo a semana da virada pelos dias.', 'Mesma linha de base da Curva S: o painel confere mês a mês e recusa o arquivo que não bate.'],
+      cols: 'Mês, Base, Previsto, Realizado (IDPM opcional)',
+      usa: 'barras de avanço por mês, ritmo dos últimos 3 meses e projeção de término' },
+    { k: 'rdo', t: 'Diário de obra (RDO)', de: 'Plataforma RDO · PDF compilado', quando: 'Diário na obra; envio semanal dos últimos 30 dias', pasta: 'planejamento/Diário',
+      como: ['Preencha e aprove o RDO até o dia útil seguinte: só RDO aprovado entra na posição do cliente.', 'Exporte da plataforma RDO o PDF compilado dos últimos 30 dias, com as fotos.',
+        'O PDF pode passar de 60 MB: a tela mostra a leitura página a página e só libera o salvar no fim.', 'O preenchimento de cada campo segue o padrão abaixo (itens 6.1 a 6.6).'],
+      usa: 'quadro Campo, efetivo por dia, frentes e paralisações, registro fotográfico e foto ao lado do mapa de avanço' },
+    { k: 'mapas', t: 'Plantas e mapa de avanço', de: 'Projetos da obra · PDF ou imagem', quando: 'Ao abrir cada frente; revisar quando o cronograma mudar', pasta: '3_Projetos',
+      como: ['Na aba Obra → Mapa de avanço, envie a planta da frente (PDF, escolhendo a página, ou PNG/JPG).', 'Uma planta por frente de serviço, com título claro (ex.: Cobertura · Galpão de injetoras).',
+        'Dê às áreas os mesmos nomes de local usados no RDO (galpão, bloco, eixo).', 'Vincule cada área à atividade do cronograma: a cor muda sozinha a cada carga. Área sem vínculo só muda à mão.'],
+      usa: 'folhas de mapa de avanço do report e planta ao lado de cada foto do serviço' },
+    { k: 'financeiro', t: 'Curva S financeira (valor agregado)', de: 'Prevision · Financeiro VA · .xls', quando: 'Todo mês, após a medição', pasta: 'planejamento/Financeiro VA',
+      como: ['Em Alimentar, escolha "Dados financeiros" antes de enviar: o cabeçalho é igual ao da Curva S física e quem define o tipo é essa escolha.',
+        'Curva em reais na base do contrato: quando o total bate com o Controle de Medição (±15%), o quadro de valor agregado entra no report.',
+        'Progresso mensal e por tarefas financeiros são opcionais: ficam guardados, o report usa a curva.'],
+      cols: 'Dia, Base, Previsto, Realizado (em R$)',
+      usa: 'valor planejado (PV), valor agregado (EV) e índice de prazo em valor (SPI)' },
+    { k: 'medicao', t: 'Controle de Medição', de: 'Planilha Machine · .xlsx', quando: 'Todo mês, a cada medição', pasta: 'contrato',
+      como: ['Total do contrato com aditivos, medido acumulado e saldo.', 'Uma linha por mês com previsto, realizado e a situação da medição (realizada, em análise, a aprovar).',
+        'Uma aba de boletim por medição (M1, M2…), com Referência (EAP), Descrição, Contratada, Acumulado, Medida, % executado, Preço unitário e Medição.',
+        'Layouts lidos: Controle Mensal (198), VISÃO GERAL (208) e SÉRIE DE MEDIÇÕES + RESUMO (207). Vale nos dois tipos de envio.'],
+      usa: 'valor do contrato, medido e saldo no quadro financeiro e última medição' },
+  ];
+  const ROTINA = [
+    ['Toda semana · dados físicos', ['RDOs do período aprovados na plataforma.', 'Avanço da semana lançado no Prevision.', 'Exportar no mesmo dia: Cronograma, Progresso por tarefas, Curva S e Progresso semanal.',
+      'Exportar o PDF dos RDOs dos últimos 30 dias.', 'Alimentar → Dados físicos: enviar tudo de uma vez, sem nenhum × na conferência, com a data de corte do dia da exportação.',
+      'Conferir a aba Obra, publicar para o cliente e baixar o report.']],
+    ['Todo mês · dados financeiros', ['Fechar a medição no Controle de Medição: linha do mês, situação e aba do boletim.', 'Exportar a Curva S financeira (Financeiro VA).',
+      'Alimentar → Dados financeiros: enviar a Curva S financeira e o Controle de Medição.', 'Conferir o quadro financeiro na aba Obra e publicar.']],
+    ['Quando houver mudança', ['Aditivo de prazo ou de contrato: atualizar o cadastro da obra.', 'Nova frente ou nova revisão de projeto: planta no mapa de avanço, com as áreas vinculadas.',
+      'Nova linha de base no Prevision: exportar juntos Cronograma, Progresso por tarefas e Curva S.']],
+  ];
   const PADRAO_RDO = [
     { b: 1, k: 'diario', t: 'Um RDO por dia útil' }, { b: 1, k: 'aprovado', t: 'RDO aprovado' },
     { b: 2, k: 'clima', t: 'Tempo e condição nos dois turnos' },
@@ -1132,17 +1186,55 @@
       faz: ['Pelo menos 2 fotos de cada atividade em andamento, mostrando o serviço (de preferência na horizontal).', 'Legenda com código EAP, serviço e local/área, iguais aos da atividade.', 'Fotos só de clima, de pessoas ou de documentos não contam como registro do serviço.'] },
   };
   function viewManual() {
-    const obras = DB.obras.map(b => { const o = visaoDaObra(b); return { b, o, q: Core.qualidadeRdo(o.rdos || [], b.fotosPendentes ? null : o.fotos || []) }; }).filter(x => x.q);
-    const val = (x, c) => x.q.v[c.k];
-    const fmt = (v, c) => v === null || v === undefined ? '—' : c.n ? fmtNum(v, 1) : pct(v, 0);
-    const cls = (v, c) => v === null || v === undefined ? '' : c.n ? '' : v >= 0.9 ? 'ok' : v >= 0.5 ? 'atencao' : 'critico';
-    // referência do item: a(s) obra(s) com o maior valor; sem referência quando todas empatam ou o melhor é quase nada
-    const melhor = c => { const vs = obras.map(x => val(x, c)).filter(v => v !== null && v !== undefined); const m = vs.length ? Math.max(...vs) : 0;
-      const top = obras.filter(x => val(x, c) === m); return m >= (c.n ? 0.5 : 0.05) && top.length < obras.length ? top : []; };
-    // obra de referência de um bloco: a que vence mais itens dele
-    const refBloco = b => { const cont = new Map(); PADRAO_RDO.filter(c => c.b === b).forEach(c => melhor(c).forEach(x => cont.set(x, (cont.get(x) || 0) + 1))); return [...cont].sort((a, z) => z[1] - a[1])[0]?.[0] || null; };
-    const ultimo = x => [...x.o.rdos].sort((a, z) => a.data < z.data ? -1 : 1).at(-1);
+    const obras = DB.obras.filter(b => temDados(visaoDaObra(b))).map(b => {
+      const o = visaoDaObra(b), fotos = b.fotosPendentes ? null : o.fotos || [], q = Core.qualidadeRdo(o.rdos || [], fotos);
+      return { b, o, q, d: { ...Core.qualidadeDocs(o, calcObra(b), fotos), rdo: q ? PADRAO_RDO.map(c => ({ t: c.t, v: q.v[c.k], n: c.n })) : null } };
+    });
+    const semCarga = DB.obras.filter(b => !temDados(visaoDaObra(b)));
     const nome = x => `Obra ${esc(x.b.codigo)}`;
+    const num = v => v === true ? 1 : v === false ? 0 : v;
+    const cls = v => v >= 0.9 ? 'ok' : v >= 0.5 ? 'atencao' : 'critico';
+    // nota do documento: média dos itens medidos (as médias por RDO, como funções e fotos, ficam de fora)
+    const nota = itens => { const vs = (itens || []).filter(i => !i.n).map(i => num(i.v)).filter(v => v !== null && v !== undefined); return vs.length ? vs.reduce((s, v) => s + v, 0) / vs.length : null; };
+    // referência: a(s) obra(s) com o maior valor; nenhuma quando todas empatam ou o melhor é quase nada
+    const melhor = (val, min = 0.05) => { const vs = obras.map(val).map(num).filter(v => v !== null && v !== undefined); const m = vs.length ? Math.max(...vs) : 0;
+      const top = obras.filter(x => num(val(x)) === m); return m >= min && top.length < obras.length ? top : []; };
+    const refDoc = D => melhor(x => nota(x.d[D.k]));
+    const cel = (v, n) => v === undefined ? '<span class="hint">não enviado</span>' : v === null ? '—' : n ? fmtNum(v, 1)
+      : typeof v === 'boolean' ? `<span class="pill ${v ? 'ok' : 'critico'} plain">${v ? 'sim' : 'não'}</span>` : `<span class="pill ${cls(v)} plain">${pct(v, 0)}</span>`;
+    const estrela = '<span class="man-ref" title="obra de referência">★</span>';
+    // itens do documento × obras
+    const tabItens = D => {
+      const modelo = (obras.find(x => x.d[D.k]) || {}).d?.[D.k];
+      if (!modelo) return '<p class="hint" style="margin:0">Nenhuma obra enviou este documento ainda.</p>';
+      const linhas = modelo.map((it, i) => [it, i]);
+      return `<div class="tw"><table class="t man-t"><thead><tr><th>Item do padrão</th>${obras.map(x => `<th class="n">${nome(x)}</th>`).join('')}</tr></thead><tbody>
+        ${linhas.map(([it, i]) => { const v = x => x.d[D.k] ? x.d[D.k][i].v : undefined, m = melhor(v, it.n ? 0.5 : 0.05);
+          return `<tr><td>${esc(it.t)}${it.n ? ' <small class="hint">(média por RDO)</small>' : ''}</td>${obras.map(x => `<td class="n">${cel(v(x), it.n)}${m.includes(x) ? ' ' + estrela : ''}</td>`).join('')}</tr>`; }).join('')}
+        </tbody></table></div>`;
+    };
+
+    // ----- situação geral: um documento por linha, uma obra por coluna -----
+    const hojeIso = new Date().toISOString().slice(0, 10);
+    const idade = (d, lim) => { if (!d) return '<span class="pill critico plain">sem carga</span>'; const n = diff(d, hojeIso); return `<span class="pill ${n > lim ? 'atencao' : 'ok'} plain">${dCurto(d)}</span>${n > lim ? `<small>${n} dias</small>` : ''}`; };
+    const celDoc = (x, D) => { const it = x.d[D.k], s = nota(it);
+      if (!it) return D.k === 'mapas' ? '<span class="pill atencao plain">sem planta</span>' : '<span class="pill critico plain">não enviado</span>';
+      return s === null ? '—' : `<span class="pill ${cls(s)} plain">${pct(s, 0)}</span>`; };
+    const geral = obras.length ? `<div class="tw"><table class="t man-t"><thead><tr><th>Documento</th><th>Quando</th>${obras.map(x => `<th class="n">${nome(x)}</th>`).join('')}</tr></thead><tbody>
+      ${DOCS.map((D, i) => { const ref = refDoc(D);
+        return `<tr><td><button class="man-ir" type="button" data-ir="man-${D.k}">${i + 1}. ${esc(D.t)}</button></td><td class="man-q">${esc(D.quando)}</td>${obras.map(x => `<td class="n">${celDoc(x, D)}${ref.includes(x) ? ' ' + estrela : ''}</td>`).join('')}</tr>`; }).join('')}
+      <tr class="man-sep"><td colspan="${obras.length + 2}">Atualização</td></tr>
+      <tr><td>Última carga física</td><td class="man-q">Semanal (até ${Core.LIMIAR_DIAS.fisico} dias)</td>${obras.map(x => `<td class="n">${idade(x.b.dataCorte, Core.LIMIAR_DIAS.fisico)}</td>`).join('')}</tr>
+      <tr><td>Última carga financeira</td><td class="man-q">Mensal (até ${Core.LIMIAR_DIAS.financeiro} dias)</td>${obras.map(x => `<td class="n">${idade(x.b.dataCorteFinanceiro, Core.LIMIAR_DIAS.financeiro)}</td>`).join('')}</tr>
+      <tr><td>Posição publicada ao cliente</td><td class="man-q">Após cada carga</td>${obras.map(x => { const p = x.b.publicadoAte, c = x.b.dataCorte;
+        return `<td class="n">${!p ? '<span class="pill critico plain">não publicada</span>' : `<span class="pill ${!c || p >= c ? 'ok' : 'atencao'} plain">${dCurto(p)}</span>${c && p < c ? `<small>rascunho de ${dCurto(c)}</small>` : ''}`}</td>`; }).join('')}</tr>
+      </tbody></table></div>
+      <small class="hint">Percentual: quanto do padrão de cada documento aparece na carga atual da obra. ★ obra de referência. ${semCarga.length ? `Sem carga ainda: ${semCarga.map(b => 'Obra ' + esc(b.codigo)).join(', ')}.` : ''}</small>`
+      : '<p class="sub" style="margin:0">Nenhuma obra tem carga ainda.</p>';
+
+    // ----- RDO: exemplos reais da obra de referência de cada bloco -----
+    const refBloco = b => { const cont = new Map(); PADRAO_RDO.forEach((c, i) => { if (c.b === b) melhor(x => x.d.rdo ? x.d.rdo[i].v : undefined, c.n ? 0.5 : 0.05).forEach(x => cont.set(x, (cont.get(x) || 0) + 1)); }); return [...cont].sort((a, z) => z[1] - a[1])[0]?.[0] || null; };
+    const ultimo = x => [...x.o.rdos].sort((a, z) => a.data < z.data ? -1 : 1).at(-1);
     const exemplo = b => {
       const x = refBloco(b); if (!x) return '';
       const cab = `<div class="step-t" style="margin:4px 0 6px">Exemplo real · ${nome(x)}</div>`;
@@ -1160,27 +1252,42 @@
           ${lin('% acumulado', a.pct === null || a.pct === undefined ? '' : pct(a.pct, 0))}${lin('Situação', a.situacao)}${/paralis/i.test(a.situacao || '') ? lin('Motivo', a.motivo) : ''}${lin('Descrição do dia', a.descricao && a.descricao !== a.servico ? a.descricao : '')}</tbody></table></div>`;
       }
       if (b === 5) { const f = [...(x.o.fotos || [])].reverse().find(f => f.legenda && f.legenda.eap) || [...(x.o.fotos || [])].reverse().find(f => f.legenda);
-        return f ? cab + `<figure style="margin:0;display:grid;gap:6px;max-width:360px"><img src="${urlImg(f.src)}" alt="" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px"><figcaption class="hint">RDO nº ${f.rdo} · ${dCurto(f.data)} — ${esc(f.legenda.texto || f.legenda.servico || '')}</figcaption></figure>` : ''; }
+        return f ? cab + `<figure class="man-foto"><img src="${urlImg(f.src)}" alt=""><figcaption class="hint">RDO nº ${f.rdo} · ${dCurto(f.data)} — ${esc(f.legenda.texto || f.legenda.servico || '')}</figcaption></figure>` : ''; }
       return '';
     };
-    const tabela = obras.length ? `<div class="tw"><table class="t"><thead><tr><th>Item do padrão</th>${obras.map(x => `<th class="n">${nome(x)}</th>`).join('')}</tr></thead><tbody>
-      ${[1, 2, 3, 4, 5].map(b => `<tr><td colspan="${obras.length + 1}"><b>${b}. ${BLOCOS_RDO[b].t}</b></td></tr>` + PADRAO_RDO.filter(c => c.b === b).map(c => { const m = melhor(c);
-        return `<tr><td>${esc(c.t)}${c.n ? ' <small class="hint">(média)</small>' : ''}</td>${obras.map(x => { const v = val(x, c), k = cls(v, c);
-          return `<td class="n">${k ? `<span class="pill ${k} plain">${fmt(v, c)}</span>` : fmt(v, c)}${m.includes(x) ? ' <span title="referência">★</span>' : ''}</td>`; }).join('')}</tr>`; }).join('')).join('')}
-      </tbody></table></div>
-      <small class="hint">★ obra de referência do item. Base: ${obras.map(x => `${nome(x)} — ${x.q.n} RDOs de ${dCurto(x.q.de)} a ${dCurto(x.q.ate)}${x.q.nFotos ? `, ${x.q.nFotos} fotos` : ''}${x.q.nParalisadas ? '' : ', sem paralisação no período'}`).join(' · ')}.</small>`
-      : '<p class="sub" style="margin:0">Nenhuma obra tem RDOs carregados ainda.</p>';
-    return `
-      <div><div class="kicker">Uso interno · Machine</div><h1 class="h1">Manual de preenchimento do RDO</h1>
-      <p class="sub">O diário de obra alimenta o painel e o report do cliente. Este é o padrão único para todas as obras, montado com o que cada obra já faz melhor. A tabela mostra quanto do padrão aparece hoje nos RDOs carregados no painel.</p></div>
-      <div class="card card-pad"><div class="step-t" style="margin-bottom:8px">Como os diários estão hoje</div>${tabela}</div>
-      ${[1, 2, 3, 4, 5].map(b => { const B = BLOCOS_RDO[b], x = refBloco(b);
-        return `<div class="card card-pad"><div class="step-t">${b}. ${B.t}${x ? ` <span class="pill info plain">referência: ${nome(x)}</span>` : ''}</div>
-          <ul class="man-l">${B.faz.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
-          <p class="hint" style="margin:0 0 6px">No painel: ${esc(B.usa)}.</p>${exemplo(b)}</div>`; }).join('')}
-      <div class="card card-pad"><div class="step-t">6. Comentários e ocorrências</div>
+    const blocosRdo = n => [1, 2, 3, 4, 5].map(b => { const B = BLOCOS_RDO[b], x = refBloco(b);
+      return `<div class="man-sub"><div class="man-sub-t">${n}.${b} ${esc(B.t)}${x ? ` <span class="pill info plain">referência: ${nome(x)}</span>` : ''}</div>
+        <ul class="man-l">${B.faz.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+        <p class="hint" style="margin:0 0 6px">No painel: ${esc(B.usa)}.</p>${exemplo(b)}</div>`; }).join('')
+      + `<div class="man-sub"><div class="man-sub-t">${n}.6 Comentários e ocorrências</div>
         <ul class="man-l"><li>Visitas do cliente e da fiscalização, entregas de material, acidentes e incidentes, interferências e pendências do cliente, com data e responsável.</li>
         <li>O que estiver nos comentários não aparece no report: o que afeta prazo vai também na atividade (situação e motivo).</li></ul></div>`;
+    const baseRdo = obras.filter(x => x.q).map(x => `${nome(x)} — ${x.q.n} RDOs de ${dCurto(x.q.de)} a ${dCurto(x.q.ate)}${x.q.nFotos ? `, ${x.q.nFotos} fotos` : ''}${x.q.nParalisadas ? '' : ', sem paralisação no período'}`).join(' · ');
+
+    // ----- um cartão por documento -----
+    const cartao = (D, i) => { const ref = refDoc(D), n = i + 1;
+      return `<section class="card card-pad man-doc" id="man-${D.k}">
+        <div class="man-h"><span class="man-n">${n}</span><div class="man-h-t"><h2>${esc(D.t)}</h2>
+          <div class="meta"><span>Origem <b>${esc(D.de)}</b></span><span>Quando <b>${esc(D.quando)}</b></span>${D.pasta ? `<span>Pasta <b>${esc(D.pasta)}</b></span>` : ''}</div></div>
+          ${ref.length ? `<span class="pill info plain">referência: ${ref.map(nome).join(', ')}</span>` : ''}</div>
+        <div class="man-g">
+          <div><div class="step-t">Como gerar e enviar</div><ol class="man-l">${D.como.map(t => `<li>${esc(t)}</li>`).join('')}</ol>
+            ${D.cols ? `<p class="hint" style="margin:0 0 6px"><b>Colunas que o painel lê:</b> ${esc(D.cols)}.</p>` : ''}
+            <p class="hint" style="margin:0"><b>No painel e no report:</b> ${esc(D.usa)}.</p></div>
+          <div><div class="step-t" style="margin-bottom:8px">Como está nas obras</div>${tabItens(D)}${D.k === 'rdo' && baseRdo ? `<small class="hint">Base: ${baseRdo}.</small>` : ''}</div>
+        </div>
+        ${D.k === 'rdo' ? `<div class="step-t" style="margin:18px 0 2px">Padrão de preenchimento</div>${blocosRdo(n)}` : ''}
+      </section>`; };
+
+    return `
+      <div class="head-row"><div><div class="kicker">Uso interno · Machine</div><h1 class="h1">Manual de alimentação do painel</h1>
+        <p class="sub">Os documentos que atualizam o painel e o report do cliente: de onde vem cada um, quando enviar, como gerar e o que precisa trazer. O padrão é o mesmo para todas as obras e foi montado com o que cada obra já faz melhor; as tabelas mostram quanto dele aparece hoje na carga de cada obra.</p></div>
+        <div class="bar-actions no-print"><button class="btn sec2" type="button" id="man-imprimir">Imprimir</button></div></div>
+      <div class="card card-pad"><div class="step-t" style="margin-bottom:8px">Documentos e situação nas obras</div>${geral}</div>
+      <div class="card card-pad"><div class="step-t" style="margin-bottom:10px">Rotina de atualização</div>
+        <div class="man-rot">${ROTINA.map(([t, passos]) => `<div><div class="man-sub-t">${esc(t)}</div><ol class="man-l">${passos.map(p => `<li>${esc(p)}</li>`).join('')}</ol></div>`).join('')}</div>
+        <p class="hint" style="margin:6px 0 0">Todo arquivo do Prevision leva o código da obra no nome (ex.: Cronograma - 208 - …): o painel confere a obra pelo nome e pela tarefa raiz e recusa arquivo de outra obra. O Relatório de Medição do cliente, o Relatório de Contas Pagas e o custo real ainda não são lidos pelo painel e não precisam ser enviados.</p></div>
+      ${DOCS.map(cartao).join('')}`;
   }
 
   // ---------- acessos (administrador) ----------
@@ -1634,6 +1741,9 @@
     $$('[data-go]').forEach(b => b.onclick = () => { atualiza(); S.view = b.dataset.go; S.menu = false; S.loginErro = null; S.loginMsg = null; S.editAcesso = null; render(); window.scrollTo(0, 0); });
     $$('[data-obra]').forEach(b => b.onclick = () => { atualiza(); if (S.obraId !== b.dataset.obra) S.mapaEd = null; S.obraId = b.dataset.obra; S.view = 'obra'; render(); window.scrollTo(0, 0); });
     $$('[data-toast]').forEach(b => b.onclick = () => toast(b.dataset.toast));
+    // manual: o índice rola até o documento; imprimir usa o CSS de impressão das telas (A4 retrato)
+    $$('[data-ir]').forEach(b => b.onclick = () => { const el = document.getElementById(b.dataset.ir); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    const mi = $('#man-imprimir'); if (mi) mi.onclick = () => window.print();
     const bt = $('#bt-tema'); if (bt) bt.onclick = () => { tema = TEMAS[(TEMAS.indexOf(tema) + 1) % 3]; lsSet('mp_tema', tema); aplicaTema(tema); render(); };
     const bu = $('#bt-user'); if (bu) bu.onclick = e => { e.stopPropagation(); S.menu = !S.menu; render(); };
     $$('[data-act="sair"]').forEach(b => b.onclick = () => { API.sair(); S.user = null; DB.obras = []; S.menu = false; S.view = 'login'; S.imp = null; render(); });

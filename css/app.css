@@ -322,6 +322,27 @@ table.t td.acoes .more { margin-left: 12px; }
 .steps { display: grid; gap: 14px; }
 .step-t { font-size: 11.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .man-l { margin: 8px 0 10px; padding-left: 20px; display: grid; gap: 5px; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+
+/* ---------- manual de alimentação ---------- */
+.man-doc { scroll-margin-top: calc(var(--mast-h) + 16px); }
+.man-h { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 16px; }
+.man-h-t { flex: 1 1 320px; min-width: 0; }
+.man-h h2 { font-size: 22px; line-height: 1.15; color: var(--ink); }
+.man-h .meta { margin-top: 4px; }
+.man-n { flex: none; width: 34px; height: 34px; display: grid; place-items: center; background: var(--brand); color: #fff; font-family: var(--f-display); font-weight: 700; font-size: 17px; border-radius: 4px; }
+.man-g { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 24px; align-items: start; }
+.man-rot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.man-sub { border-top: 1px solid var(--rule); padding-top: 12px; margin-top: 12px; }
+.man-sub-t { font-weight: 600; font-size: 15px; color: var(--ink); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+table.t.man-t { min-width: 0; }
+.man-q { color: var(--muted); font-size: 12.5px; }
+.man-ir { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--brand); cursor: pointer; text-align: left; }
+.man-ir:hover { text-decoration: underline; }
+table.t tr.man-sep td { background: var(--card-2); font-size: 11.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.man-ref { color: var(--brand); }
+.man-foto { margin: 0; display: grid; gap: 6px; max-width: 360px; }
+.man-foto img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; }
+@media (max-width: 899px) { .man-g, .man-rot { grid-template-columns: minmax(0, 1fr); } }
 .field { display: grid; gap: 6px; }
 .field label { font-size: 13px; color: var(--ink-2); font-weight: 600; }
 .inp { border: 1px solid var(--rule); background: var(--card); border-radius: 8px; padding: 9px 12px; min-width: 0; max-width: 100%; }
@@ -522,4 +543,5 @@ label.chk input { margin: 0; }
   .mast, .nav, .no-print, .toast, .lb { display: none !important; }
   body, html { background: #fff; }
   .page { padding: 0; max-width: none; }
+  .man-sub, .man-g > div, .man-rot > div, table.t tr { break-inside: avoid; }
 }
