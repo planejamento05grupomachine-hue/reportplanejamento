@@ -455,7 +455,7 @@
     if (horas) r.horario.horas = horas;
     for (const turno of ['Manhã', 'Tarde', 'Noite']) {
       const t = todas.find(x => new RegExp('\\| ' + turno + ' \\| ').test(x));
-      if (t) { const p = t.split(' | '); const i = p.indexOf(turno); r.clima.push({ turno, tempo: p[i + 1] || null, condicao: p[i + 2] || null }); }
+      if (t) { const p = t.split(' | '); const i = p.indexOf(turno); r.clima.push(separaClima({ turno, tempo: p[i + 1] || null, condicao: p[i + 2] || null })); }
     }
 
     // Mão de obra: grade de células. Lê pela posição dos itens na 1ª página.
@@ -485,6 +485,12 @@
     return r;
   }
 
+  // Layout com índice pluviométrico: tempo e condição numa célula só ("Nublado Praticável")
+  function separaClima(c) {
+    const m = !c.condicao && c.tempo && c.tempo.match(/^(.*?)\s*((?:Im)?pratic[aá]vel)$/i);
+    return m ? { ...c, tempo: m[1] || null, condicao: m[2] } : c;
+  }
+
   function lerMaoDeObra(pagina) {
     const ls = pagina.linhas;
     const i0 = ls.findIndex(l => /^Mão de obra \(\d+\)$/.test(l.txt));
@@ -494,9 +500,11 @@
     const itens = pagina.itens.filter(i => i.y < yTop - 1 && i.y > yBot + 1);
     // Faixas (linhas da grade): separadas pelos totais "(n)" da coluna da direita
     const totais = itens.filter(i => /^\(\d+\)$/.test(i.s.trim())).sort((a, b) => b.y - a.y);
-    const rotTot = itens.filter(i => /Mão de Obra Própria|Terceiros/i.test(i.s)).sort((a, b) => b.y - a.y);
+    // rótulo da faixa: "Mão de Obra Própria" pode vir numa linha só ou quebrado em duas ("Mão de Obra" / "Própria")
+    const rotTot = itens.filter(i => /Própria|Terceiros/i.test(i.s)).sort((a, b) => b.y - a.y);
     const xTot = totais.length ? Math.min(...totais.map(t => t.x), ...rotTot.map(t => t.x)) - 5 : Infinity;
-    const faixas = totais.map((t, k) => ({ y: t.y, tipo: /terceir/i.test((rotTot[k] || {}).s || '') ? 'terceiros' : 'propria' }));
+    const rotulo = t => rotTot.reduce((b, r) => !b || Math.abs(r.y - t.y) < Math.abs(b.y - t.y) ? r : b, null);
+    const faixas = totais.map(t => ({ y: t.y, total: +t.s.trim().slice(1, -1), tipo: /terceir/i.test((rotulo(t) || {}).s || '') ? 'terceiros' : 'propria' }));
     const out = [];
     const cel = itens.filter(i => i.x < xTot);
     // agrupa por coluna (x do centro)
@@ -515,12 +523,28 @@
         const s = it.s.trim();
         if (/^\d+$/.test(s)) {
           const fx = faixas.reduce((best, f) => Math.abs(f.y - it.y) < Math.abs(best.y - it.y) ? f : best, faixas[0] || { tipo: 'propria', y: it.y });
-          out.push({ funcao: nome.join(' ').replace(/\s+/g, ' ').trim(), qtd: +s, tipo: fx.tipo });
+          const topo = nome.length ? nome[0].y : it.y;
+          out.push({ funcao: nome.map(n => n.s).join(' ').replace(/\s+/g, ' ').trim(), qtd: +s, tipo: fx.tipo, cy: (topo + it.y) / 2 });
           nome = [];
-        } else nome.push(s);
+        } else nome.push({ s, y: it.y });
       }
     }
-    return out;
+    // Uma faixa pode ter mais de uma linha de células (208: "Terceiros (13)" ocupa três linhas) e o total fica no meio
+    // dela: pelo total mais próximo, a linha da borda cai na faixa errada. Com as linhas de cima para baixo, cada faixa
+    // fica com as linhas que somam o seu total; se as somas não fecharem, vale o total mais próximo.
+    const linhas = [];
+    for (const m of [...out].sort((a, b) => b.cy - a.cy)) {
+      const l = linhas.find(x => Math.abs(x.cy - m.cy) < 6);
+      if (l) l.cel.push(m); else linhas.push({ cy: m.cy, cel: [m] });
+    }
+    if (faixas.length > 1) {
+      const soma = cel => cel.reduce((s, m) => s + m.qtd, 0);
+      let k = 0, acc = 0;
+      const daFaixa = linhas.map(l => { if (k < faixas.length - 1 && acc >= faixas[k].total) { k++; acc = 0; } acc += soma(l.cel); return faixas[k]; });
+      const fecha = faixas.every(f => linhas.reduce((s, l, i) => s + (daFaixa[i] === f ? soma(l.cel) : 0), 0) === f.total);
+      if (fecha) linhas.forEach((l, i) => l.cel.forEach(m => { m.tipo = daFaixa[i].tipo; }));
+    }
+    return out.map(({ cy, ...m }) => m);
   }
 
   // Bloco "Equipamentos (n)": grade de nome + quantidade, sem totais por faixa

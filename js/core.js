@@ -309,8 +309,44 @@
     let i = 0; A.forEach(w => { if (B.has(w)) i++; });
     return i / Math.min(A.size, B.size);
   }
+  // empresa da frente: campo próprio do RDO ou, quando o diário não tem, "Empresa (n)" no fim da descrição (198)
+  const empresasFrente = a => a.empresa ? [a.empresa] : [...String(a.descricao || '').matchAll(/([A-Za-zÀ-ú0-9][^.|()]*?)\s*\(\d+\)/g)].map(m => m[1].trim());
+  // RDOs gravados antes da correção do leitor: tempo e condição na mesma célula ("Nublado Praticável")
+  const climaRdo = c => { const m = !c.condicao && c.tempo && c.tempo.match(/^(.*?)\s*((?:Im)?pratic[aá]vel)$/i); return m ? { ...c, tempo: m[1] || null, condicao: m[2] } : c; };
+  // Qualidade do preenchimento dos RDOs (manual interno): quanto de cada campo do padrão aparece nos diários lidos.
+  // Frações de 0 a 1, ou médias por RDO para atividades, itens de mão de obra e fotos.
+  function qualidadeRdo(rdos, fotos) {
+    if (!rdos || !rdos.length) return null;
+    const rd = [...rdos].sort((a, b) => a.data < b.data ? -1 : 1);
+    const A = rd.flatMap(r => r.atividades || []), par = A.filter(a => /paralis/i.test(a.situacao || ''));
+    const F = fotos || [];
+    const fr = (arr, f) => arr.length ? arr.filter(f).length / arr.length : null;
+    const med = f => rd.reduce((s, r) => s + f(r), 0) / rd.length;
+    // um RDO por dia útil (segunda a sexta) entre o primeiro e o último diário lido
+    const util = d => { const w = dia(d).getDay(); return w > 0 && w < 6; };
+    let uteis = 0; for (let d = rd[0].data; d <= rd.at(-1).data; d = addDias(d, 1)) if (util(d)) uteis++;
+    const comRdo = new Set(rd.map(r => r.data).filter(util)).size;
+    return { n: rd.length, de: rd[0].data, ate: rd.at(-1).data, nFotos: F.length, nParalisadas: par.length, v: {
+      diario: uteis ? Math.min(1, comRdo / uteis) : null,
+      aprovado: fr(rd, r => r.status === 'aprovado'),
+      clima: fr(rd, r => (r.clima || []).length > 0 && r.clima.every(c => climaRdo(c).condicao)),
+      maoDeObra: med(r => (r.maoDeObra || []).filter(m => m.qtd > 0).length),
+      equipamentos: fr(rd, r => (r.equipamentos || []).length > 0),
+      atividades: med(r => (r.atividades || []).length),
+      eap: fr(A, a => a.eap),
+      empresa: fr(A, a => empresasFrente(a).length),
+      local: fr(A, a => a.local || a.area),
+      pct: fr(A, a => a.pct !== null && a.pct !== undefined),
+      descricao: fr(A, a => a.descricao && normNome(a.descricao) !== normNome(a.servico || '')),
+      motivo: fr(par, a => a.motivo),
+      fotos: med(r => r.fotos || 0),
+      fotoLegenda: fr(F, f => f.legenda && (f.legenda.servico || f.legenda.texto)),
+      fotoEap: fr(F, f => f.legenda && f.legenda.eap),
+      fotoLocal: fr(F, f => f.legenda && (f.legenda.local || f.legenda.area)),
+    } };
+  }
   function calcCampo(rdos, corte) {
-    const ate = rdos.filter(r => r.data <= corte).sort((a, b) => a.data < b.data ? -1 : 1);
+    const ate = rdos.filter(r => r.data <= corte).map(r => ({ ...r, clima: (r.clima || []).map(climaRdo) })).sort((a, b) => a.data < b.data ? -1 : 1);
     if (!ate.length) return null;
     const ult = ate.at(-1);
     const serie = ate.map(r => ({ data: r.data, numero: r.numero, status: r.status,
@@ -442,6 +478,21 @@
       const resumo = Object.keys(MAPA_ST).map(k => ({ k, t: MAPA_ST[k], n: zonas.filter(z => z.st === k).length, area: area(k) / tot }));
       return { ...m, zonas, resumo };
     });
+  }
+  // Foto do RDO → frente de serviço do mapa (folha de registro fotográfico: foto ao lado da planta).
+  // Pela EAP da legenda contra a atividade vinculada à área (a mesma etapa ou uma de dentro dela) ou, sem EAP, pelo nome do
+  // serviço contra a atividade, o rótulo da área ou o título da frente. Devolve a planta e as áreas a destacar.
+  function fotoNoMapa(f, mapas) {
+    const L = f.legenda || {}, serv = L.servico || L.texto || '';
+    if (!L.eap && !serv) return null;
+    const mesmaEtapa = (a, b) => a && b && (a === b || a.startsWith(b + '.') || b.startsWith(a + '.'));
+    let melhor = null;
+    for (const m of mapas) {
+      const zonas = m.zonas.map(z => ({ id: z.id, s: z.ativ && mesmaEtapa(L.eap, z.ativ.eap) ? 3 : Math.max(parecido(serv, z.ativ ? z.ativ.nome : ''), parecido(serv, z.rotulo)) >= 0.6 ? 2 : 0 })).filter(z => z.s);
+      const s = zonas.length ? Math.max(...zonas.map(z => z.s)) : parecido(serv, m.titulo) >= 0.6 ? 1 : 0;
+      if (s && (!melhor || s > melhor.s)) melhor = { m, s, zonas: zonas.filter(z => z.s === s).map(z => z.id) };
+    }
+    return melhor && { mapa: melhor.m, zonas: melhor.zonas };
   }
 
   // ---------- narrativa automática (painel e report) ----------
@@ -886,8 +937,8 @@
   }
 
   // Efetivo diário (empilhado: próprio + terceiros)
-  function chartEfetivo(el, campo) {
-    const W = Math.max(260, el.clientWidth || 400), H = 120, m = { t: 10, r: 4, b: 22, l: 26 };
+  function chartEfetivo(el, campo, opts = {}) {
+    const W = Math.max(260, el.clientWidth || 400), H = opts.altura || 120, m = { t: 10, r: 4, b: 22, l: 26 };
     const s = campo.serie, max = niceMax(Math.max(...s.map(x => x.propria + x.terceiros)) * 1.1);
     const slot = (W - m.l - m.r) / s.length, bw = Math.max(4, Math.min(22, slot - 6));
     const Y = v => H - m.b - v / max * (H - m.t - m.b);
@@ -915,6 +966,6 @@
 
   root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, diaSemana, diff, addDias, nomeBonito, semaforo, FAIXAS,
     calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, nomeCurto, narrativa, resumoExecutivo, auditoria, marcos, motivoCurto, chartCurvaS, chartMensal, chartCombo, chartEfetivo, interp, fracTempo,
-    calcFinanceiro, moeda, moedaCurta, vaNoReport, MAPA_ST, atividadesParaMapa, statusZona, ptsZona, geoZona, mapasDaObra };
+    calcFinanceiro, moeda, moedaCurta, vaNoReport, empresasFrente, qualidadeRdo, MAPA_ST, atividadesParaMapa, statusZona, ptsZona, geoZona, mapasDaObra, fotoNoMapa };
 })(typeof window !== 'undefined' ? window : globalThis);
 
