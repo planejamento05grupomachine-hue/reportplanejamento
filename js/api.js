@@ -581,8 +581,8 @@
       return gravar(async () => { await commit({}, 'Painel de Obras Machine — versão compactada', { orfao: true, progresso }); });
     },
 
-    // ----- configuração inicial -----
-    // Cifra a carga atual (legado/), cria o primeiro administrador e apaga os arquivos em claro.
+    // ----- configuração inicial (repositório novo, sem acessos) -----
+    // Cria as chaves e o primeiro administrador; as obras são cadastradas depois, pelo próprio painel.
     async configurar({ nome, email, senha, limparHistorico }, progresso) {
       const p = m => progresso && progresso(m);
       if (!GH.temToken()) throw erro('Informe o token do GitHub.', 'SEM_TOKEN');
@@ -590,35 +590,16 @@
       if (await this.estado() === 'login') throw erro('O painel já está configurado.');
       if (String(senha).length < 12) throw erro('A senha precisa ter pelo menos 12 caracteres.');
       email = String(email).trim().toLowerCase();
-      p('Lendo a carga atual do painel…');
-      const leg = await lerJSON('legado/seed.json');
       MK = aleatorio(32);
       DIR = { usuarios: {}, chaves: {}, ki: b64(aleatorio(32)), criadoEm: agora() };
       ACESSO = { versao: 1, cifra: 'AES-256-GCM', kdf: 'PBKDF2-SHA256', usuarios: {} };
-      const arq = {};
-      for (const o of (leg ? leg.obras : [])) {
-        const id = idSeguro(o.id || o.codigo);
-        DIR.chaves[id] = b64(aleatorio(32));
-        p(`Cifrando a obra ${o.codigo}…`);
-        const fotos = [];
-        for (const f of (o.fotos || [])) { const { src, ...m } = f; fotos.push(comSrc({ ...m, bytes: await bytesDaFoto(src) })); }
-        const { fotos: _f, ...resto } = o;
-        const pub = { ...resto, id, destaques: (o.destaques || []).map(s => { const f = (o.fotos || []).find(x => x.src === s); return f ? idFoto(f) : null; }).filter(Boolean),
-          nFotos: fotos.length, publicadoEm: temDados(o) ? agora() : undefined };
-        if (temDados(o)) pub.dataCorte = o.publicadoAte || o.dataCorte;
-        delete pub.publicadoAte;
-        arq[P.obra(id)] = await arqObra(id, pub);
-        if (fotos.length) arq[P.fotos(id)] = await arqFotos(chave(DIR.chaves[id]), fotos);
-        OB[id] = { pub, ras: null, fotos: { pub: fotos, ras: null } };
-      }
       const uid = await idDoEmail(email);
       DIR.usuarios[uid] = { nome: String(nome).trim(), email, perfil: 'admin', obras: [], criadoEm: agora(), senhaEm: agora() };
       p('Criando o acesso do administrador…');
       await novaEntrada(uid, senha);
-      arq[P.dir] = await arqDir();
-      arq[P.acesso] = textoAcesso();
+      const arq = { [P.dir]: await arqDir(), [P.acesso]: textoAcesso() };
       p('Publicando no GitHub…');
-      await commit(arq, 'Painel de Obras Machine — dados cifrados e acesso por senha', { orfao: !!limparHistorico, apagarPrefixos: ['legado/', 'assets/fotos/', 'js/seed.js', 'local.html', 'tools/limitar-fotos.cjs'], progresso });
+      await commit(arq, 'Painel de Obras Machine — acesso por senha', { orfao: !!limparHistorico, progresso });
       CH = chaveiroDe(uid); guardarSessao();
       return usuarioDaSessao();
     },

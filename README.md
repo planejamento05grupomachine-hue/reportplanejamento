@@ -28,6 +28,15 @@ Cifra AES-256-GCM; a senha vira chave por PBKDF2-SHA256 com 600 mil iterações.
 painel têm 12 caracteres aleatórios. Ao remover um acesso (ou reduzir o que alguém vê), todas as chaves são
 trocadas e os dados recifrados. Depois, **Publicação → Compactar histórico** apaga as versões antigas do repositório.
 
+## Telas
+
+- **Portfólio** — visão executiva de todas as obras: indicadores gerais e uma coluna por obra com prazo, avanço físico,
+  planejado × realizado na data, situação e pontos de atenção. No celular, cada obra vira um cartão.
+- **Obra** — situação, cronograma, Curva S, avanço por mês, valor agregado, frentes, tarefas, campo (RDO), fotos,
+  mapa de avanço e paralisações.
+- **Report** — folhas A4 paisagem para cliente e diretoria (ver item 6 da rotina).
+- **Manual do RDO** (menu da conta, uso interno) — padrão de preenchimento do diário de obra.
+
 ## Rotina do administrador
 
 1. **Publicação (GitHub)** — informe uma vez o token de publicação (fine-grained token com acesso só a este
@@ -58,9 +67,9 @@ Cada gravação vira um commit neste repositório; o site atualiza em cerca de u
 
 ## Configuração inicial (uma vez)
 
-Na primeira abertura depois da atualização, o painel mostra **Proteger o painel**: informe nome, e-mail e senha
-do administrador e o token do GitHub. O painel cifra a carga atual (`legado/seed.json` e `assets/fotos/`), cria o primeiro acesso,
-apaga os arquivos em claro e, com a opção marcada, reinicia o histórico do repositório sem as versões antigas.
+Num repositório sem acessos (`data/acesso.json` vazio ou ausente), o painel mostra **Proteger o painel**: informe nome,
+e-mail e senha do administrador e o token do GitHub. O painel cria as chaves e o primeiro acesso e, com a opção marcada,
+reinicia o histórico do repositório. As obras são cadastradas depois, em **Cadastrar obra**.
 
 ## PDF por linha de comando
 

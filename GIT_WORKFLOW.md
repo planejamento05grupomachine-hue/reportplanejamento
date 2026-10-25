@@ -7,7 +7,7 @@
    git pull
    ```
 2. **Implementar** a mudança (direto na `main` se for pequena e segura; em branch se for maior — ver abaixo).
-3. **Validar** localmente (abrir `index.html`, checar o painel, rodar `tools/gerar.cjs` se os dados mudaram).
+3. **Validar** localmente (servir a pasta num servidor local e conferir o painel; `tools/gerar.cjs` gera o PDF do report).
 4. **Commit**:
    ```
    git add <arquivos>
@@ -48,4 +48,4 @@ Se um merge ou push sair errado:
 
 ## Dados sensíveis
 
-A pasta `tipos e arquivos/` (contratos, planilhas financeiras e relatórios por obra) é **ignorada pelo Git** (`.gitignore`) — ela alimenta `tools/gerar.cjs` para gerar os dados cifrados em `data/`, mas não deve ser versionada nem publicada.
+A pasta `tipos e arquivos/` (contratos, planilhas financeiras e relatórios por obra) é **ignorada pelo Git** (`.gitignore`): são os arquivos de origem que o administrador envia em **Alimentar**. O painel grava só a versão cifrada em `data/`; os originais não devem ser versionados nem publicados.
