@@ -394,6 +394,7 @@
         const meta = {
           codigo: String(d.codigo || id).trim(), nome: d.nome, cliente: d.cliente || '', contratante: d.contratante || '', cidade: d.cidade || '',
           contrato: d.contrato || '', local: d.local || '', responsavel: d.responsavel || '',
+          reportVA: ['mostrar', 'ocultar'].includes(d.reportVA) ? d.reportVA : 'auto',
           prazoContratual: d.prazo_inicio && d.prazo_fim ? { inicio: d.prazo_inicio, fim: d.prazo_fim, dias: d.prazo_dias } : (d.prazo_inicio || d.prazo_fim ? { inicio: d.prazo_inicio, fim: d.prazo_fim, dias: null } : null),
         };
         const arq = {};

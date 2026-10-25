@@ -205,29 +205,31 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .folha.exec .rx-box { padding: 14px 20px 18px; }
 .folha.exec .rx-card { padding: 16px 16px 14px; }
 .folha.exec .rx-card-v { font-size: 21px; }
-.rx-cards.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rx-cards.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } .rx-cards.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-/* Valor agregado: legenda dos termos */
-.rx-glos { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 18px; padding: 10px 14px; background: #FFFFFF;
-  border: 1px solid var(--rx-line); border-radius: 8px; font-size: var(--fs-11); line-height: 1.45; color: var(--rx-ink); }
-.rx-glos > div { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: baseline; }
-.rx-glos dt { font-weight: 700; font-size: var(--fs-12); color: var(--rx-navy); letter-spacing: .02em; }
-.rx-glos dd { margin: 0; }
+/* Valor agregado: nota dos termos (uma linha, discreta) */
+.rx-glos { margin: 0; font-size: var(--fs-11); line-height: 1.45; color: var(--rx-muted); }
 .rx-glos b { font-weight: 600; color: var(--rx-navy); }
-.rx-tok .rx-glos { border: 0; padding: 8px 0; }
-@media (max-width: 720px) { .rx-tok .rx-glos { grid-template-columns: minmax(0, 1fr); } }
+.rx-tok .rx-glos { padding: 2px 0; }
 
 /* ===== Mapa de avanço ===== cores do padrão de mapeamento: verde executado · amarelo executando · vermelho a executar */
 .mp-planta { position: relative; width: 100%; margin-inline: auto; background: #FFFFFF; border: 1px solid var(--rx-line, var(--rule)); border-radius: 6px; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
 .mp-planta img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; display: block; pointer-events: none; max-width: none; }
-.mp-z { position: absolute; box-sizing: border-box; border: 2px solid; display: block; font-style: normal; }
-.mp-z b { position: absolute; left: 3px; top: 3px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: #FFFFFF; color: #1F3045;
-  font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; box-shadow: 0 0 0 1px rgba(16, 24, 40, .18); }
-.mp-z.ok { background: rgba(34, 197, 94, .36); border-color: #16A34A; }
-.mp-z.andamento { background: rgba(250, 204, 21, .42); border-color: #CA8A04; }
-.mp-z.pendente { background: rgba(239, 68, 68, .32); border-color: #DC2626; }
-.mp-z.novo { background: rgba(84, 124, 165, .22); border: 2px dashed #547CA5; }
-.mp-z.sel { outline: 3px solid #1F3045; outline-offset: 1px; z-index: 2; }
+/* áreas = polígonos num SVG sobre a planta; cores no próprio SVG (atributos), para sair iguais no PDF */
+.mp-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.mp-num { position: absolute; transform: translate(-50%, -50%); min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: #FFFFFF; color: #1F3045;
+  font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; font-style: normal; box-shadow: 0 0 0 1px rgba(16, 24, 40, .25); pointer-events: none; }
+/* editor: alças de vértice (arrastar · duplo clique remove), meio de lado (arrastar cria vértice) e giro */
+.mp-edit .mp-svg polygon { cursor: pointer; }
+.mp-edit .mp-svg polygon.sel { cursor: move; }
+.mp-edit.desenhando .mp-svg polygon { cursor: crosshair; }
+.mp-h, .mp-hm, .mp-hr { position: absolute; transform: translate(-50%, -50%); box-sizing: border-box; border-radius: 50%; z-index: 3; touch-action: none; }
+.mp-h { width: 14px; height: 14px; background: #FFFFFF; border: 2px solid #1F3045; cursor: grab; }
+.mp-hm { width: 10px; height: 10px; background: rgba(255, 255, 255, .85); border: 1.5px dashed #1F3045; cursor: copy; }
+.mp-hr { width: 18px; height: 18px; background: #1F3045; border: 2px solid #FFFFFF; cursor: alias; box-shadow: 0 0 0 1px #1F3045; }
+.mp-h:hover, .mp-hm:hover, .mp-hr:hover { transform: translate(-50%, -50%) scale(1.25); }
+.mp-ferr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mp-ferr .hint { margin: 0; }
 .mp-sw { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -1px; margin-right: 6px; flex: none; }
 .mp-sw.ok { background: #22C55E; } .mp-sw.andamento { background: #FACC15; } .mp-sw.pendente { background: #EF4444; }
 .mp-leg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; font-size: 12px; color: var(--rx-ink, var(--ink-2)); }
@@ -251,8 +253,9 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .mp-card { margin: 0; display: grid; gap: 10px; align-content: start; padding: 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--card); }
 .mp-card figcaption b { display: block; color: var(--ink); }
 .mp-card figcaption small { color: var(--muted); }
-.mp-editor .mp-edit .mp-planta { cursor: crosshair; }
-.mp-editor .mp-edit .mp-z { cursor: pointer; }
+.mp-editor .mp-edit { padding: 22px 0 4px; }
+.mp-editor .mp-edit .mp-planta { overflow: visible; cursor: default; }
+.mp-editor .mp-edit.desenhando .mp-planta { cursor: crosshair; }
 .mp-painel { display: grid; gap: 10px; border: 1px solid var(--rule); border-radius: 10px; background: var(--card-2); }
 .mp-painel .seg button { display: inline-flex; align-items: center; }
 .mp-linha { cursor: pointer; }
