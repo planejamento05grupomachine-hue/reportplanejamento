@@ -595,7 +595,7 @@
     const mapas = Core.mapasDaObra(o, r);
     return `<p class="sec-lead">Planta da obra com as áreas de cada frente de serviço classificadas em <b>Executado</b>, <b>Executando</b> e <b>A executar</b>. Área vinculada a uma atividade do cronograma muda de cor sozinha a cada carga.${ehAdmin() ? ' O mapa salvo vai para o rascunho e entra no report depois de publicado.' : ''}</p>
       ${mapas.length ? `<div class="mp-lista">${mapas.map((m, i) => `<figure class="mp-card"><figcaption><b>${esc(m.titulo || 'Sem título')}</b><small>${PAGINA_MAPA[m.pagina || 'retrato']} · ${m.zonas.length} ${m.zonas.length === 1 ? 'área' : 'áreas'}</small></figcaption>
-        ${plantaHTML(m)}${legMapa(m)}
+        ${plantaHTML(m)}${quadroMapa(m)}
         ${ehAdmin() ? `<div class="bar-actions"><button class="btn sec2" data-mapaed="${i}">Editar</button><button class="more neg" data-mapadel="${i}">Remover</button></div>` : ''}</figure>`).join('')}</div>`
       : `<p class="sub" style="margin:0">${ehAdmin() ? 'Nenhum mapa ainda. Envie a planta (PDF ou imagem) e demarque as áreas.' : 'Nenhum mapa de avanço publicado.'}</p>`}
       ${ehAdmin() ? '<div class="bar-actions"><button class="btn" data-mapaed="novo">+ Novo mapa de avanço</button></div>' : ''}`;
@@ -1661,6 +1661,18 @@
       ${m.zonas.map(z => `<i class="mp-num" data-n="${esc(z.id)}" style="left:${z.cx * 100}%;top:${z.cy * 100}%">${z.n}</i>`).join('')}${sel ? alcasZona(sel.pts) : ''}</div>`;
   }
   const legMapa = m => `<div class="mp-leg">${m.resumo.map(x => `<span><i class="mp-sw ${COR_MAPA[x.k]}"></i>${x.t}${m.zonas.length ? ` <small>${x.n} ${x.n === 1 ? 'área' : 'áreas'} · ${pct(x.area, 0)}</small>` : ''}</span>`).join('')}</div>`;
+  // Prazo da frente (início e término planejados, pelas atividades vinculadas às áreas) + o que está em execução agora.
+  // Some junto da legenda (que já traz o quantitativo: nº de áreas e % da planta por situação) no quadro da frente.
+  function infoPrazoMapa(m) {
+    const d = m.datas || {};
+    const partes = [];
+    if (d.inicio) partes.push(`<span><small>Início</small>${dBR(d.inicio)}</span>`);
+    if (d.fimPrevisto) partes.push(`<span><small>Término previsto</small>${dBR(d.fimPrevisto)}</span>`);
+    if (d.fimAtual) partes.push(`<span class="neg"><small>Término atual</small>${dBR(d.fimAtual)}</span>`);
+    if (m.emExecucao && m.emExecucao.length) partes.push(`<span class="exec"><small>Em execução</small>${esc(m.emExecucao.join(' · '))}</span>`);
+    return partes.length ? `<div class="mp-prazo">${partes.join('')}</div>` : '';
+  }
+  const quadroMapa = m => `<div class="mp-resumo">${infoPrazoMapa(m)}${legMapa(m)}</div>`;
   const tabelaMapa = (m, comp) => m.zonas.length ? `<table class="mp-tab${comp ? ' comp' : ''}"><thead><tr><th>Nº</th><th>Área</th>${comp ? '' : '<th>Atividade</th>'}<th class="n">Avanço</th><th>Situação</th></tr></thead><tbody>
     ${m.zonas.map(z => `<tr><td class="mp-n"><i class="mp-sw ${COR_MAPA[z.st]}"></i>${z.n}</td><td>${esc(z.rotulo || '—')}</td>${comp ? '' : `<td>${z.ativ ? esc(z.ativ.nome) : '<small>situação informada no painel</small>'}</td>`}<td class="n">${z.feito === null ? '—' : pct(z.feito, 0)}</td><td>${Core.MAPA_ST[z.st]}</td></tr>`).join('')}</tbody></table>` : '';
   // folhas do mapa (paisagem, como todo o report): uma planta por folha, com legenda e tabela ao lado (abaixo, se a
@@ -1670,8 +1682,8 @@
     const titulo = m => `<h2 class="mp-tt"><small>Frente de serviço</small>${esc(m.titulo || 'Sem título')}</h2>`;
     const larga = m => m.w / m.h >= 1.6;
     const uma = mapas.filter(m => m.pagina !== 'paisagem').map(m => folha('Mapa de avanço físico', larga(m)
-      ? `${titulo(m)}<div class="mp-um largo">${plantaHTML(m, { maxH: Math.max(260, 470 - 27 * m.zonas.length) })}<div class="mp-info">${legMapa(m)}${tabelaMapa(m, false)}</div></div>`
-      : `<div class="mp-um">${plantaHTML(m, { maxH: 640 })}<div class="mp-info">${titulo(m)}${legMapa(m)}${tabelaMapa(m, true)}</div></div>`, 'mp-folha'));
+      ? `${titulo(m)}<div class="mp-um largo">${plantaHTML(m, { maxH: Math.max(260, 440 - 27 * m.zonas.length) })}<div class="mp-info">${quadroMapa(m)}${tabelaMapa(m, false)}</div></div>`
+      : `<div class="mp-um">${plantaHTML(m, { maxH: 600 })}<div class="mp-info">${titulo(m)}${quadroMapa(m)}${tabelaMapa(m, true)}</div></div>`, 'mp-folha'));
     const duas = mapas.filter(m => m.pagina === 'paisagem'), pares = [];
     for (let i = 0; i < duas.length; i += 2) pares.push(duas.slice(i, i + 2));
     const dupla = pares.map(par => { const emp = par.length > 1 && par.every(larga);

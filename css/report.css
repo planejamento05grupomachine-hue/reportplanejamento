@@ -286,6 +286,14 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .mp-leg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; font-size: 12px; color: var(--rx-ink, var(--ink-2)); }
 .mp-leg span { display: inline-flex; align-items: center; }
 .mp-leg small { color: var(--rx-muted, var(--muted)); margin-left: 6px; }
+/* quadro da frente: prazo (início/término) + quantitativo macro (legenda com nº de áreas e % da planta por situação) */
+.mp-resumo { display: grid; gap: 8px; padding: 10px 14px; background: var(--rx-bg, var(--card-2)); border: 1px solid var(--rx-line, var(--rule)); border-radius: 8px; }
+.mp-resumo .mp-leg { gap: 6px 18px; }
+.mp-prazo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 20px; font-size: 12px; color: var(--rx-navy, var(--ink)); }
+.mp-prazo span { display: inline-flex; flex-direction: column; gap: 1px; font-weight: 600; }
+.mp-prazo small { font-size: 10px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--rx-muted, var(--muted)); }
+.mp-prazo span.neg { color: var(--rx-crit-ink, #B11E2F); }
+.mp-prazo span.exec { font-weight: 500; }
 .mp-tab { width: 100%; border-collapse: collapse; font-size: 11.5px; line-height: 1.4; color: var(--rx-ink, var(--ink-2)); }
 .mp-tab th { text-align: left; font-weight: 600; color: var(--rx-muted, var(--muted)); border-bottom: 1px solid var(--rx-line, var(--rule)); padding: 6px 8px; }
 .mp-tab td { border-bottom: 1px solid var(--rx-line-2, var(--rule)); padding: 6px 8px; vertical-align: top; }

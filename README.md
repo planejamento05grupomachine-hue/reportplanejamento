@@ -58,7 +58,9 @@ trocadas e os dados recifrados. Depois, **Publicação → Compactar histórico*
    todas as obras: **Visão geral** (indicadores, leitura do período, Curva S, marcos e pontos de atenção), **Andamento
    das frentes** (avanço por atividade e campo no último RDO), **Valor agregado** (quando entra no report), **Registro
    fotográfico** (uma foto do serviço e, ao lado, a planta da frente com a área do serviço destacada; fotos sem frente no
-   mapa, ou obra sem mapa, em grade de 12 por folha) e **Mapa de avanço** (uma ou duas plantas por folha).
+   mapa, ou obra sem mapa, em grade de 12 por folha) e **Mapa de avanço** (uma ou duas plantas por folha; a folha de uma
+   planta traz também o quadro da frente — início e término planejados, término atual quando há desvio, o que está em
+   execução, e o quantitativo macro por situação, nº de áreas e % da planta — além da tabela por área e da legenda).
    Com espaço sobrando, as etapas do avanço por atividade abrem sozinhas; as que não cabem seguem numa folha de
    continuação. Listas longas mostram os primeiros itens; o aviso "+N na aba Obra" aparece só na tela, não no PDF.
    O **Manual de alimentação** (menu da conta, uso interno) traz a rotina semanal e mensal, o padrão de cada documento e

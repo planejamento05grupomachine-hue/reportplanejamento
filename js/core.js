@@ -444,10 +444,12 @@
   // Vinculada, a situação sai do realizado da atividade a cada carga: 100% = executado, >0 = executando, 0 = a executar.
   const MAPA_ST = { executado: 'Executado', executando: 'Executando', 'a-executar': 'A executar' };
   function atividadesParaMapa(r) {
-    if (r.crono && r.crono.linhas.length) return r.crono.linhas.filter(l => l.nivel > 1).map(l => ({ chave: 'c' + l.linha + '|' + normNome(l.nome), eap: l.eap, nivel: l.nivel, nome: l.nomeExib, feito: l.realizado || 0 }));
+    if (r.crono && r.crono.linhas.length) return r.crono.linhas.filter(l => l.nivel > 1).map(l => ({ chave: 'c' + l.linha + '|' + normNome(l.nome), eap: l.eap, nivel: l.nivel, nome: l.nomeExib, feito: l.realizado || 0,
+      inicio: l.inicio || null, inicioBase: l.inicioBase || null, fim: l.fim || null, fimBase: l.fimBase || null }));
     const nome = Object.fromEntries((r.lista || []).map(t => [t.eap, t]));
     const vistos = new Set(); const out = [];
-    const add = p => { if (vistos.has(p.eap)) return; vistos.add(p.eap); out.push({ chave: 't' + p.eap + '|' + normNome(p.nome), eap: p.eap, nivel: p.nivel || p.eap.split('.').length, nome: p.nome, feito: p.pctPacote ?? p.pctTarefa ?? 0 }); };
+    const add = p => { if (vistos.has(p.eap)) return; vistos.add(p.eap); out.push({ chave: 't' + p.eap + '|' + normNome(p.nome), eap: p.eap, nivel: p.nivel || p.eap.split('.').length, nome: p.nome, feito: p.pctPacote ?? p.pctTarefa ?? 0,
+      inicio: p.inicio || null, inicioBase: null, fim: p.fim || null, fimBase: p.fimBase || null }); };
     (r.pacotes || []).forEach(p => { add(p); (r.subpacotes(p.eap) || []).forEach(add); });
     Object.values(nome).forEach(add);
     return out.sort((a, b) => a.eap.localeCompare(b.eap, 'pt-BR', { numeric: true }));
@@ -476,7 +478,15 @@
       const area = k => zonas.filter(z => z.st === k).reduce((s, z) => s + z.area, 0);
       const tot = zonas.reduce((s, z) => s + z.area, 0) || 1;
       const resumo = Object.keys(MAPA_ST).map(k => ({ k, t: MAPA_ST[k], n: zonas.filter(z => z.st === k).length, area: area(k) / tot }));
-      return { ...m, zonas, resumo };
+      // Prazo da frente: início e término planejados (base) e término atual, pelas atividades vinculadas às áreas
+      // (área sem vínculo não tem data própria). Término atual só aparece quando difere do previsto (há desvio).
+      const vinc = zonas.filter(z => z.ativ);
+      const inicio = vinc.map(z => z.ativ.inicioBase || z.ativ.inicio).filter(Boolean).sort()[0] || null;
+      const fimPrevisto = vinc.map(z => z.ativ.fimBase || z.ativ.fim).filter(Boolean).sort().at(-1) || null;
+      const fimAtual = vinc.map(z => z.ativ.fim).filter(Boolean).sort().at(-1) || null;
+      const datas = { inicio, fimPrevisto, fimAtual: fimAtual && fimAtual !== fimPrevisto ? fimAtual : null };
+      const emExecucao = zonas.filter(z => z.st === 'executando').map(z => z.rotulo).filter(Boolean);
+      return { ...m, zonas, resumo, datas, emExecucao };
     });
   }
   // Foto do RDO → frente de serviço do mapa (folha de registro fotográfico: foto ao lado da planta).
