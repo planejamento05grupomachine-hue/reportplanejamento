@@ -9,6 +9,12 @@ tipos e arquivos/
 .env
 .env.*
 
+# Sincronização com o Prevision: cache do SheetJS, relatórios (cifrados, mas não versionados), sessões e coletas locais
+sync/.cache/
+relatorio-sync*.bin
+prevision-sessao*.json
+coletas/
+
 # Logs
 *.log
 npm-debug.log*

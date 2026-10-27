@@ -1,0 +1,25 @@
+# Testes da sincronização e das regras de carga compartilhadas com o painel (só dados fictícios, sem segredos).
+name: Testes
+
+on:
+  push:
+    paths: ['js/**', 'sync/**', '.github/workflows/**']
+  pull_request:
+    paths: ['js/**', 'sync/**', '.github/workflows/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test "sync/test/*.test.cjs"

@@ -16,13 +16,11 @@
   'use strict';
   const CFG = window.MP_CONFIG || {};
   const ITER = CFG.iteracoes || 600000;
-  const subtle = crypto.subtle;
   const te = new TextEncoder(), td = new TextDecoder();
+  // criptografia e empacotamento: js/cofre.js (o mesmo código da sincronização automática)
+  const { b64, unb64, aleatorio, cifrar, decifrar, chaveDaSenha, idDoEmail, empacotarJSON, desempacotarJSON } = window.Cofre;
 
   // ---------- utilidades ----------
-  const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
-  const unb64 = s => { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; };
-  const aleatorio = n => crypto.getRandomValues(new Uint8Array(n));
   const hoje = () => new Date().toISOString().slice(0, 10);
   const agora = () => new Date().toISOString();
   const clone = x => JSON.parse(JSON.stringify(x));
@@ -34,27 +32,6 @@
   const ssSet = (k, v) => { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch (e) { /* sem armazenamento */ } };
   const erro = (msg, codigo) => Object.assign(new Error(msg), { codigo });
 
-  // ---------- criptografia ----------
-  const importar = raw => subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
-  async function cifrar(chave, bytes) {
-    const k = chave instanceof CryptoKey ? chave : await importar(chave);
-    const iv = aleatorio(12);
-    const ct = new Uint8Array(await subtle.encrypt({ name: 'AES-GCM', iv }, k, bytes));
-    const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12); return out;
-  }
-  async function decifrar(chave, buf) {
-    const k = chave instanceof CryptoKey ? chave : await importar(chave);
-    const u = new Uint8Array(buf);
-    return new Uint8Array(await subtle.decrypt({ name: 'AES-GCM', iv: u.subarray(0, 12) }, k, u.subarray(12)));
-  }
-  async function chaveDaSenha(senha, salt, iter) {
-    const base = await subtle.importKey('raw', te.encode(String(senha).normalize('NFC')), 'PBKDF2', false, ['deriveKey']);
-    return subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: iter }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
-  }
-  async function idDoEmail(email) {
-    const h = new Uint8Array(await subtle.digest('SHA-256', te.encode('mp-painel|' + String(email).trim().toLowerCase())));
-    return [...h.subarray(0, 16)].map(b => b.toString(16).padStart(2, '0')).join('');
-  }
   // senha gerada: 12 caracteres sem ambíguos, em 3 blocos de 4 — 60 bits
   function gerarSenha() {
     const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 símbolos, sem 0/O e 1/I
@@ -63,23 +40,7 @@
     return s;
   }
 
-  // ---------- empacotamento ----------
-  // byte 1 = JSON comprimido (gzip) · 2 = JSON puro · 3 = pacote de fotos
-  async function gzip(bytes, modo) {
-    const s = new Blob([bytes]).stream().pipeThrough(modo === 'c' ? new CompressionStream('gzip') : new DecompressionStream('gzip'));
-    return new Uint8Array(await new Response(s).arrayBuffer());
-  }
-  async function empacotarJSON(obj) {
-    const raw = te.encode(JSON.stringify(obj));
-    const ok = typeof CompressionStream !== 'undefined';
-    const corpo = ok ? await gzip(raw, 'c') : raw;
-    const out = new Uint8Array(corpo.length + 1); out[0] = ok ? 1 : 2; out.set(corpo, 1); return out;
-  }
-  async function desempacotarJSON(u8) {
-    if (u8[0] === 1) return JSON.parse(td.decode(await gzip(u8.subarray(1), 'd')));
-    if (u8[0] === 2) return JSON.parse(td.decode(u8.subarray(1)));
-    throw erro('Formato de arquivo desconhecido.');
-  }
+  // ---------- empacotamento das fotos (byte 3; JSON comprimido ou puro: js/cofre.js) ----------
   function empacotarFotos(fotos) {
     const meta = fotos.map(f => { const { bytes, src, ...m } = f; return { ...m, tam: bytes.length }; });
     const cab = te.encode(JSON.stringify(meta));
@@ -422,17 +383,8 @@
     salvarCarga(id, pacote, corte, fontes, progresso) {
       return gravar(async () => {
         const e = OB[id]; if (!e) throw erro('Obra não encontrada.');
-        const base = e.ras || e.pub;
-        const ras = clone(base);
-        ['curva', 'mensal', 'tarefas', 'rdos', 'cronograma', 'medicao'].forEach(k => { if (pacote[k]) ras[k] = pacote[k]; });
-        // financeiro tem 3 subtipos (curva/mensal/tarefas) em lotes separados: funde em vez de substituir,
-        // senão enviar só a Curva S financeira apagaria o Progresso por tarefas financeiro do mês anterior.
-        if (pacote.financeiro) ras.financeiro = { ...(ras.financeiro || {}), ...pacote.financeiro };
-        if (['curva', 'mensal', 'tarefas', 'rdos', 'cronograma'].some(k => pacote[k])) ras.dataCorte = corte;
-        if (['financeiro', 'medicao'].some(k => pacote[k])) ras.dataCorteFinanceiro = corte;
-        ras.atualizadoEm = hoje();
-        ras.fontes = { ...(base.fontes || {}), ...fontes };
-        delete ras.publicadoEm;
+        // regra de fusão da carga no rascunho: js/carga.js (a mesma da sincronização automática)
+        const ras = Carga.aplicarCarga(e.ras || e.pub, pacote, corte, fontes, hoje(), { temRascunho: !!e.ras });
         const arq = {};
         if (pacote.fotos) {
           progresso && progresso('Preparando as fotos…');
@@ -442,8 +394,6 @@
           e.fotos.ras = fotos;
           ras.fotosProprias = true; ras.nFotos = fotos.length; ras.destaques = [];
           arq[P.fotosRas(id)] = await arqFotos(chave(DIR.ki), fotos);
-        } else if (!e.ras) {
-          ras.fotosProprias = false;
         }
         progresso && progresso('Cifrando os dados…');
         arq[P.ras(id)] = await arqRas(ras);
