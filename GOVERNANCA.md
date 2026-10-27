@@ -76,6 +76,11 @@ report. O cliente segue a mesma regra na aba Obra; administradores e diretoria s
 | Financeiro (Curva S VA, Controle de Medição) | Mensal | `obra.dataCorteFinanceiro` |
 | Custo (quando existir) | Mensal, junto com o financeiro | — |
 
+A sincronização automática (`sync/README.md`) segue esta mesma receita: físico na perspectiva **Física (Duração)** em
+percentual (a que bate com o realizado do Cronograma), financeiro na **Econômica** em R$, Progresso por tarefas sem filtro
+de datas, tudo exportado junto e gravado como rascunho. A Curva S que o Prevision exporta hoje tem um ponto por dia; a
+conferência com o Progresso mensal usa o último ponto de cada mês.
+
 O painel avisa quando um dado está desatualizado além da cadência esperada (aba Obra →
 Conferência dos dados): mais de 10 dias sem corte físico, ou mais de 35 dias sem corte
 financeiro (`LIMIAR_DIAS_FISICO`/`LIMIAR_DIAS_FINANCEIRO` em `js/core.js`).

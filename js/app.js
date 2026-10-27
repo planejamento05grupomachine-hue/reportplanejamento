@@ -896,7 +896,7 @@
         <input type="file" id="imp-file" multiple accept=".xls,.xlsx,.csv,.pdf" hidden>
         <small class="hint">O que cada arquivo precisa trazer e quando enviar: <button class="btn sec2" type="button" data-go="manual" style="padding:2px 10px;min-height:0">Manual de alimentação</button></small>
         ${imp.arquivos.length ? `<div class="check">${imp.arquivos.map(a => `<div class="${a.erro ? 'er' : 'ok'}"><i>${a.erro ? '×' : '✓'}</i><span><b>${esc(a.nome)}</b> → ${a.erro ? esc(a.erro) : esc(a.tipoNome)}</span></div>`).join('')}</div>` : ''}
-        ${Object.keys(imp.dados).length ? `<div class="step-t">4 · Conferência</div><div class="check">${conferenciaImport(o, imp).map(([k, t]) => `<div class="${k}"><i>${k === 'ok' ? '✓' : k === 'av' ? '!' : '×'}</i><span>${t}</span></div>`).join('')}</div>
+        ${Object.keys(imp.dados).length ? `<div class="step-t">4 · Conferência</div><div class="check">${Carga.conferencia(o, imp).map(([k, t]) => `<div class="${k}"><i>${k === 'ok' ? '✓' : k === 'av' ? '!' : '×'}</i><span>${t}</span></div>`).join('')}</div>
           <div class="field" style="max-width:260px"><label for="imp-corte">Data de corte</label><input class="inp" type="date" id="imp-corte" value="${imp.corte || o.dataCorte}"></div>
           <div class="step-t">5 · Atualizar</div>
           <div class="bar-actions"><button class="btn" id="imp-aplicar" ${imp.lendo ? 'disabled' : ''}>Salvar rascunho da obra ${esc(o.codigo)}</button><button class="btn sec2" id="imp-limpar">Descartar</button></div>
@@ -916,90 +916,7 @@
     if (k === 'medicao') return `${d.resumo && d.resumo.totalContrato ? moeda(d.resumo.totalContrato) + ' · ' : ''}${d.boletins.length} ${d.boletins.length === 1 ? 'boletim' : 'boletins'}`;
     return '';
   }
-  // Código da obra pelo nome do arquivo ("Curva S - 207 - ...", "Cronograma_-_208_-_...") ou pelo nome da raiz ("208 - Fibrasa ...")
-  const codigoEm = s => { const m = String(s || '').replace(/_/g, ' ').match(/(?:^|[\s-])(\d{3,4})\s+-\s/); return m ? m[1] : null; };
-  function identidadeImport(o, imp) {
-    const out = [], d = imp.dados, nomes = imp.nomes || {}, cod = String(o.codigo);
-    const raizObra = norm => { const r = (o.tarefas || []).find(t => t.nivel === 1); return r ? norm(r.tarefa) : null; };
-    const n = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-    const confere = (rotulo, achado, como) => {
-      if (achado === null || achado === undefined) return;
-      out.push(achado === cod ? ['ok', `${rotulo}: obra ${cod} (${como}).`] : ['er', `${rotulo} é da obra ${achado} (${como}), não da obra ${cod}. Arquivo não aplicado.`]);
-    };
-    Object.entries(nomes).forEach(([tipo, nome]) => confere({ curva: 'Curva S', mensal: 'Progresso mensal', tarefas: 'Progresso por tarefas', cronograma: 'Cronograma', rdos: 'PDF de RDOs' }[tipo] || tipo, codigoEm(nome), 'pelo nome do arquivo'));
-    const raizT = d.tarefas && d.tarefas.find(t => t.nivel === 1), raizC = d.cronograma && d.cronograma.find(l => l.nivel === 1);
-    [['Progresso por tarefas', raizT && raizT.tarefa], ['Cronograma', raizC && raizC.nome]].forEach(([rot, nome]) => {
-      if (!nome) return;
-      const c = codigoEm(nome + ' ');
-      if (c) confere(rot, c, 'pelo nome da tarefa raiz');
-      else if (raizObra(n) && n(nome) !== raizObra(n)) out.push(['er', `${rot}: a tarefa raiz "${nome}" não é a da obra ${cod} ("${(o.tarefas || []).find(t => t.nivel === 1).tarefa}"). Arquivo não aplicado.`]);
-    });
-    if (raizT && raizC && n(raizT.tarefa) !== n(raizC.nome)) out.push(['er', 'Cronograma e Progresso por tarefas têm tarefas raiz diferentes: são de obras ou versões diferentes.']);
-    if (d.rdos && d.rdos.length) { const c = codigoEm((d.rdos.at(-1).obra || '').replace(/^(\d{3,4})\s+(?!-)/, '$1 - ')); if (c) confere('PDF de RDOs', c, 'pelo cabeçalho do RDO'); }
-    // Progresso mensal não traz identificação: confere com a Curva S (base acumulada mês a mês).
-    // O semanal somado em meses reparte as semanas da virada do mês pelos dias: tolerância maior (até ~1,5 ponto na 207).
-    const curva = d.curva || o.curva || [];
-    if (d.mensal && curva.length) {
-      const sem = d.mensal.some(m => m.origem === 'semanal'), tol = sem ? 0.02 : 0.002, nome = sem ? 'Progresso semanal' : 'Progresso mensal';
-      let acc = 0, ruins = 0, comp = 0;
-      d.mensal.forEach(m => { acc += m.base || 0; const p = curva.find(x => x.data.slice(0, 7) === m.mes); if (p) { comp++; if (Math.abs((p.base || 0) - acc) > tol) ruins++; } });
-      out.push(comp && !ruins ? ['ok', `${nome} confere com a Curva S (base acumulada ${sem ? 'equivalente' : 'igual'} em ${comp} meses).`] : ['er', `${nome} não confere com a Curva S${d.curva ? ' enviada' : ' da obra'} (${ruins} de ${comp} meses com base diferente): pode ser de outra obra ou de outra linha de base.`]);
-    }
-    if (d.cronograma && d.tarefas) {
-      const rc = raizC, rt = raizT;
-      if (rc && rt && Math.abs(rc.realizado - rt.realizado) > 0.001) out.push(['av', `Cronograma (${pct(rc.realizado, 2)}) e Progresso por tarefas (${pct(rt.realizado, 2)}) mostram realizados diferentes: exporte os dois no mesmo dia.`]);
-    }
-    return out;
-  }
-  function conferenciaImport(o, imp) {
-    const out = identidadeImport(o, imp), d = imp.dados;
-    if (d.curva) {
-      const ult = [...d.curva].reverse().find(p => p.realizado > 0);
-      const fim = d.curva.at(-1);
-      out.push([Math.abs(fim.base - 1) < 0.001 ? 'ok' : 'av', `Curva S: ${d.curva.length} pontos, de ${dBR(d.curva[0].data)} a ${dBR(fim.data)}. Base fecha em ${pct(fim.base, 2)}. Último realizado ${ult ? pct(ult.realizado, 2) : '—'}.`]);
-      const mono = d.curva.every((p, i) => !i || p.base >= d.curva[i - 1].base - 1e-6);
-      out.push([mono ? 'ok' : 'er', mono ? 'Curva base sempre crescente.' : 'A curva base diminui em algum mês: confira a exportação.']);
-    }
-    if (d.mensal) {
-      const soma = d.mensal.reduce((s, m) => s + (m.base || 0), 0);
-      out.push([Math.abs(soma - 1) < 0.002 ? 'ok' : 'av', `Progresso ${d.mensal.some(m => m.origem === 'semanal') ? 'semanal (somado por mês)' : 'mensal'}: ${d.mensal.length} meses; a base soma ${pct(soma, 2)}.`]);
-      if (d.mensal.every(m => !m.idpm)) out.push(['av', 'IDPM veio zerado no arquivo; o painel calcula o IDP.']);
-    }
-    if (d.tarefas) {
-      const raiz = d.tarefas.find(t => t.nivel === 1);
-      const folhas = d.tarefas.filter(t => t.folha);
-      const soma = folhas.reduce((s, t) => s + (t.previsto || 0), 0);
-      out.push(['ok', `Progresso por tarefas: ${d.tarefas.length} linhas, ${folhas.length} tarefas finais, ${Math.max(...d.tarefas.map(t => t.nivel))} níveis de EAP. Realizado total ${raiz ? pct(raiz.realizado, 2) : '—'}.`]);
-      out.push([Math.abs(soma - 1) < 0.001 ? 'ok' : 'av', `Pesos das tarefas finais somam ${pct(soma, 2)}${Math.abs(soma - 1) < 0.001 ? '' : ' (arredondamento do Prevision; o painel normaliza)'}.`]);
-      if (d.curva && raiz) {
-        const ult = [...d.curva].reverse().find(p => p.realizado > 0);
-        const ok = ult && Math.abs(ult.realizado - raiz.realizado) < 0.001;
-        out.push([ok ? 'ok' : 'av', ok ? 'Curva S e Progresso por tarefas mostram o mesmo realizado.' : 'Curva S e Progresso por tarefas mostram realizados diferentes: confira se foram exportados no mesmo dia.']);
-      }
-    }
-    if (d.cronograma) {
-      const c = d.cronograma, raiz = c.find(l => l.nivel === 1);
-      const tar = d.tarefas || o.tarefas || [];
-      const casam = c.filter(l => tar[l.linha - 1] && String(tar[l.linha - 1].tarefa).trim().toLowerCase() === l.nome.trim().toLowerCase()).length;
-      out.push(['ok', `Cronograma: ${c.length} linhas. Previsto ${raiz ? pct(raiz.previsto, 2) : '—'}, realizado ${raiz ? pct(raiz.realizado, 2) : '—'}; término ${raiz ? dBR(raiz.fim) : '—'} (base ${raiz ? dBR(raiz.fimBase) : '—'}).`]);
-      if (S.imp.dataEstimada) out.push(['av', `Posição estimada em ${dBR(S.imp.dataEstimada)} a partir do previsto do Prevision; o painel usa ${dBR(S.imp.corte)}. Ajuste a data de corte abaixo se precisar.`]);
-      out.push([casam === c.length ? 'ok' : 'av', `${casam} de ${c.length} linhas ligadas ao Progresso por tarefas (pela posição na árvore e pelo nome).`]);
-      if (tar.length && c.length < tar.length * 0.9) out.push(['av', `A exportação veio com a árvore recolhida (${c.length} de ${tar.length} linhas). Exporte com tudo expandido para o Gantt completo.`]);
-      const pend = c.filter(l => /pendente de contrata/i.test(l.responsaveis || '') && l.realizado < 0.9995).length;
-      if (pend) out.push(['av', `${pend} linhas com responsável "Pendente de contratação"; vão para Atenção no report.`]);
-    }
-    if (d.rdos) {
-      const r = d.rdos;
-      const par = r.at(-1)?.atividades.filter(a => /paralis/i.test(a.situacao)).length || 0;
-      out.push(['ok', `RDOs: ${r.length} relatórios (nº ${r[0].numero} a ${r.at(-1).numero}), de ${dBR(r[0].data)} a ${dBR(r.at(-1).data)}. ${r.filter(x => x.status === 'aprovado').length} aprovados, ${r.filter(x => x.status !== 'aprovado').length} em preenchimento.`]);
-      // "207/2026" no RDO e "CT/207/2026" no cadastro são o mesmo contrato: compara só os dígitos. A obra já foi
-      // conferida pelo cabeçalho do RDO; contrato diferente é aviso, não bloqueia a carga.
-      const contr = r.at(-1).contrato, dig = s => String(s || '').replace(/\D/g, '');
-      if (dig(contr) && dig(o.contrato) && dig(contr) !== dig(o.contrato)) out.push(['av', `O contrato do RDO (${contr}) não coincide com o do cadastro da obra (${o.contrato}). Confira o cadastro.`]);
-      out.push([par ? 'av' : 'ok', par ? `${par} frentes paralisadas no último RDO; vão para Paralisações e restrições.` : 'Nenhuma frente paralisada no último RDO.']);
-    }
-    return out;
-  }
+  // conferência dos arquivos com a obra: js/carga.js (as mesmas regras da sincronização automática)
 
   // leitura das planilhas (SheetJS) e do PDF dos RDOs (pdf.js), só quando o administrador abre Alimentar
   const CDN = 'https://cdnjs.cloudflare.com/ajax/libs/';
@@ -1073,16 +990,12 @@
       S.imp.arquivos = S.imp.arquivos.filter(a => a.nome !== reg.nome).concat(reg);
       S.imp.lendo = null; render();
     }
-    if (S.imp.dados.rdos) S.imp.corte = S.imp.dados.rdos.map(x => x.data).filter(Boolean).sort().at(-1);
-    if (S.imp.dados.cronograma) {
-      // posição do cronograma: estimada pelo "Previsto (%)" da raiz contra a curva S, nunca depois de hoje
+    if (S.imp.dados.rdos || S.imp.dados.cronograma) {
+      // data de corte: a do último RDO; com cronograma, estimada pelo "Previsto (%)" da raiz contra a curva S, nunca depois de hoje
       const o = DB.obras.find(x => x.id === ($('#imp-obra') ? $('#imp-obra').value : S.obraId)) || DB.obras[0];
-      const raiz = S.imp.dados.cronograma.find(l => l.nivel === 1);
-      const tmp = { ...o, curva: S.imp.dados.curva || o.curva, tarefas: S.imp.dados.tarefas || o.tarefas };
-      const est = raiz ? Core.estimaDataRef(tmp, raiz.previsto) : null;
-      const hoje = new Date().toISOString().slice(0, 10);
-      S.imp.corte = est ? (est > hoje ? hoje : est) : (S.imp.corte || hoje);
-      S.imp.dataEstimada = est;
+      const { corte, dataEstimada } = Carga.estimarCorte(S.imp.dados, o, new Date().toISOString().slice(0, 10), S.imp.corte);
+      S.imp.corte = corte;
+      if (S.imp.dados.cronograma) S.imp.dataEstimada = dataEstimada;
     }
     S.imp.lendo = null;
     render();
@@ -1092,12 +1005,12 @@
     if (S.imp && S.imp.lendo) { toast('Aguarde terminar a leitura dos arquivos.'); return; }
     const obraId = $('#imp-obra').value;
     const oSel = DB.obras.find(x => x.id === obraId);
-    const erros = oSel ? conferenciaImport(oSel, S.imp).filter(x => x[0] === 'er') : [];
+    const erros = oSel ? Carga.conferencia(oSel, S.imp).filter(x => x[0] === 'er') : [];
     if (erros.length) { toast('Há arquivos que não conferem com a obra selecionada. Corrija antes de salvar.'); return; }
     const d = S.imp.dados;
     const corte = ($('#imp-corte') && $('#imp-corte').value) || S.imp.corte;
     if (!corte) { toast('Informe a data de corte.'); return; }
-    const pacote = { ...d, cronograma: d.cronograma ? { arquivo: S.imp.arqCrono, linhas: d.cronograma, dataRef: corte } : undefined };
+    const pacote = Carga.montarPacote(d, corte, S.imp.arqCrono);
     const fontes = Object.fromEntries(S.imp.arquivos.filter(a => !a.erro).map(a => [a.tipoNome, a.nome]));
     const ok = await gravando('Gravando a carga…', prog => API.salvarCarga(obraId, pacote, corte, fontes, prog));
     if (!ok) return;

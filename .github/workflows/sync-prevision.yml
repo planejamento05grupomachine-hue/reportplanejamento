@@ -1,0 +1,98 @@
+# Sincronização semanal Prevision → Painel de Obras Machine (rascunho). Operação e segredos: sync/README.md.
+name: Sincronização Prevision
+
+on:
+  schedule:
+    # quarta-feira 07:15 em America/Sao_Paulo = 10:15 UTC (o Brasil não tem horário de verão desde 2019).
+    # Para mudar o horário, mude esta linha (o GitHub só aceita cron em UTC).
+    - cron: '15 10 * * 3'
+  workflow_dispatch:
+    inputs:
+      obra:
+        description: 'Código da obra (ex.: 198). Vazio = todas as habilitadas em sync/obras.json'
+        required: false
+        default: ''
+      simular:
+        description: 'Simulação: coleta e valida, não grava'
+        type: boolean
+        default: true
+      fonte:
+        description: 'Fonte: auto = API oficial onde a equivalência foi comprovada, exportação nos demais'
+        type: choice
+        options: [auto, exportacao, api]
+        default: auto
+      aceitar_nova_base:
+        description: 'Aceitar nova linha de base (só depois de conferir no Prevision)'
+        type: boolean
+        default: false
+
+# A gravação usa o token do segredo PAINEL_GH_TOKEN (o mesmo caminho da gravação manual do painel);
+# o GITHUB_TOKEN do job só lê.
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-prevision
+  cancel-in-progress: false
+
+jobs:
+  sincronizar:
+    # agendada só com a variável SYNC_ATIVO = true; a execução manual vale sempre
+    if: github.event_name == 'workflow_dispatch' || vars.SYNC_ATIVO == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Dependências (Playwright + Chromium)
+        working-directory: sync
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Sincronizar
+        env:
+          PAINEL_GH_TOKEN: ${{ secrets.PAINEL_GH_TOKEN }}
+          PAINEL_EMAIL: ${{ secrets.PAINEL_EMAIL }}
+          PAINEL_SENHA: ${{ secrets.PAINEL_SENHA }}
+          PREVISION_SESSAO: ${{ secrets.PREVISION_SESSAO }}
+          PREVISION_API_TOKEN: ${{ secrets.PREVISION_API_TOKEN }}
+          EVENTO: ${{ github.event_name }}
+          OBRA: ${{ inputs.obra }}
+          SIMULAR: ${{ inputs.simular }}
+          FONTE: ${{ inputs.fonte }}
+          NOVA_BASE: ${{ inputs.aceitar_nova_base }}
+          MODO_AGENDADO: ${{ vars.SYNC_MODO }}
+        run: |
+          args=()
+          if [ -n "$OBRA" ]; then
+            if ! [[ "$OBRA" =~ ^[0-9]{3,4}(,[0-9]{3,4})*$ ]]; then echo "Código de obra inválido: $OBRA"; exit 2; fi
+            args+=(--obra "$OBRA")
+          else
+            args+=(--todas)
+          fi
+          if [ "$EVENTO" = "schedule" ]; then
+            # SYNC_MODO = simular deixa a rotina agendada em simulação (período de acompanhamento)
+            [ "$MODO_AGENDADO" = "simular" ] && args+=(--simular)
+            args+=(--fonte auto)
+          else
+            [ "$SIMULAR" = "true" ] && args+=(--simular)
+            [ "$NOVA_BASE" = "true" ] && args+=(--aceitar-nova-base)
+            args+=(--fonte "${FONTE:-auto}")
+          fi
+          node sync/sincronizar.cjs "${args[@]}" --relatorio "$RUNNER_TEMP/relatorio-sync.bin"
+
+      - name: Relatório detalhado (cifrado com a chave interna do painel)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorio-sync
+          path: ${{ runner.temp }}/relatorio-sync.bin
+          retention-days: 30
+          if-no-files-found: ignore

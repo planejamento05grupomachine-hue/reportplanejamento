@@ -1,0 +1,12 @@
+{
+  "name": "painel-sync-prevision",
+  "private": true,
+  "description": "Sincronização semanal do Painel de Obras Machine com o Prevision (dados físicos e valor agregado → rascunho). Ver sync/README.md.",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test \"test/*.test.cjs\"",
+    "simular": "node sincronizar.cjs --todas --simular",
+    "sessao": "node sessao.cjs"
+  },
+  "dependencies": { "playwright": "1.56.0" }
+}

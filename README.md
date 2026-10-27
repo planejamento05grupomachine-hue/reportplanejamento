@@ -70,6 +70,10 @@ trocadas e os dados recifrados. Depois, **Publicação → Compactar histórico*
 
 Cada gravação vira um commit neste repositório; o site atualiza em cerca de um minuto.
 
+**Sincronização automática com o Prevision** (`sync/`): toda quarta-feira às 07:15 a rotina do GitHub Actions pode coletar
+os dados físicos e de valor agregado das obras configuradas e gravar como **rascunho** (a publicação continua manual). Ela
+usa os mesmos parsers e as mesmas regras da tela Alimentar. Estado, segredos e operação: `sync/README.md`.
+
 ## Configuração inicial (uma vez)
 
 Num repositório sem acessos (`data/acesso.json` vazio ou ausente), o painel mostra **Proteger o painel**: informe nome,
@@ -90,10 +94,13 @@ Precisa do Playwright. O PDF mostra o que a conta usada enxerga.
 index.html        página
 css/              app.css (painel) · report.css (report executivo)
 js/config.js      repositório e e-mail de acesso
-js/api.js         cofre (criptografia) e publicação no GitHub
+js/cofre.js       criptografia e empacotamento (navegador e sincronização)
+js/api.js         sessão, acessos e publicação no GitHub
 js/parsers.js     leitura das planilhas do Prevision e do PDF de RDOs
 js/core.js        cálculos e gráficos
+js/carga.js       conferência e fusão da carga no rascunho (tela Alimentar e sincronização)
 js/app.js         telas
 data/             dados cifrados (gravados pelo próprio painel)
+sync/             sincronização semanal com o Prevision (ver sync/README.md)
 tools/gerar.cjs   exportação do report em PDF
 ```

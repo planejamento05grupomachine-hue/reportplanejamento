@@ -1,0 +1,63 @@
+{
+  "versao": 1,
+  "observacao": "Vínculo explícito entre as obras do Prevision e do painel. Repositório público: nomes de obra e cliente não entram aqui em claro, só o SHA-256 do nome do projeto no Prevision normalizado (sem acentos, minúsculas, espaços simples). Ver sync/README.md.",
+  "padroes": {
+    "fisico": { "ativo": true, "relatorios": { "curva": "obrigatorio", "tarefas": "obrigatorio", "cronograma": "obrigatorio", "mensal": "obrigatorio" } },
+    "financeiro": { "ativo": true, "relatorios": { "curva": "obrigatorio", "mensal": "opcional" } },
+    "exportacao": {
+      "fisico": { "perspectiva": "physical", "formato": "percentage" },
+      "financeiro": { "perspectiva": "economic", "formato": "monetary" },
+      "tarefas": "periodo-da-obra-inteira",
+      "cronograma": { "arquivo": "Excel", "dataReferencia": "hoje" },
+      "restaurarVisao": { "perspectiva": "economic", "formato": "percentage" }
+    }
+  },
+  "obras": [
+    {
+      "painelId": "198", "codigo": "198",
+      "conferenciaNome": { "sha256": "0aee1d724d7e3f1caff6e8ed486d55ffdb66ac4e22ea39f4478cbedeaf446cab" },
+      "prevision": { "ganttId": 32419, "apiProjectId": "32419" },
+      "vinculo": "confirmado",
+      "evidencia": "27/10/2026: código 198 no nome do projeto, nome confere com o hash e id 32419 igual na interface (Gantt) e na API oficial. Exportações reais conferidas: Cronograma e Progresso por tarefas com 410 linhas ligadas e o mesmo realizado da Curva S física. Na execução, a tarefa raiz ainda é comparada com a da carga atual do painel.",
+      "habilitada": true,
+      "api": {
+        "equivalenciaValidada": {
+          "em": "2026-10-27",
+          "conjuntos": ["financeiro"],
+          "resultado": "API × exportação do mesmo dia (sync/comparar-api.cjs): Curva S física e financeira com as mesmas 535 datas, diferença máxima 3,7e-7 (fração) e R$ 0,0000002; Progresso mensal físico e financeiro idênticos (18 meses); 68 datas de medição iguais. O físico continua pela exportação porque a API não tem o Progresso por tarefas nem o Cronograma."
+        }
+      }
+    },
+    {
+      "painelId": "207", "codigo": "207",
+      "conferenciaNome": { "sha256": "d95bf71a5a6642f77e07befbf3dda44a34af6032c2f20cbef190fc4a3a3b830b" },
+      "prevision": { "ganttId": 37748, "apiProjectId": "37748" },
+      "vinculo": "confirmado",
+      "evidencia": "27/10/2026: código 207 no nome do projeto, nome confere com o hash e id 37748 igual na interface e na API. Exportações ainda não conferidas com dados reais.",
+      "habilitada": false,
+      "api": { "equivalenciaValidada": null }
+    },
+    {
+      "painelId": "208", "codigo": "208",
+      "conferenciaNome": { "sha256": "0e1570c9c66cf17e1ff5d2481e4b8e1ad980979d5f44d201622e710260f68c62" },
+      "prevision": { "ganttId": 40210, "apiProjectId": "40210" },
+      "vinculo": "confirmado",
+      "evidencia": "27/10/2026: código 208 no nome do projeto, nome confere com o hash e id 40210 igual na interface e na API. Exportações ainda não conferidas com dados reais.",
+      "habilitada": false,
+      "api": { "equivalenciaValidada": null }
+    },
+    {
+      "painelId": "211", "codigo": "211",
+      "conferenciaNome": { "sha256": "f332bc74383ea0a8bcda9bc5ea0033d6281d1f5b385cd7eae26b156d74fad357" },
+      "prevision": { "ganttId": 41940, "apiProjectId": "41940" },
+      "vinculo": "confirmado",
+      "evidencia": "27/10/2026: código 211 no nome do projeto, nome confere com o hash e id 41940 igual na interface e na API. No painel a obra ainda não tem rascunho: fazer a primeira carga pela tela Alimentar antes de habilitar.",
+      "habilitada": false,
+      "api": { "equivalenciaValidada": null }
+    }
+  ],
+  "foraDoEscopo": [
+    { "codigo": "210", "prevision": "42195", "motivo": "Projeto ativo no Prevision sem obra cadastrada no painel: não é importado." },
+    { "codigo": "212", "prevision": "42528", "motivo": "Projeto ativo no Prevision sem obra cadastrada no painel: não é importado." }
+  ]
+}
