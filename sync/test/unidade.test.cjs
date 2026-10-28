@@ -112,6 +112,19 @@ test('validação física: casos que bloqueiam e preservam a última carga', () 
   assert.ok(ids(validarFisico(c2, atual, CFG_FIS, { hoje })).includes('COLETAS_DIFERENTES'));
 });
 
+test('dados mais antigos: compara o avanço acumulado, não a data (carga antiga com realizado até o fim do mês)', () => {
+  const atual = obraAtual();
+  // formato antigo: o realizado aparece em todos os dias até o fim do mês, depois da última medição (12/06)
+  const ult = [...atual.curva].reverse().find(p => p.realizado > 0);
+  atual.curva = atual.curva.map(p => (p.data > ult.data && p.data <= '2026-07-31' ? { ...p, realizado: ult.realizado } : p));
+  atual.financeiro.curva = atual.financeiro.curva.map(p => (p.data > ult.data && p.data <= '2026-07-31' ? { ...p, realizado: ult.realizado * 5000000 } : p));
+  const c = coleta(fx.projeto());
+  assert.ok(!ids(validarFisico(c.fis, atual, CFG_FIS, { hoje: '2026-07-15' })).includes('DADOS_MAIS_ANTIGOS'), 'coleta mais nova não pode ser bloqueada pela data');
+  assert.ok(!ids(validarFinanceiro(c.fin, { ...atual, dataCorteFinanceiro: '2026-07-31' }, CFG_FIN, { hoje: '2026-07-15' })).some(x => /DADOS_MAIS_ANTIGOS|CORTE_ANTERIOR/.test(x)));
+  const velha = coleta(fx.projeto({ medicao: '2026-05-29', hoje: '2026-06-01' }));
+  assert.ok(ids(validarFinanceiro(velha.fin, atual, CFG_FIN, { hoje: '2026-07-15' })).includes('DADOS_MAIS_ANTIGOS'), 'valor agregado menor bloqueia');
+});
+
 test('validação física: dados iguais aos da carga atual não contam como nova produção', () => {
   const c = coleta(fx.projeto()).fis;
   const obra = { ...obraAtual(), curva: c.dados.curva, mensal: c.dados.mensal, tarefas: c.dados.tarefas, cronograma: { linhas: c.dados.cronograma, dataRef: '2026-07-01' }, dataCorte: '2026-07-15' };

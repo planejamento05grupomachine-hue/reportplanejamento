@@ -78,8 +78,10 @@ function validarFisico(conj, obra, cfg, { hoje, aceitarNovaBase = false } = {}) 
   const horas = conj.origem.map(o => o.coletadoEm && Date.parse(o.coletadoEm)).filter(Boolean);
   if (horas.length > 1 && (Math.max(...horas) - Math.min(...horas)) / 60000 > JANELA_COLETA_MIN) r.bloqueio('COLETAS_DIFERENTES', `Arquivos coletados com mais de ${JANELA_COLETA_MIN} minutos de diferença.`, conj.origem.map(o => `${o.tipo}: ${o.coletadoEm}`).join(' · '));
 
+  // dado mais antigo = avanço acumulado menor que o da carga atual. Não compara a data do último realizado: as cargas
+  // antigas trazem o realizado até a data da exportação e a exportação de hoje só nos dias de medição (28/10/2026).
   const ult = ultimoReal(d.curva), ultAtual = ultimoReal(obra.curva);
-  if (ult && ultAtual && ult.data < ultAtual.data) r.bloqueio('DADOS_MAIS_ANTIGOS', 'A coleta tem medição mais antiga que a carga atual do painel.', `último realizado ${ult.data} × atual ${ultAtual.data}`);
+  if (ult && ultAtual && ult.realizado < ultAtual.realizado - 0.0005) r.bloqueio('DADOS_MAIS_ANTIGOS', 'O avanço realizado da coleta é menor que o da carga atual do painel (dados mais antigos ou corrigidos no Prevision).', `realizado ${ult.realizado} (${ult.data}) × atual ${ultAtual.realizado} (${ultAtual.data})`);
   if (obra.dataCorte && corte < obra.dataCorte) r.bloqueio('CORTE_ANTERIOR', 'A data de corte calculada é anterior à da carga atual.', `${corte} × ${obra.dataCorte}`);
   const lb = baseDiverge(d.curva, obra.curva, 0.002);
   if (lb.diverge && !aceitarNovaBase) r.bloqueio('LINHA_DE_BASE_DIFERENTE', 'A linha de base mudou em relação à carga atual (nova linha de base, outra perspectiva ou outra obra).', `diferença máx. ${lb.max} em ${lb.comp} datas`);
@@ -128,15 +130,16 @@ function validarFinanceiro(conj, obra, cfg, { hoje, aceitarNovaBase = false } = 
 
   const atual = (obra.financeiro || {}).curva;
   const ultAtual = ultimoReal(atual);
-  if (ult && ultAtual && ult.data < ultAtual.data) r.bloqueio('DADOS_MAIS_ANTIGOS', 'A coleta financeira tem medição mais antiga que a carga atual.', `${ult.data} × ${ultAtual.data}`);
+  if (ult && ultAtual && ult.realizado < ultAtual.realizado - Math.max(1, fimBase * 0.0005)) r.bloqueio('DADOS_MAIS_ANTIGOS', 'O valor agregado da coleta é menor que o da carga atual (dados mais antigos ou corrigidos no Prevision).', `${ult.realizado} (${ult.data}) × ${ultAtual.realizado} (${ultAtual.data})`);
   const lb = baseDiverge(d.curva, atual, tol);
   if (lb.diverge && !aceitarNovaBase) r.bloqueio('LINHA_DE_BASE_DIFERENTE', 'A linha de base financeira mudou em relação à carga atual.', `diferença máx. ${lb.max}`);
   else if (lb.diverge) r.aviso('LINHA_DE_BASE_ACEITA', 'Nova linha de base financeira aceita por quem disparou a execução.');
 
   // corte financeiro: a data do último valor agregado registrado (o dado diz até quando vai), nunca depois de hoje
   const corte = ult ? (ult.data > hoje ? hoje : ult.data) : null;
+  // sem comparação com o corte financeiro atual: na carga manual ele é a data digitada; aqui, a do último valor agregado.
+  // A proteção contra dado antigo é a de cima, pelo valor.
   if (!corte) r.bloqueio('SEM_REALIZADO', 'A Curva S financeira não tem nenhum valor agregado realizado.');
-  if (corte && obra.dataCorteFinanceiro && corte < obra.dataCorteFinanceiro) r.bloqueio('CORTE_ANTERIOR', 'O corte financeiro é anterior ao da carga atual.', `${corte} × ${obra.dataCorteFinanceiro}`);
   const tipos = Object.keys(d);
   const novo = retratoFinanceiro(d, tipos);
   return fechar(r, { corte, ultimoRealizado: ult ? ult.data : null, hash: hashDe(novo), inalterado: quaseIgual(novo, retratoFinanceiro(obra.financeiro, tipos)) });
