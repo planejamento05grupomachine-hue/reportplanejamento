@@ -42,18 +42,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
 
       - name: Dependências (Playwright + Chromium)
         working-directory: sync
         run: |
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
 
       - name: Sincronizar
@@ -90,7 +90,7 @@ jobs:
 
       - name: Relatório detalhado (cifrado com a chave interna do painel)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: relatorio-sync
           path: ${{ runner.temp }}/relatorio-sync.bin

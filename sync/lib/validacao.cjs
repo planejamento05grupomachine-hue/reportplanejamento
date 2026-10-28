@@ -6,7 +6,9 @@
 'use strict';
 const { Carga, sha256 } = require('./ambiente.cjs');
 
-const AVISOS_INFORMATIVOS = [/^IDPM veio zerado/, /^Posição estimada em/, /Pendente de contratação/];
+// "Pesos das tarefas finais somam X%" é arredondamento do Prevision (o painel normaliza); o limite de 0,5% fica com a
+// verificação TAREFAS_FILTRADAS abaixo (207: 100,24% em 28/10/2026)
+const AVISOS_INFORMATIVOS = [/^IDPM veio zerado/, /^Posição estimada em/, /Pendente de contratação/, /^Pesos das tarefas finais somam/];
 const JANELA_COLETA_MIN = 90;
 
 const ultimoReal = curva => [...(curva || [])].reverse().find(p => p.realizado > 0) || null;

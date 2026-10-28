@@ -91,15 +91,26 @@ configurado, e a tarefa raiz exportada tem de ser a mesma da carga atual do pain
 
 | Painel | Prevision (interface = API) | Vínculo | Habilitada | Fonte no `auto` | Observação |
 |---|---|---|---|---|---|
-| 198 | 32419 | confirmado | sim (piloto) | físico: exportação · VA: API | exportações e API conferidas com dados reais |
-| 207 | 37748 | confirmado | não | exportação | exportações ainda não conferidas |
-| 208 | 40210 | confirmado | não | exportação | exportações ainda não conferidas |
-| 211 | 41940 | confirmado | não | exportação | sem rascunho no painel: primeira carga pela tela Alimentar |
+| 198 | 32419 | confirmado | sim | físico: exportação · VA: API | exportações e API conferidas com dados reais |
+| 207 | 37748 | confirmado | sim | exportação | exportação automática simulada sem bloqueio em 28/10/2026 |
+| 208 | 40210 | confirmado | sim | exportação | exportação automática simulada sem bloqueio em 28/10/2026 |
+| 211 | 41940 | confirmado | sim (só físico) | exportação | VA desligado: no Prevision a visão econômica está sem dados (orçamento não vinculado ao cronograma) |
 | — | 42195 (210), 42528 (212) | fora | — | — | projetos do Prevision sem obra no painel: não são importados |
 
 Para habilitar 207/208/211: exportar no mesmo dia os arquivos da obra (com os parâmetros acima), simular com
 `--fonte arquivos`, rodar `comparar-api.cjs` e, com diferenças nulas, registrar `api.equivalenciaValidada` e
 `"habilitada": true`. Conferência local com nomes: `PAINEL_EMAIL=… PAINEL_SENHA=… PREVISION_API_TOKEN=… node sync/vinculos.cjs`.
+
+### Como a exportação anda pela interface (conferido em 28/10/2026)
+
+- `/app/projects` abre a tela inicial; a lista de obras vem do cartão da etapa "Obra" (o "Executar" é desenho).
+- Se o Dashboard avisar "A sua dashboard está desatualizada", o robô clica em **Atualizar** antes de exportar (só
+  recalcula o painel do Prevision). Sem isso, o Dashboard pode ficar atrás do Cronograma (211: 5,80% × 5,93%).
+- O calendário do Progresso por tarefas é limitado ao período do projeto: no limite, o robô fica com a data extrema
+  permitida e confere o período aplicado (até 3 tentativas). A validação ainda exige a raiz somando 100%.
+- Cada conjunto falha sozinho: projeto sem a visão econômica (`SEM_DADOS_PREVISION`) não impede o físico.
+- Para diagnosticar localmente: `SYNC_CAPTURAS=<pasta>` grava uma captura da tela onde a exportação parou (nunca no
+  GitHub Actions); `node sync/diagnostico-tela.cjs` mostra o que a sessão salva enxerga.
 
 ## O que é validado antes de gravar
 

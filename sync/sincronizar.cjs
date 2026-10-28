@@ -99,7 +99,8 @@ async function coletar(obra, ctx) {
       const pasta = fs.mkdtempSync(path.join(tmp, `obra-${obra.codigo}-`));
       const r = await (await deps.exportar())(obra, pasta, arq => lerPlanilha(XLSX, new Uint8Array(fs.readFileSync(arq))).dado, exp);
       const ler = lista => lista.map(x => ({ nome: x.nome, bytes: new Uint8Array(fs.readFileSync(x.caminho)), coletadoEm: x.coletadoEm }));
-      exp.forEach(n => { out[n] = { fonte: 'exportacao', projeto: r.projeto, arquivos: ler(r[n] || []) }; });
+      const extra = n => ({ fonte: 'exportacao', projeto: r.projeto, periodoTarefas: (r.periodoTarefas || {})[n] || null, dashboardAtualizado: !!r.dashboardAtualizado });
+      exp.forEach(n => { out[n] = (r.erros || {})[n] ? { ...extra(n), erro: r.erros[n] } : { ...extra(n), arquivos: ler(r[n] || []) }; });
     } catch (e) { if (FALHA_DA_FONTE.includes(e.codigo)) estado.falha.exportacao = e; exp.forEach(n => { out[n] = { fonte: 'exportacao', erro: e }; }); }
   }
   return out;
@@ -137,6 +138,7 @@ async function processarObra(obra, ctx) {
     const cfg = obra[nat], conj = conjuntoDe(e, nat, XLSX);
     const v = (nat === 'fisico' ? validarFisico : validarFinanceiro)(conj, base, cfg, { hoje, aceitarNovaBase: op.aceitarNovaBase });
     const c = res.conjuntos[nat] = { status: v.bloqueado ? 'bloqueado' : v.inalterado ? 'inalterado' : 'valido', fonte: e.fonte, corte: v.corte || null, ultimoRealizado: v.ultimoRealizado || null,
+      periodoTarefas: e.periodoTarefas || null, dashboardAtualizado: e.dashboardAtualizado || false,
       ultimaMedicaoPrevision: conj.ultimaMedicaoPrevision || null, hash: v.hash || null, verificacoes: v.verificacoes,
       arquivos: conj.origem.map(o => ({ tipo: o.tipo, nome: o.nome, sha256: o.sha256 || null, bytes: o.bytes || null, coletadoEm: o.coletadoEm })) };
     if (c.status !== 'valido') continue;
@@ -274,7 +276,7 @@ if (require.main === module) {
     if (op.detalhar && process.env.GITHUB_ACTIONS) throw erro('--detalhar mostra números da obra: não use no GitHub Actions (o log é público).', 'USO');
     const { resumo, codigoSaida, relatorio } = await executar(op);
     console.log(resumo);
-    if (op.detalhar) for (const o of relatorio.obras) console.log(JSON.stringify({ obra: o.obra, seria: o.seria, mensagens: o.mensagens, conjuntos: Object.fromEntries(Object.entries(o.conjuntos || {}).map(([k, c]) => [k, { status: c.status, fonte: c.fonte, corte: c.corte, ultimoRealizado: c.ultimoRealizado, ultimaMedicaoPrevision: c.ultimaMedicaoPrevision, erro: c.erro, verificacoes: c.verificacoes.map(v => `${v.nivel} ${v.id}: ${v.detalhe}`), arquivos: c.arquivos.map(a => `${a.tipo} ${a.nome} ${(a.sha256 || '').slice(0, 12)} ${a.coletadoEm}`) }])) }, null, 1));
+    if (op.detalhar) for (const o of relatorio.obras) console.log(JSON.stringify({ obra: o.obra, seria: o.seria, mensagens: o.mensagens, conjuntos: Object.fromEntries(Object.entries(o.conjuntos || {}).map(([k, c]) => [k, { status: c.status, fonte: c.fonte, corte: c.corte, ultimoRealizado: c.ultimoRealizado, ultimaMedicaoPrevision: c.ultimaMedicaoPrevision, erro: c.erro, periodoTarefas: c.periodoTarefas, dashboardAtualizado: c.dashboardAtualizado, verificacoes: c.verificacoes.map(v => `${v.nivel} ${v.id}: ${v.detalhe}`), arquivos: c.arquivos.map(a => `${a.tipo} ${a.nome} ${(a.sha256 || '').slice(0, 12)} ${a.coletadoEm}`) }])) }, null, 1));
     if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, '```\n' + resumo + '\n```\n');
     process.exitCode = codigoSaida;
   })().catch(e => { console.error(`[${e.codigo || 'ERRO'}] ${e.message}`); process.exitCode = 2; });
