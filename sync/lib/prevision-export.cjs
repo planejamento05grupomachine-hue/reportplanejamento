@@ -100,10 +100,20 @@ async function exportarQuadro(page, titulo, pasta) {
   const menus = await marcarMenus(page);
   if (!menus.includes(titulo)) throw erro(`Não achei o menu do quadro "${titulo}" no Dashboard.`, 'EXPORTACAO_INTERFACE');
   const botao = page.locator(`[data-sync-menu="${titulo}"]`);
-  await botao.scrollIntoViewIfNeeded();
-  await botao.click();
-  const item = page.getByRole('menuitem', { name: /exportar excel/i }).filter({ visible: true }).last();
-  return baixar(page, () => item.click(), pasta);
+  // o menu às vezes abre animando e o item não fica clicável a tempo (207 no GitHub Actions, 28/10/2026): até 3 tentativas
+  for (let t = 0; ; t++) {
+    try {
+      await botao.scrollIntoViewIfNeeded();
+      await botao.click();
+      const item = page.getByRole('menuitem', { name: /exportar excel/i }).filter({ visible: true }).last();
+      await item.waitFor({ state: 'visible', timeout: 15000 });
+      return await baixar(page, () => item.click({ timeout: 15000 }), pasta);
+    } catch (e) {
+      if (t >= 2) throw e;
+      await page.keyboard.press('Escape').catch(() => {});
+      await page.waitForTimeout(1500);
+    }
+  }
 }
 
 // Período do Progresso por tarefas: do mês anterior ao início da Curva S até o mês seguinte ao fim
