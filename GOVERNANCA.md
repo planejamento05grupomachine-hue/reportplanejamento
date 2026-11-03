@@ -132,3 +132,32 @@ não medida. Aparece só para administradores e diretoria, na aba Obra (não vai
   antes das folhas A4. Não entra no PDF nem na impressão.
 - **Token do GitHub**: por padrão fica só até fechar o navegador; *Lembrar neste computador* vale 7 dias. Use token
   fine-grained, só deste repositório, com validade de até 90 dias.
+
+## Mapa de restrições (aba Restrições, uso interno)
+
+Registro e gestão das restrições revisadas na reunião semanal, no padrão do Last Planner System: restrição é o que
+precisa estar resolvido para uma frente avançar (projeto, contratação, material, mão de obra, aprovação, cliente...).
+
+- **Quem vê**: administradores registram e atualizam; diretoria consulta; cliente não vê a aba nem recebe os dados.
+- **Onde fica**: `data/restricoes/<obra>.bin`, cifrado com a chave interna (a mesma do rascunho), fora do arquivo publicado
+  ao cliente. Entra na troca de chaves. A gravação é item a item sobre a versão mais recente do repositório.
+- **Campos**: frente/item, tipo, ação para remover, responsável (aceita "Ana / Bia", "André + Gisele"), data limite ou
+  condição ("3 dias após envio da carta"), status (Pendente, Em andamento, Em aprovação, Removida), observação e, opcional,
+  a atividade do cronograma que a restrição libera.
+- **Farol automático** (`Core.farolRestricao`), pela data de hoje: vencida (data limite passou) · vence em até 7 dias ·
+  sem data ou condicionada · no prazo · removida. "Atrasado" não é status: é calculado.
+- **IRR, índice de remoção de restrições** (`Core.indicadoresRestricoes`): por semana (segunda a domingo), restrições
+  removidas até a data prevista ÷ restrições previstas para a semana. O cartão mostra as 4 últimas semanas somadas;
+  referência de 80%, a mesma usada para o PPC no Last Planner. A data prevista é a **original** (a primeira data limite
+  informada): reprogramar a data conta como reprogramação, aparece na linha e não melhora o índice.
+- **Por que IRR e não PPC**: o PPC mede o cumprimento da programação semanal de tarefas (o compromisso do planejamento de
+  curto prazo), que o painel não recebe. Para o mapa de restrições, o indicador correspondente é o IRR.
+- **Vínculo com o cronograma**: quando a atividade vinculada começa antes da data limite da restrição (e ainda não está
+  concluída), a linha mostra o alerta; é a restrição no caminho da obra.
+- **Importar planilha**: aceita os mapas atuais em .xlsx (cabeçalho com Status e Ação; Frente/Item, Disciplina,
+  Responsável, Data limite e Observação em qualquer ordem). Células mescladas valem para o bloco; faixas de título
+  ("ADITIVOS DE ESCOPO") são puladas; datas "27/out", "28-out", "29/10/2026" e datas do Excel são lidas. *Somar* atualiza
+  as restrições já existentes (mesma frente, tipo e ação) e acrescenta as novas; *Substituir* apaga as atuais. Se o nome
+  do arquivo indica outra obra, o painel avisa antes de importar.
+- **Imprimir**: a aba imprime o mapa (indicadores, IRR e a lista no filtro escolhido) para a reunião.
+- **Portfólio**: para a equipe interna, "Restrições vencidas" entra nos pontos de atenção de cada obra.

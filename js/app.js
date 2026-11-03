@@ -88,7 +88,7 @@
   aplicaTema(tema);
 
   // ---------- moldura ----------
-  const TITULO_TELA = { alimentar: 'Alimentar dados', acessos: 'Acessos', 'nova-obra': 'Nova obra', 'editar-obra': 'Cadastro da obra', senha: 'Senha', github: 'Publicação', manual: 'Manual de alimentação', portfolio: 'Portfólio' };
+  const TITULO_TELA = { alimentar: 'Alimentar dados', acessos: 'Acessos', 'nova-obra': 'Nova obra', 'editar-obra': 'Cadastro da obra', senha: 'Senha', github: 'Publicação', manual: 'Manual de alimentação', portfolio: 'Portfólio', restricoes: 'Restrições' };
   function shell(conteudo) {
     const u = S.user;
     const o = S.obraId ? DB.obras.find(x => x.id === S.obraId) : null;
@@ -96,12 +96,13 @@
     const itens = [
       ['portfolio', 'Portfólio', IC.home, !ehCliente() || obrasDoUsuario().length > 1],
       ['obra', 'Obra', IC.obra, true],
+      ['restricoes', 'Restrições', IC.rlist, !ehCliente()],
       ['alimentar', 'Alimentar', IC.up, ehAdmin()],
       ['report', 'Report', IC.doc, true],
       ['acessos', 'Acessos', IC.users, ehAdmin()],
     ].filter(i => i[3]);
     // portfólio e report na largura da folha A4 paisagem; as demais telas na largura A4 retrato
-    const larga = ['report', 'portfolio', 'manual'].includes(S.view) ? ' larga' : '';
+    const larga = ['report', 'portfolio', 'manual', 'restricoes'].includes(S.view) ? ' larga' : '';
     const botoes = itens.map(([k, t, ic]) => `<button data-go="${k}" ${S.view === k ? 'aria-current="page"' : ''}>${ic}<span>${t}</span></button>`).join('');
     return `
       <header class="mast"><div class="mast-in">
@@ -241,6 +242,18 @@
         <div class="bar-actions"><a class="btn" href="${mailto(u.email, 'Acesso ao Painel de Obras Machine', corpo)}">Enviar por e-mail</a><button class="btn sec2" type="button" data-fecha="1">Fechar</button></div>
       </div></div>`;
     }
+    // importação da planilha de restrições: resumo do que foi lido e como aplicar
+    if (m.tipo === 'resimp' && S.resImp) {
+      const r = S.resImp, base = DB.obras.find(x => x.id === S.obraId) || {}, atuais = (base.restricoes || []).length;
+      const ab = r.itens.filter(x => x.status !== 'removida').length, cond = r.itens.filter(x => !x.dataLimite && x.condicao).length;
+      return `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="md-t"><div class="modal-card">
+      <h2 id="md-t">Importar mapa de restrições</h2>
+      <p class="sub"><b>${esc(r.arquivo)}</b>${r.dataMapa ? ` · mapa de ${dBR(r.dataMapa)}` : ''}: ${r.itens.length} restrições (${ab} abertas, ${r.itens.length - ab} removidas${cond ? `, ${cond} com data condicionada` : ''}).</p>
+      ${r.outraObra ? `<div class="note-box err" role="alert">O arquivo indica a obra <b>${esc(r.outraObra)}</b>, mas a obra aberta é a <b>${esc(base.codigo)}</b>. Confira antes de importar.</div>` : ''}
+      <p class="sub">${atuais ? `A obra ${esc(base.codigo)} já tem ${atuais} restrições. <b>Somar</b> atualiza as que já existem (mesma frente, tipo e ação) e acrescenta as novas; <b>Substituir</b> apaga as atuais.` : `As restrições entram na obra ${esc(base.codigo)}.`} O farol é recalculado pela data limite; "Atrasado" da planilha vira pendente vencida.</p>
+      <div class="bar-actions"><button class="btn" type="button" data-resimp="somar">${atuais ? 'Somar às atuais' : 'Importar'}</button>${atuais ? '<button class="btn sec2" type="button" data-resimp="substituir">Substituir as atuais</button>' : ''}<button class="btn sec2" type="button" data-fecha="1">Cancelar</button></div>
+    </div></div>`;
+    }
     // depois de publicar: avisar os clientes com acesso à obra (e-mail pronto, com cópia oculta e link direto)
     if (m.tipo === 'avisar') return `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="md-t"><div class="modal-card">
       <h2 id="md-t">Publicado. Avisar o cliente?</h2>
@@ -298,8 +311,10 @@
     const realMed = obras.reduce((s, x) => s + x.r.real, 0) / obras.length;
     const prevMed = obras.reduce((s, x) => s + x.r.prevCorte, 0) / obras.length;
     // pontos de atenção na mesma escala para todas as obras
-    const atencao = r => [['Tarefas atrasadas', r.cont.atrasada], ['Frentes paralisadas', r.campo ? r.campo.paralisadas.length : 0], ['A contratar', r.crono ? r.crono.pendentes.length : 0]];
-    const maxAt = Math.max(1, ...obras.flatMap(x => atencao(x.r).map(a => a[1])));
+    // restrições vencidas: só para a equipe interna (o cliente não recebe as restrições)
+    const hojeP = hojeLocal(), vencidasDe = o => (o.restricoes || []).filter(x => Core.farolRestricao(x, hojeP).k === 'critico').length;
+    const atencao = (r, o) => [['Tarefas atrasadas', r.cont.atrasada], ['Frentes paralisadas', r.campo ? r.campo.paralisadas.length : 0], ['A contratar', r.crono ? r.crono.pendentes.length : 0], ...(ehCliente() ? [] : [['Restrições vencidas', vencidasDe(o)]])];
+    const maxAt = Math.max(1, ...obras.flatMap(x => atencao(x.r, x.o).map(a => a[1])));
     const coluna = ({ o, r, cor }) => {
       const P = r.prazo, slip = r.crono && r.crono.slip, cp = Core.comparaPlano(r.desvio);
       const corDesvio = r.sem.k === 'critico' ? 'neg' : r.desvio >= Core.TOLERANCIA ? 'pos' : '';
@@ -316,7 +331,7 @@
           ${r.prazoGanho ? `<div><span>Prazo</span><b class="${clsAtraso(r)}">${Core.textoAtraso(r.prazoGanho)}</b></div>` : ''}
           <div><span>Comparado ao plano</span><b class="${corDesvio}">${cp.dir === 0 ? 'em linha' : pp(r.desvio)}</b></div>
           <div><span>Término do cronograma</span><b class="${slip > 0 ? 'neg' : slip < 0 ? 'pos' : ''}">${dCurto(P.fimCron)}${slip ? ` (${slip > 0 ? '+' : ''}${slip} d)` : ''}</b></div></div></div>
-        <div class="pf-cel"><h4>Pontos de atenção</h4><div class="pf-iss">${atencao(r).map(([t, n]) => `<div class="${n ? '' : 'z'}"><span>${t}</span><i style="width:${n ? Math.max(4, n / maxAt * 100) : 4}%"></i><b>${n}</b></div>`).join('')}</div></div>
+        <div class="pf-cel"><h4>Pontos de atenção</h4><div class="pf-iss">${atencao(r, o).map(([t, n]) => `<div class="${n ? '' : 'z'}"><span>${t}</span><i style="width:${n ? Math.max(4, n / maxAt * 100) : 4}%"></i><b>${n}</b></div>`).join('')}</div></div>
         <button class="pf-abre" data-obra="${esc(o.id)}">Abrir a obra ${IC.right}</button>
       </article>`;
     };
@@ -1397,6 +1412,127 @@
       ${ativ.map(a => linha(a, 0)).join('')}</div>`;
   }
 
+  // ---------- restrições (uso interno) ----------
+  // Mapa de restrições da reunião semanal, no padrão do Last Planner System: cada restrição tem frente, tipo, responsável,
+  // data limite e ação. O farol sai da data (Core.farolRestricao), o IRR mede a remoção no prazo (Core.indicadoresRestricoes).
+  // Administrador registra e atualiza; diretoria consulta; cliente não vê a aba.
+  const hojeLocal = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+  const FILTROS_RES = [['abertas', 'Abertas'], ['vencidas', 'Vencidas'], ['semana', 'Vencem em 7 dias'], ['removidas', 'Removidas'], ['todas', 'Todas']];
+  function viewRestricoes() {
+    const base = DB.obras.find(x => x.id === S.obraId);
+    if (!base) return `<div class="card card-pad">Escolha uma obra no portfólio.</div>`;
+    const hoje = hojeLocal(), itens = base.restricoes || [], adm = ehAdmin();
+    const I = Core.indicadoresRestricoes(itens, hoje);
+    const linhasCron = (base.cronograma && base.cronograma.linhas) || [];
+    const filtro = S.resFiltro || 'abertas', pessoa = S.resPessoa || null;
+    const doFiltro = x => { const f = Core.farolRestricao(x, hoje);
+      return filtro === 'todas' ? true : filtro === 'removidas' ? x.status === 'removida' : filtro === 'vencidas' ? f.k === 'critico' : filtro === 'semana' ? f.ordem === 1 : x.status !== 'removida'; };
+    const lista = Core.ordenarRestricoes(itens.filter(doFiltro).filter(x => !pessoa || Core.pessoasDe(x.responsavel).includes(pessoa)), hoje);
+    const conta = { abertas: I.abertas, vencidas: I.vencidas, semana: I.vencem7, removidas: I.total - I.abertas, todas: I.total };
+    const irrCls = v => v === null ? '' : v >= I.meta ? 'ok' : v >= 0.6 ? 'warn' : 'crit';
+    const seletorObra = DB.obras.length > 1 ? `<label class="rs-obra"><span>Obra</span><select class="inp" id="rs-obra">${DB.obras.map(o => `<option value="${esc(o.id)}" ${o.id === base.id ? 'selected' : ''}>${esc(o.codigo)} · ${esc(o.nome)}</option>`).join('')}</select></label>` : '';
+
+    const kpis = `<div class="kpi-strip">
+        <div class="kpi-t neutro"><span>Abertas</span><b>${I.abertas}</b><small>${I.total} registradas${I.semData ? ` · ${I.semData} sem data` : ''}</small></div>
+        <div class="kpi-t ${I.vencidas ? 'crit' : 'ok'}"><span>Vencidas</span><b class="${I.vencidas ? 'crit' : ''}">${I.vencidas}</b><small>data limite já passou</small></div>
+        <div class="kpi-t ${I.vencem7 ? 'warn' : 'ok'}"><span>Vencem em 7 dias</span><b>${I.vencem7}</b><small>prioridade da semana</small></div>
+        <div class="kpi-t ${irrCls(I.irr4) || 'neutro'}"><span>IRR · 4 semanas</span><b class="${irrCls(I.irr4) === 'crit' ? 'crit' : ''}">${I.irr4 === null ? '—' : pct(I.irr4, 0)}</b><small>${I.previstas4 ? `${I.noPrazo4} de ${I.previstas4} removidas no prazo` : 'sem restrições previstas'} · meta ${pct(I.meta, 0)}</small></div>
+        <div class="kpi-t neutro"><span>Removidas na semana</span><b>${I.removidasSemana}</b><small>desde ${dCurto(I.serie.at(-1).ini)}</small></div>
+      </div>`;
+
+    const irr = `<div class="card card-pad rs-irr-card">
+        <div class="rs-irr-cab"><b>IRR semanal</b><span>restrições removidas até a data prevista original ÷ restrições previstas na semana</span></div>
+        <div class="rs-irr" role="img" aria-label="IRR das últimas ${I.serie.length} semanas">
+          <em class="rs-meta" style="--m:${I.meta}"><span>meta ${pct(I.meta, 0)}</span></em>
+          ${I.serie.map(w => `<div class="${w.atual ? 'at' : ''}" title="${dBR(w.ini)} a ${dBR(w.fim)}: ${w.previstas ? `${w.noPrazo} de ${w.previstas} no prazo` : 'nenhuma prevista'}${w.atual ? ' (semana em curso)' : ''}">
+            <i class="${irrCls(w.irr)}" style="height:${w.irr === null ? 0 : Math.max(2, w.irr * 100)}%"></i><b>${w.irr === null ? '—' : pct(w.irr, 0)}</b><span>${dCurto(w.ini)}${w.atual ? '*' : ''}</span></div>`).join('')}
+        </div>
+        <p class="sec-lead" style="margin:0">* semana em curso, até hoje. A data prevista é a primeira data limite informada: reprogramar não melhora o índice${I.reprogramadas ? ` (${I.reprogramadas} ${I.reprogramadas === 1 ? 'restrição aberta foi reprogramada' : 'restrições abertas foram reprogramadas'})` : ''}.</p>
+      </div>`;
+
+    const pessoas = I.porPessoa.length ? `<div class="rs-pessoas" role="group" aria-label="Filtrar por responsável">
+        ${I.porPessoa.map(p => `<button data-respessoa="${esc(p.nome)}" aria-pressed="${pessoa === p.nome}">${esc(p.nome)} <b>${p.abertas}</b>${p.vencidas ? `<i>${p.vencidas} vencida${p.vencidas > 1 ? 's' : ''}</i>` : ''}</button>`).join('')}
+        ${pessoa ? '<button data-respessoa="" class="rs-limpa">Todos</button>' : ''}</div>` : '';
+
+    const linha = x => {
+      const f = Core.farolRestricao(x, hoje), imp = Core.restricaoImpede(x, linhasCron);
+      const datas = x.dataLimite ? `${dBR(x.dataLimite)}${(x.reprogramacoes || 0) > 0 ? `<small>reprogramada ${x.reprogramacoes}× · prevista ${dCurto(x.dataOriginal)}</small>` : ''}` : `<span class="rs-cond">${esc(x.condicao || 'sem data')}</span>`;
+      return `<tr class="rs-${f.k}">
+        <td>${pill(f.k, f.t)}</td>
+        <td><b style="font-weight:600">${esc(x.frente || '—')}</b>${x.acao ? `<small class="rs-acao">${esc(x.acao)}</small>` : ''}${x.obs ? `<small class="rs-obs" title="${esc(x.obs)}">${esc(x.obs)}</small>` : ''}
+          ${imp ? `<small class="rs-imp ${imp.conflito ? 'crit' : ''}">${imp.conflito ? `${IC.alert}<span>${esc(Core.nomeCurto ? Core.nomeCurto(imp.nome) : imp.nome)} começa em ${dBR(imp.inicio)}, antes da data limite</span>` : `<span>Libera: ${esc(imp.nome)}${imp.inicio ? ` (início ${dBR(imp.inicio)})` : ''}</span>`}</small>` : ''}</td>
+        <td>${esc(x.tipo || '—')}</td><td>${esc(x.responsavel || '—')}</td>
+        <td class="n">${datas}</td>
+        <td>${esc(Core.ST_RESTR[x.status] || x.status)}${x.status === 'removida' && x.removidaEm ? `<small>em ${dCurto(x.removidaEm)}</small>` : ''}</td>
+        ${adm ? `<td class="acoes no-print">${x.status !== 'removida' ? `<button class="btn sm" data-resremover="${esc(x.id)}" title="Marcar como removida hoje">Remover</button>` : ''}<button class="btn sm sec2" data-reseditar="${esc(x.id)}">Editar</button></td>` : ''}
+      </tr>`;
+    };
+    const tabela = lista.length ? `<div class="tw"><table class="t rs-t"><thead><tr><th>Farol</th><th>Frente · ação</th><th>Tipo</th><th>Responsável</th><th class="n">Data limite</th><th>Status</th>${adm ? '<th class="no-print"></th>' : ''}</tr></thead>
+        <tbody>${lista.map(linha).join('')}</tbody></table></div>`
+      : `<p class="sec-lead" style="margin:0">${itens.length ? 'Nenhuma restrição neste filtro.' : adm ? 'Nenhuma restrição registrada. Cadastre a primeira ou importe a planilha do mapa de restrições.' : 'Nenhuma restrição registrada nesta obra.'}</p>`;
+
+    return `
+      <div class="head-row"><div style="min-width:0">
+        <div class="kicker">Obra ${esc(base.codigo)} · uso interno</div>
+        <h1 class="h1">Mapa de restrições</h1>
+        <p class="sub">O que precisa estar resolvido para cada frente avançar. Farol pela data limite; revisão na reunião semanal.${base.restricoesEm ? ` Atualizado em ${new Date(base.restricoesEm).toLocaleDateString('pt-BR')}.` : ''}</p>
+        <p class="print-only">Posição de ${dBR(hoje)} · ${esc(base.nome)}</p>
+      </div><div class="bar-actions no-print">${seletorObra}
+        ${adm ? '<button class="btn" data-resnova>Nova restrição</button><button class="btn sec2" id="rs-importar">Importar planilha</button><input type="file" id="rs-arq" accept=".xlsx,.xls" hidden>' : ''}
+        <button class="btn sec2" id="rs-imprimir">Imprimir</button><button class="btn sec2" data-copialink>Copiar link</button></div></div>
+      ${S.resEd ? formRestricao(base, linhasCron) : ''}
+      ${kpis}
+      ${irr}
+      <div class="card card-pad steps">
+        <div class="seg no-print" role="group" aria-label="Filtrar restrições">${FILTROS_RES.map(([k, t]) => `<button data-resfiltro="${k}" aria-pressed="${filtro === k}">${t}<b>${conta[k]}</b></button>`).join('')}</div>
+        ${pessoas ? `<div class="no-print">${pessoas}</div>` : ''}
+        ${tabela}
+      </div>`;
+  }
+  function formRestricao(base, linhasCron) {
+    const x = S.resEd.id ? (base.restricoes || []).find(r => r.id === S.resEd.id) || {} : { status: 'pendente' };
+    const v = k => esc(x[k] || '');
+    const nomes = [...new Set((base.restricoes || []).flatMap(r => Core.pessoasDe(r.responsavel)))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const frentes = [...new Set((base.restricoes || []).map(r => r.frente).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const tipos = [...new Set([...Core.TIPOS_RESTR, ...(base.restricoes || []).map(r => r.tipo).filter(Boolean)])];
+    const ativ = linhasCron.filter(l => l.nivel >= 2 && l.nivel <= 4 && (l.realizado || 0) < 0.9995);
+    const atAtual = x.atividade ? `${x.atividade.linha}|${x.atividade.nome}` : '';
+    return `<form class="card card-pad steps rs-form no-print" id="f-res" novalidate>
+        <div class="step-t">${x.id ? 'Editar restrição' : 'Nova restrição'}</div>
+        <div class="two"><div class="field"><label for="rs-frente">Frente / item</label><input class="inp" id="rs-frente" list="rs-frentes" value="${v('frente')}" required placeholder="ex.: Fundação rasa"><datalist id="rs-frentes">${frentes.map(f => `<option value="${esc(f)}">`).join('')}</datalist></div>
+          <div class="field"><label for="rs-tipo">Tipo</label><input class="inp" id="rs-tipo" list="rs-tipos" value="${v('tipo')}" placeholder="Projeto, Contratação, Material…"><datalist id="rs-tipos">${tipos.map(t => `<option value="${esc(t)}">`).join('')}</datalist></div></div>
+        <div class="field"><label for="rs-acao">Ação para remover</label><textarea class="inp" id="rs-acao" rows="2" placeholder="ex.: Apresentar ao Fernando o quadro de concorrência da SC 4811">${v('acao')}</textarea></div>
+        <div class="two"><div class="field"><label for="rs-resp">Responsável</label><input class="inp" id="rs-resp" list="rs-nomes" value="${v('responsavel')}" placeholder="ex.: Gisele / André"><datalist id="rs-nomes">${nomes.map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
+          <div class="two"><div class="field"><label for="rs-data">Data limite</label><input class="inp" id="rs-data" type="date" value="${v('dataLimite')}"></div>
+            <div class="field"><label for="rs-status">Status</label><select class="inp" id="rs-status">${Object.entries(Core.ST_RESTR).map(([k, t]) => `<option value="${k}" ${(x.status || 'pendente') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div></div></div>
+        <div class="two"><div class="field"><label for="rs-cond">Condição, quando não há data</label><input class="inp" id="rs-cond" value="${v('condicao')}" placeholder="ex.: 3 dias após envio da carta"></div>
+          <div class="field" id="rs-rem-f" ${x.status === 'removida' ? '' : 'hidden'}><label for="rs-rem">Removida em</label><input class="inp" id="rs-rem" type="date" value="${esc(x.removidaEm || hojeLocal())}"></div></div>
+        <div class="field"><label for="rs-obs">Observação</label><textarea class="inp" id="rs-obs" rows="2">${v('obs')}</textarea></div>
+        ${ativ.length ? `<div class="field"><label for="rs-ativ">Atividade do cronograma que esta restrição libera (opcional)</label><select class="inp" id="rs-ativ"><option value="">—</option>${ativ.map(l => `<option value="${esc(l.linha + '|' + l.nome)}" ${atAtual === l.linha + '|' + l.nome ? 'selected' : ''}>${esc(l.eap)} · ${esc(l.nome.length > 80 ? l.nome.slice(0, 77) + '…' : l.nome)}${l.inicio ? ` · início ${dCurto(l.inicio)}` : ''}</option>`).join('')}</select>
+          <small class="hint">Com o vínculo, o painel avisa quando a atividade começa antes da data limite da restrição.</small></div>` : ''}
+        ${x.id && (x.reprogramacoes || 0) > 0 ? `<p class="sec-lead" style="margin:0">Reprogramada ${x.reprogramacoes}× · data prevista original ${dBR(x.dataOriginal)} (base do IRR).</p>` : ''}
+        <div class="bar-actions"><button class="btn" type="submit">Salvar</button><button class="btn sec2" type="button" id="rs-cancelar">Cancelar</button>${x.id ? '<button class="btn danger" type="button" id="rs-excluir">Excluir</button>' : ''}</div>
+      </form>`;
+  }
+  // grava e volta à lista; a tela é recarregada da API (mesma versão que foi para o repositório)
+  async function gravaRestricao(msg, fn, ok) {
+    const r = await gravando(msg, fn);
+    if (!r) return false;
+    await recarregar(); if (ok) toast(ok);
+    return true;
+  }
+  async function importarPlanilhaRestricoes(f) {
+    try { if (!window.XLSX) await carregaScript(CDN + 'xlsx/0.18.5/xlsx.full.min.js'); } catch (e) { toast(e.message + '. Confira a conexão e tente de novo.'); return; }
+    try {
+      const wb = Parsers.wbDe(window.XLSX, new Uint8Array(await f.arrayBuffer()));
+      const r = Parsers.parseRestricoes(window.XLSX, wb, { arquivo: f.name, hoje: hojeLocal(), dataRestricao: Core.dataRestricao });
+      if (!r || !r.itens.length) { toast('Não encontrei a tabela de restrições (cabeçalho com Status e Ação) nesta planilha.'); return; }
+      const base = DB.obras.find(x => x.id === S.obraId);
+      const cod = (f.name.match(/obra\s*(\d{3,4})/i) || r.titulo.match(/obra\s*(\d{3,4})/i) || [])[1];
+      S.resImp = { ...r, arquivo: f.name, outraObra: cod && base && cod !== String(base.codigo) ? cod : null };
+      S.modal = { tipo: 'resimp' }; render();
+    } catch (e) { toast('Não consegui ler a planilha: ' + e.message); }
+  }
   // ---------- report no celular: resumo legível antes das folhas ----------
   // No celular a folha A4 é reduzida até caber e o texto fica pequeno demais. O resumo traz o essencial em tamanho de
   // leitura (só na tela estreita; fora da impressão e do PDF): situação, avanço, prazo, projeção, atenções e marcos.
@@ -1680,24 +1816,24 @@
     }
     if (!S.obraId || !DB.obras.some(o => o.id === S.obraId)) S.obraId = obrasDoUsuario()[0]?.id;
     if (!ehAdmin() && ['alimentar', 'acessos', 'nova-obra', 'editar-obra', 'senha', 'github'].includes(S.view)) S.view = 'obra';
-    if (ehCliente() && S.view === 'manual') S.view = 'obra';
+    if (ehCliente() && ['manual', 'restricoes'].includes(S.view)) S.view = 'obra';
     if (S.view === 'manual') DB.obras.filter(o => o.fotosPendentes).forEach(carregarFotos);
     const base = DB.obras.find(x => x.id === S.obraId);
     if (base && base.fotosPendentes && ['obra', 'report'].includes(S.view)) carregarFotos(base);
     const v = S.view === 'portfolio' ? viewPortfolio() : S.view === 'obra' ? viewObra() : S.view === 'alimentar' ? viewAlimentar()
       : S.view === 'acessos' ? viewAcessos() : S.view === 'nova-obra' ? viewNovaObra() : S.view === 'editar-obra' ? viewNovaObra(base)
-      : S.view === 'senha' ? viewSenha() : S.view === 'github' ? viewGithub() : S.view === 'manual' ? viewManual() : viewReport();
+      : S.view === 'senha' ? viewSenha() : S.view === 'github' ? viewGithub() : S.view === 'manual' ? viewManual() : S.view === 'restricoes' ? viewRestricoes() : viewReport();
     app.innerHTML = shell(v) + lightbox() + modalHTML();
     bind(); desenha(); atualizaEndereco();
   }
   // ---------- links diretos ----------
   // O endereço acompanha a tela: #portfolio · #obra-208 · #obra-208/report · #manual. Abrir o link (depois do login, se
   // preciso) leva direto à mesma tela; telas administrativas não entram no endereço.
-  const TELAS_LINK = ['portfolio', 'obra', 'report', 'manual'];
+  const TELAS_LINK = ['portfolio', 'obra', 'report', 'manual', 'restricoes'];
   function hashDaTela() {
     if (!S.user || !TELAS_LINK.includes(S.view)) return null;
     if (S.view === 'portfolio' || S.view === 'manual') return '#' + S.view;
-    return S.obraId ? `#obra-${S.obraId}${S.view === 'report' ? '/report' : ''}` : null;
+    return S.obraId ? `#obra-${S.obraId}${S.view === 'report' ? '/report' : S.view === 'restricoes' ? '/restricoes' : ''}` : null;
   }
   function atualizaEndereco() {
     const h = hashDaTela();
@@ -1708,7 +1844,7 @@
     const mo = h.match(/obra-([\w-]+)/);
     if (mo && DB.obras.some(o => o.id === mo[1])) S.obraId = mo[1];
     if (!S.obraId || !DB.obras.some(o => o.id === S.obraId)) S.obraId = DB.obras[0]?.id;
-    S.view = /report/.test(h) ? 'report' : mo ? 'obra' : /manual/.test(h) && u.perfil !== 'cliente' ? 'manual' : /alimentar/.test(h) && ehAdmin() ? 'alimentar'
+    S.view = /report/.test(h) ? 'report' : /restricoes/.test(h) && u.perfil !== 'cliente' ? 'restricoes' : mo ? 'obra' : /manual/.test(h) && u.perfil !== 'cliente' ? 'manual' : /alimentar/.test(h) && ehAdmin() ? 'alimentar'
       : /portfolio/.test(h) && (DB.obras.length > 1 || u.perfil !== 'cliente') ? 'portfolio' : DB.obras.length > 1 || ehAdmin() ? 'portfolio' : 'obra';
   }
   window.addEventListener('hashchange', () => {
@@ -1851,6 +1987,44 @@
     });
     const mav = $('#m-avisar'); if (mav) mav.onclick = () => { setTimeout(() => { S.modal = null; render(); }, 300); };
 
+    // ----- restrições -----
+    const rso = $('#rs-obra'); if (rso) rso.onchange = () => { S.obraId = rso.value; S.resEd = null; S.resPessoa = null; render(); };
+    $$('[data-resfiltro]').forEach(b => b.onclick = () => { S.resFiltro = b.dataset.resfiltro; render(); });
+    $$('[data-respessoa]').forEach(b => b.onclick = () => { S.resPessoa = b.dataset.respessoa && S.resPessoa !== b.dataset.respessoa ? b.dataset.respessoa : null; render(); });
+    $$('[data-resnova]').forEach(b => b.onclick = () => { S.resEd = { id: null }; render(); const f = $('#rs-frente'); if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } });
+    $$('[data-reseditar]').forEach(b => b.onclick = () => { S.resEd = { id: b.dataset.reseditar }; render(); const f = $('#f-res'); if (f) f.scrollIntoView({ block: 'start' }); });
+    $$('[data-resremover]').forEach(b => b.onclick = async () => {
+      const id = S.obraId, x = (DB.obras.find(o => o.id === id).restricoes || []).find(r => r.id === b.dataset.resremover); if (!x) return;
+      await gravaRestricao('Marcando a restrição como removida…', () => API.salvarRestricao(id, { ...x, status: 'removida', removidaEm: hojeLocal() }), 'Restrição removida.');
+    });
+    const rst = $('#rs-status'); if (rst) rst.onchange = () => { const f = $('#rs-rem-f'); if (f) f.hidden = rst.value !== 'removida'; };
+    const rsc = $('#rs-cancelar'); if (rsc) rsc.onclick = () => { S.resEd = null; render(); };
+    const fr = $('#f-res'); if (fr) fr.onsubmit = async e => {
+      e.preventDefault();
+      const v = id => ($('#' + id) ? $('#' + id).value : '').trim();
+      if (!v('rs-frente') && !v('rs-acao')) { toast('Informe a frente ou a ação.'); return; }
+      const at = v('rs-ativ'), i = at.indexOf('|');
+      const item = { id: S.resEd.id || undefined, frente: v('rs-frente'), tipo: v('rs-tipo'), acao: v('rs-acao'), responsavel: v('rs-resp'),
+        dataLimite: v('rs-data') || null, condicao: v('rs-data') ? '' : v('rs-cond'), status: v('rs-status') || 'pendente', obs: v('rs-obs'),
+        removidaEm: v('rs-status') === 'removida' ? (v('rs-rem') || hojeLocal()) : null,
+        atividade: at ? { linha: +at.slice(0, i), nome: at.slice(i + 1) } : null };
+      const novo = !item.id, id = S.obraId;
+      const ok = await gravaRestricao('Salvando a restrição…', () => API.salvarRestricao(id, item), novo ? 'Restrição registrada.' : 'Restrição atualizada.');
+      if (ok) { S.resEd = null; render(); }
+    };
+    const rsx = $('#rs-excluir'); if (rsx) rsx.onclick = () => {
+      const id = S.obraId, rid = S.resEd && S.resEd.id;
+      confirma({ titulo: 'Excluir restrição', texto: 'A restrição sai do mapa e do cálculo do IRR. Para registrar que foi resolvida, use o status <b>Removida</b>.', ok: 'Excluir', perigo: true },
+        async () => { const ok = await gravaRestricao('Excluindo…', () => API.excluirRestricao(id, rid), 'Restrição excluída.'); if (ok) { S.resEd = null; render(); } });
+    };
+    const rsi = $('#rs-importar'), rsa = $('#rs-arq');
+    if (rsi && rsa) { rsi.onclick = () => rsa.click(); rsa.onchange = () => { if (rsa.files.length) importarPlanilhaRestricoes(rsa.files[0]); }; }
+    $$('[data-resimp]').forEach(b => b.onclick = async () => {
+      const imp = S.resImp, id = S.obraId, subst = b.dataset.resimp === 'substituir'; S.modal = null; S.resImp = null; render();
+      const r = await gravando('Importando as restrições…', () => API.importarRestricoes(id, imp.itens, subst));
+      if (r) { await recarregar(); toast(`Importadas: ${r.novos} novas${r.atualizados ? `, ${r.atualizados} atualizadas` : ''}.`); }
+    });
+    const rsp = $('#rs-imprimir'); if (rsp) rsp.onclick = () => window.print();
     // ----- acessos -----
     $$('[data-editacesso]').forEach(b => b.onclick = () => { S.editAcesso = b.dataset.editacesso || null; render(); const f = $('#f-edacesso') || $('#f-acesso'); if (f) f.scrollIntoView({ block: 'center' }); });
     const syncObras = id => { const sel = $(`#${id}-perfil`), box = $(`[data-obras-de="${id}"]`); if (sel && box) { box.hidden = sel.value !== 'cliente'; sel.onchange = () => { box.hidden = sel.value !== 'cliente'; }; } };

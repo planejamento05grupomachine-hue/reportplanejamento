@@ -177,6 +177,7 @@
     acesso: 'data/acesso.json', dir: 'data/diretorio.bin',
     obra: id => `data/obras/${id}.bin`, ras: id => `data/obras/${id}.rascunho.bin`,
     fotos: id => `data/fotos/${id}.bin`, fotosRas: id => `data/fotos/${id}.rascunho.bin`,
+    res: id => `data/restricoes/${id}.bin`,
   };
 
   // ---------- estado da sessão ----------
@@ -232,6 +233,8 @@
   const arqDir = async () => cifrar(MK, await empacotarJSON(DIR));
   const arqObra = async (id, obj) => cifrar(chave(DIR.chaves[id]), await empacotarJSON(obj));
   const arqRas = async obj => cifrar(chave(DIR.ki), await empacotarJSON(obj));
+  const arqRes = arqRas; // restrições: mesma chave interna do rascunho
+  const idNovo = () => [...aleatorio(8)].map(b => b.toString(16).padStart(2, '0')).join('');
   const arqFotos = async (k, fotos) => cifrar(k, empacotarFotos(fotos));
 
   // ---------- fila de gravação (um commit por vez) ----------
@@ -283,6 +286,8 @@
     o.publicado = !ras && temDados(pub);
     o.cargaId = ehInterno() && temDados(base) ? (ras ? 'rascunho' : 'publicado') : null;
     if (!temDados(base)) o.semDados = true;
+    // restrições: só equipe interna (administradores e diretoria); o cliente nem recebe o campo
+    if (ehInterno()) { o.restricoes = clone((e.res && e.res.itens) || []); o.restricoesEm = (e.res && e.res.atualizadoEm) || null; } else delete o.restricoes;
     return o;
   }
   function ordenar(ids) { return ids.sort((a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true })); }
@@ -291,8 +296,9 @@
     const k = CH.obras[id]; if (!k) return;
     const pub = await lerCifrado(P.obra(id), chave(k));
     const ras = ehInterno() ? await lerCifrado(P.ras(id), chave(CH.ki)) : null;
+    const res = ehInterno() ? await lerCifrado(P.res(id), chave(CH.ki)) : null;
     const antes = OB[id];
-    OB[id] = { pub, ras, fotos: { pub: null, ras: null } };
+    OB[id] = { pub, ras, res, fotos: { pub: null, ras: null } };
     if (antes) revogarUrls(antes);
   }
   function revogarUrls(e) { for (const l of [e.fotos.pub, e.fotos.ras]) (l || []).forEach(f => { try { URL.revokeObjectURL(f.src); } catch (x) { /* ok */ } }); }
@@ -467,6 +473,65 @@
       });
     },
 
+
+    // ----- mapa de restrições (uso interno: data/restricoes/<id>.bin, chave interna) -----
+    // Gravação item a item sobre a versão mais recente do repositório (gravar() relê tudo antes), para duas pessoas
+    // editando restrições diferentes não apagarem a alteração uma da outra.
+    salvarRestricao(id, item) {
+      return gravar(async () => {
+        const e = OB[id]; if (!e) throw erro('Obra não encontrada.');
+        const res = e.res || { versao: 1, itens: [] };
+        const itens = [...(res.itens || [])];
+        const i = item.id ? itens.findIndex(x => x.id === item.id) : -1;
+        const atual = i >= 0 ? itens[i] : null;
+        const novo = { ...(atual || {}), ...item, id: item.id || idNovo(), atualizadaEm: agora(), atualizadaPor: CH.nome };
+        if (!atual) { novo.criadaEm = agora(); novo.dataOriginal = novo.dataOriginal || novo.dataLimite || null; novo.reprogramacoes = 0; }
+        else {
+          // data limite trocada: conta como reprogramação; a data original (base do IRR) não muda
+          if (!atual.dataOriginal && atual.dataLimite) novo.dataOriginal = atual.dataLimite;
+          if (atual.dataLimite && novo.dataLimite && novo.dataLimite !== atual.dataLimite) novo.reprogramacoes = (atual.reprogramacoes || 0) + 1;
+          if (!novo.dataOriginal) novo.dataOriginal = novo.dataLimite || null;
+        }
+        if (novo.status !== 'removida') novo.removidaEm = null;
+        if (i >= 0) itens[i] = novo; else itens.push(novo);
+        e.res = { ...res, itens, atualizadoEm: agora() };
+        await commit({ [P.res(id)]: await arqRes(e.res) }, `Restrições da obra ${(e.pub && e.pub.codigo) || id}: ${atual ? 'atualiza' : 'nova'} "${String(novo.frente || novo.acao || '').slice(0, 40)}"`);
+        return paraApp(id);
+      });
+    },
+    excluirRestricao(id, rid) {
+      return gravar(async () => {
+        const e = OB[id]; if (!e || !e.res) throw erro('Restrição não encontrada.');
+        e.res = { ...e.res, itens: (e.res.itens || []).filter(x => x.id !== rid), atualizadoEm: agora() };
+        await commit({ [P.res(id)]: await arqRes(e.res) }, `Restrições da obra ${(e.pub && e.pub.codigo) || id}: exclui uma restrição`);
+        return paraApp(id);
+      });
+    },
+    // Importação da planilha: substituir apaga as atuais; somar atualiza as que já existem (mesma frente, tipo e ação)
+    importarRestricoes(id, itens, substituir) {
+      return gravar(async () => {
+        const e = OB[id]; if (!e) throw erro('Obra não encontrada.');
+        const chaveR = x => [x.frente, x.tipo, x.acao].map(v => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()).join('|');
+        const base = substituir ? [] : [...((e.res && e.res.itens) || [])];
+        const porChave = new Map(base.map((x, i) => [chaveR(x), i]));
+        let novos = 0, atualizados = 0;
+        itens.forEach(x => {
+          const k = chaveR(x), i = porChave.get(k);
+          if (i === undefined) { base.push({ ...x, id: idNovo(), criadaEm: agora(), atualizadaEm: agora(), atualizadaPor: CH.nome, importada: true }); porChave.set(k, base.length - 1); novos++; }
+          else {
+            const a = base[i];
+            const rep = a.dataLimite && x.dataLimite && a.dataLimite !== x.dataLimite ? 1 : 0;
+            base[i] = { ...a, ...x, id: a.id, criadaEm: a.criadaEm, dataOriginal: a.dataOriginal || a.dataLimite || x.dataLimite || null,
+              reprogramacoes: (a.reprogramacoes || 0) + rep, removidaEm: x.status === 'removida' ? (a.removidaEm || x.removidaEm) : null,
+              atividade: a.atividade || x.atividade || null, atualizadaEm: agora(), atualizadaPor: CH.nome };
+            atualizados++;
+          }
+        });
+        e.res = { versao: 1, ...(e.res || {}), itens: base, atualizadoEm: agora() };
+        await commit({ [P.res(id)]: await arqRes(e.res) }, `Restrições da obra ${(e.pub && e.pub.codigo) || id}: importa planilha (${novos} novas, ${atualizados} atualizadas)`);
+        return { obra: paraApp(id), novos, atualizados };
+      });
+    },
     // mapas de avanço (plantas demarcadas): sempre no rascunho — o cliente só vê depois de "Publicar para o cliente"
     salvarMapas(id, mapas) {
       return gravar(async () => {
@@ -589,6 +654,7 @@
       arq[P.obra(id)] = await arqObra(id, e.pub);
       if (e.fotos.pub && e.fotos.pub.length) arq[P.fotos(id)] = await arqFotos(chave(DIR.chaves[id]), e.fotos.pub);
       if (e.ras) { arq[P.ras(id)] = await arqRas(e.ras); if (e.ras.fotosProprias && e.fotos.ras) arq[P.fotosRas(id)] = await arqFotos(chave(DIR.ki), e.fotos.ras); }
+      if (e.res) arq[P.res(id)] = await arqRes(e.res);
     }
     for (const [uid, uk] of Object.entries(uks)) { ACESSO.usuarios[uid].a = b64(await cifrar(MK, uk)); await gravarChaveiro(uid, uk); }
     arq[P.dir] = await arqDir(); arq[P.acesso] = textoAcesso();

@@ -791,6 +791,94 @@
     return { fontes, alertas: al.sort((a, b) => (a.k === 'av' ? 0 : 1) - (b.k === 'av' ? 0 : 1)) };
   }
 
+  // ---------- restrições (Last Planner System) ----------
+  // Restrição = o que precisa estar resolvido para uma atividade começar (projeto, contratação, material, aprovação...).
+  // O farol sai da data limite, sem pintura manual:
+  //   vencida (data limite passou) · vence em até 7 dias · sem data (ou condicionada a outro evento) · no prazo · removida
+  // IRR (índice de remoção de restrições) da semana = removidas até a data prevista ÷ restrições previstas para a semana.
+  // A data prevista é a ORIGINAL (a primeira data limite informada): reprogramar a data não melhora o índice.
+  // PPC mede o cumprimento da programação semanal de tarefas, que o painel não recebe; para restrições vale o IRR.
+  const ST_RESTR = { pendente: 'Pendente', andamento: 'Em andamento', aprovacao: 'Em aprovação', removida: 'Removida' };
+  const TIPOS_RESTR = ['Projeto', 'Contratação', 'Material', 'Serviço', 'Mão de obra', 'Equipamento', 'Aprovação', 'Cliente', 'Outros'];
+  const JANELA_RESTR = 7, META_IRR = 0.8;
+  const prazoOriginal = x => x.dataOriginal || x.dataLimite || null;
+  function farolRestricao(x, hoje) {
+    if (x.status === 'removida') return { k: 'ok', t: 'Removida', ordem: 4 };
+    if (!x.dataLimite) return { k: 'atencao', t: x.condicao ? 'Condicionada' : 'Sem data', ordem: 2 };
+    const d = diff(hoje, x.dataLimite);
+    if (d < 0) return { k: 'critico', t: `Vencida há ${-d} d`, ordem: 0, dias: d };
+    if (d <= JANELA_RESTR) return { k: 'atencao', t: d === 0 ? 'Vence hoje' : `Vence em ${d} d`, ordem: 1, dias: d };
+    return { k: 'info', t: 'No prazo', ordem: 3, dias: d };
+  }
+  // "Bruno / Maikon" · "André + Gisele" · "Maria, Gisele" → uma pessoa por nome
+  const pessoasDe = s => String(s || '').split(/\s*(?:\/|\+|,|;|&|\se\s)\s*/).map(t => t.trim()).filter(Boolean);
+  const segundaDe = d => { const w = (dia(d).getUTCDay() + 6) % 7; return addDias(d, -w); };
+  // Ordem da lista: vencidas (mais antigas primeiro), vencem em 7 dias, sem data, no prazo, removidas (mais recentes primeiro)
+  function ordenarRestricoes(itens, hoje) {
+    return [...itens].map(x => ({ x, f: farolRestricao(x, hoje) })).sort((a, b) => a.f.ordem - b.f.ordem
+      || (a.f.ordem === 4 ? String(b.x.removidaEm || '').localeCompare(String(a.x.removidaEm || '')) : String(a.x.dataLimite || '9').localeCompare(String(b.x.dataLimite || '9')))
+      || String(a.x.frente || '').localeCompare(String(b.x.frente || ''), 'pt-BR')).map(v => v.x);
+  }
+  function indicadoresRestricoes(itens, hoje, semanas = 8) {
+    const lista = itens || [];
+    const abertas = lista.filter(x => x.status !== 'removida');
+    const far = abertas.map(x => farolRestricao(x, hoje));
+    const s0 = segundaDe(hoje);
+    const serie = [];
+    for (let i = semanas - 1; i >= 0; i--) {
+      const ini = addDias(s0, -7 * i), fim = addDias(ini, 6), ate = fim < hoje ? fim : hoje;
+      const prev = lista.filter(x => { const p = prazoOriginal(x); return p && p >= ini && p <= ate; });
+      const ok = prev.filter(x => x.status === 'removida' && x.removidaEm && x.removidaEm <= prazoOriginal(x)).length;
+      serie.push({ ini, fim, previstas: prev.length, noPrazo: ok, irr: prev.length ? ok / prev.length : null, atual: i === 0 });
+    }
+    // índice de referência: últimas 4 semanas somadas (uma semana com 2 restrições oscila demais)
+    const u4 = serie.slice(-4), p4 = u4.reduce((a, w) => a + w.previstas, 0), ok4 = u4.reduce((a, w) => a + w.noPrazo, 0);
+    const porPessoa = {};
+    abertas.forEach((x, i) => pessoasDe(x.responsavel).forEach(n => {
+      const r = porPessoa[n] || (porPessoa[n] = { nome: n, abertas: 0, vencidas: 0 });
+      r.abertas++; if (far[i].k === 'critico') r.vencidas++;
+    }));
+    const semanaAtual = serie.at(-1);
+    return {
+      total: lista.length, abertas: abertas.length,
+      vencidas: far.filter(f => f.k === 'critico').length,
+      vencem7: far.filter(f => f.ordem === 1).length,
+      semData: far.filter(f => f.ordem === 2).length,
+      removidasSemana: lista.filter(x => x.status === 'removida' && x.removidaEm && x.removidaEm >= semanaAtual.ini && x.removidaEm <= hoje).length,
+      reprogramadas: abertas.filter(x => (x.reprogramacoes || 0) > 0).length,
+      serie, irr4: p4 ? ok4 / p4 : null, previstas4: p4, noPrazo4: ok4, meta: META_IRR,
+      porPessoa: Object.values(porPessoa).sort((a, b) => b.vencidas - a.vencidas || b.abertas - a.abertas || a.nome.localeCompare(b.nome, 'pt-BR')),
+    };
+  }
+  // Atividade vinculada que começa antes de a restrição sair: a restrição está no caminho da obra
+  function restricaoImpede(x, linhas) {
+    if (!x.atividade || x.status === 'removida') return null;
+    const l = (linhas || []).find(v => v.linha === x.atividade.linha && normNome(v.nome) === normNome(x.atividade.nome))
+      || (linhas || []).find(v => normNome(v.nome) === normNome(x.atividade.nome));
+    if (!l) return { linha: null, nome: x.atividade.nome, inicio: null, conflito: false, achou: false };
+    const conflito = !!(l.inicio && (!x.dataLimite || x.dataLimite >= l.inicio) && (l.realizado || 0) < 0.9995);
+    return { linha: l.linha, nome: l.nome, inicio: l.inicio, conflito, achou: true };
+  }
+  // Data de restrição escrita à mão: "27/out", "28-out", "29/10/2026", "05/11", número de série do Excel ou ISO.
+  // Ano ausente: o mais próximo da data de referência (o mapa de 29/10/2026 com "04/jan" é janeiro de 2027).
+  const MES_N = { jan: 1, fev: 2, feb: 2, mar: 3, abr: 4, apr: 4, mai: 5, may: 5, jun: 6, jul: 7, ago: 8, aug: 8, set: 9, sep: 9, out: 10, oct: 10, nov: 11, dez: 12, dec: 12 };
+  function dataRestricao(v, ref) {
+    if (v === null || v === undefined || v === '') return null;
+    if (typeof v === 'number' && v > 20000 && v < 80000) return iso(new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 864e5 + 12 * 36e5));
+    const t = String(v).trim().toLowerCase();
+    let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[0];
+    let d, mes, ano;
+    if ((m = t.match(/^(\d{1,2})\s*[\/.\-]\s*(\d{1,2})(?:\s*[\/.\-]\s*(\d{2,4}))?$/))) { d = +m[1]; mes = +m[2]; ano = m[3]; }
+    else if ((m = t.match(/^(\d{1,2})\s*[\/.\-\s]\s*([a-zç]{3})[a-zç]*\.?(?:\s*[\/.\-\s]\s*(\d{2,4}))?$/)) && MES_N[m[2]]) { d = +m[1]; mes = MES_N[m[2]]; ano = m[3]; }
+    else return null;
+    if (!(mes >= 1 && mes <= 12 && d >= 1 && d <= 31)) return null;
+    const pad = n => String(n).padStart(2, '0');
+    if (ano) return `${ano.length === 2 ? '20' + ano : ano}-${pad(mes)}-${pad(d)}`;
+    const r = ref || iso(new Date()), y = +r.slice(0, 4);
+    const cands = [y - 1, y, y + 1].map(a => `${a}-${pad(mes)}-${pad(d)}`);
+    return cands.sort((a, b) => Math.abs(diff(r, a)) - Math.abs(diff(r, b)))[0];
+  }
+
   // ---------- marcos ----------
   // Marcos explícitos do cronograma ("MARCO ...") ou, na falta deles, entregas de 1 dia (entrega, aceite, vistoria,
   // liberação, comissionamento, testes). Variação só quando a linha tem data de base.
@@ -1196,7 +1284,7 @@
   }
 
   root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, diaSemana, diff, addDias, semaforo, FAIXAS,
-    calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, dataDoPrevisto, prazoGanho, tendenciaPrazo, textoAtraso, fraseProjecao, chartTendencia, narrativa, resumoExecutivo, chartCurvaS, chartMensal, chartCombo, chartEfetivo,
+    calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, dataDoPrevisto, prazoGanho, tendenciaPrazo, textoAtraso, fraseProjecao, chartTendencia, narrativa, resumoExecutivo, ST_RESTR, TIPOS_RESTR, META_IRR, JANELA_RESTR, farolRestricao, indicadoresRestricoes, ordenarRestricoes, restricaoImpede, dataRestricao, pessoasDe, prazoOriginal, chartCurvaS, chartMensal, chartCombo, chartEfetivo,
     LIM_FOTOS: LIM.fotos, calcFinanceiro, moeda, moedaCurta, vaNoReport, empresasFrente, qualidadeRdo, qualidadeDocs, LIMIAR_DIAS: { fisico: LIMIAR_DIAS_FISICO, financeiro: LIMIAR_DIAS_FINANCEIRO }, MAPA_ST, atividadesParaMapa, ptsZona, geoZona, mapasDaObra, fotoNoMapa };
 })(typeof window !== 'undefined' ? window : globalThis);
 
