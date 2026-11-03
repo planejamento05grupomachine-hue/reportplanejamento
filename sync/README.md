@@ -99,7 +99,8 @@ configurado, e a tarefa raiz exportada tem de ser a mesma da carga atual do pain
 | 207 | 37748 | confirmado | sim | exportação | a carga manual de 25/10 tinha a Curva S na perspectiva Econômica (idêntica à exportação Econômica nos 12 pontos) e tarefas/Cronograma na Física; em 02/11/2026 passou para a Física, a régua das outras obras (nenhuma linha de base nova no Prevision desde 06/08) |
 | 208 | 40210 | confirmado | sim | exportação | exportação automática simulada sem bloqueio em 28/10/2026 |
 | 211 | 41940 | confirmado | sim (só físico) | exportação | VA desligado: no Prevision a visão econômica está sem dados (orçamento não vinculado ao cronograma) |
-| — | 42195 (210), 42528 (212) | fora | — | — | projetos do Prevision sem obra no painel: não são importados |
+| 212 | 42528 | confirmado | sim (só físico) | exportação | cadastrada em 03/11/2026; obra começando; VA desligado (visão econômica sem dados no Prevision) |
+| — | 42195 (210) | fora | — | — | projeto do Prevision sem obra no painel: não é importado |
 
 Para habilitar 207/208/211: exportar no mesmo dia os arquivos da obra (com os parâmetros acima), simular com
 `--fonte arquivos`, rodar `comparar-api.cjs` e, com diferenças nulas, registrar `api.equivalenciaValidada` e
