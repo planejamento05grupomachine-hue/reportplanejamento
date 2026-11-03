@@ -273,3 +273,9 @@ workflow *Testes* roda a cada mudança em `js/` ou `sync/`.
 - Correção na conferência "Progresso mensal × Curva S": compara com o último ponto da Curva S em cada mês (antes: o
   primeiro). Com a curva diária que o Prevision exporta hoje, a conferência antiga recusava arquivos corretos; com uma
   curva de um ponto por mês, o resultado é o mesmo de antes.
+
+### Configurar sem abrir o GitHub (computador do Planejamento)
+
+- `~/.painel-sync/github-segredos.token`: token fine-grained deste repositório com **Secrets**, **Variables** e **Actions** em *Read and write*.
+  `node sync/configurar-github.cjs --estado` mostra as variáveis e os nomes dos segredos; `--ativar` liga o agendamento; `--aviso` confere a sessão do GitHub agora.
+- `~/.painel-sync/fontes.env`: credenciais do Sienge e do Diário de Obra para o diagnóstico local (`SIENGE_SUBDOMINIO=`, `SIENGE_USUARIO=`, `SIENGE_SENHA=`, `DIARIO_TOKEN=`, uma por linha). Nunca vai para o repositório.

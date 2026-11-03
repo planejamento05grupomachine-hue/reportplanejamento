@@ -84,6 +84,8 @@ test('diagnóstico: estrutura sem valores e código da obra no nome', () => {
 
 test('diagnóstico sem nenhuma credencial: termina bem e diz "não configurado"', () => {
   const env = { ...process.env }; ['SIENGE_SUBDOMINIO', 'SIENGE_USUARIO', 'SIENGE_SENHA', 'DIARIO_TOKEN'].forEach(k => delete env[k]);
+  // pasta de usuário vazia: o ~/.painel-sync/fontes.env de quem roda o teste não entra
+  const vazio = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'sem-fontes-')); env.HOME = vazio; env.USERPROFILE = vazio; delete env.GITHUB_ACTIONS;
   const out = execFileSync(process.execPath, [path.join(__dirname, '..', 'fontes-externas.cjs'), '--verificar'], { env, encoding: 'utf8' });
   assert.equal((out.match(/não configurado/g) || []).length, 2);
 });

@@ -19,6 +19,17 @@ const sienge = require('./lib/sienge.cjs');
 const diario = require('./lib/diario-obra.cjs');
 const { esqueleto, codigoNoNome } = require('./lib/somente-leitura.cjs');
 
+// No seu computador, as credenciais podem ficar em ~/.painel-sync/fontes.env (fora do repositório), uma por linha:
+//   SIENGE_SUBDOMINIO=…  SIENGE_USUARIO=…  SIENGE_SENHA=…  DIARIO_TOKEN=…
+// Variáveis já definidas no ambiente (GitHub Actions) têm prioridade. O conteúdo nunca é impresso.
+(() => {
+  const arq = path.join(require('os').homedir(), '.painel-sync', 'fontes.env');
+  if (process.env.GITHUB_ACTIONS || !fs.existsSync(arq)) return;
+  fs.readFileSync(arq, 'utf8').split(/\r?\n/).forEach(l => {
+    const m = l.match(/^\s*(SIENGE_SUBDOMINIO|SIENGE_USUARIO|SIENGE_SENHA|DIARIO_TOKEN)\s*=\s*(.*?)\s*$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  });
+})();
 const args = process.argv.slice(2);
 const explorar = args.includes('--explorar');
 const detalhar = args.includes('--detalhar') && !process.env.GITHUB_ACTIONS;
