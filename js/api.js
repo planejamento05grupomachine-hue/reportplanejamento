@@ -66,10 +66,25 @@
 
   // ---------- GitHub ----------
   const GHCFG = CFG.github || {};
+  const DIAS_TOKEN = 7;
   const GH = {
-    get token() { return ssGet('mp_gh') || lsGet('mp_gh'); },
+    // Token lembrado no computador vale 7 dias ({ t, ate }); depois disso é apagado e o painel pede de novo.
+    // Token gravado antes dessa regra (texto puro) ganha os 7 dias a partir de agora.
+    get token() { return ssGet('mp_gh') || this.lembrado(); },
+    lembrado() {
+      const v = lsGet('mp_gh'); if (!v) return null;
+      let o; try { o = JSON.parse(v); } catch (e) { o = null; }
+      if (!o || typeof o !== 'object') { o = { t: v, ate: Date.now() + DIAS_TOKEN * 864e5 }; lsSet('mp_gh', JSON.stringify(o)); }
+      if (!o.t || !(o.ate > Date.now())) { lsSet('mp_gh', null); return null; }
+      return o.t;
+    },
     temToken() { return !!this.token; },
-    definirToken(t, lembrar) { ssSet('mp_gh', null); lsSet('mp_gh', null); (lembrar ? lsSet : ssSet)('mp_gh', String(t).trim()); this._branch = null; },
+    definirToken(t, lembrar) {
+      ssSet('mp_gh', null); lsSet('mp_gh', null);
+      if (lembrar) lsSet('mp_gh', JSON.stringify({ t: String(t).trim(), ate: Date.now() + DIAS_TOKEN * 864e5 }));
+      else ssSet('mp_gh', String(t).trim());
+      this._branch = null;
+    },
     limparToken() { ssSet('mp_gh', null); lsSet('mp_gh', null); },
     async req(metodo, caminho, corpo, aceitar) {
       const r = await fetch('https://api.github.com' + caminho, {
@@ -296,7 +311,7 @@
     emailAcesso: CFG.emailAcesso,
     github: {
       temToken: () => GH.temToken(),
-      lembrado: () => !!lsGet('mp_gh'),
+      lembrado: () => !ssGet('mp_gh') && !!GH.lembrado(),
       async definir(token, lembrar) { GH.definirToken(token, lembrar); try { const r = await GH.verificar(); refAtual = null; return r; } catch (e) { GH.limparToken(); throw e; } },
       limpar() { GH.limparToken(); refAtual = null; },
       repo: () => `${GHCFG.owner}/${GHCFG.repo}`,
@@ -356,6 +371,7 @@
           codigo: String(d.codigo || id).trim(), nome: d.nome, cliente: d.cliente || '', contratante: d.contratante || '', cidade: d.cidade || '',
           contrato: d.contrato || '', local: d.local || '', responsavel: d.responsavel || '',
           reportVA: ['mostrar', 'ocultar'].includes(d.reportVA) ? d.reportVA : 'auto',
+          indicePrazo: d.indicePrazo === 'percentual' ? 'percentual' : 'tempo',
           prazoContratual: d.prazo_inicio && d.prazo_fim ? { inicio: d.prazo_inicio, fim: d.prazo_fim, dias: d.prazo_dias } : (d.prazo_inicio || d.prazo_fim ? { inicio: d.prazo_inicio, fim: d.prazo_fim, dias: null } : null),
         };
         const arq = {};

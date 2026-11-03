@@ -124,10 +124,21 @@
     return `<details class="sec" data-sec="${id}" ${open ? 'open' : ''}><summary><span class="mk"></span><h2>${titulo}</h2><span class="rt"><span class="rtxt">${direita || ''}</span><span class="chev">${IC.chev}</span></span></summary><div class="sec-body">${corpo}</div></details>`;
   };
   const pill = (k, t) => `<span class="pill ${k}">${esc(t)}</span>`;
+  // Índice que acende o farol: IDP(t) (prazo ganho, em tempo) quando confiável; senão, o IDP em % (início da obra ou cadastro)
+  const indicePrazo = r => r.farolTempo ? `IDP(t) ${fmtNum(r.prazoGanho.idpT, 2)}` : `IDP ${fmtNum(r.idp, 2)}`;
+  const clsAtraso = r => !r.prazoGanho || Math.abs(r.prazoGanho.atraso) < 1 ? '' : r.prazoGanho.atraso < 0 ? 'pos' : r.sem.k === 'critico' ? 'neg' : r.sem.k === 'atencao' ? 'warn' : '';
 
   // ---------- e-mails (pedido de acesso e de senha) ----------
   const SITE = () => location.origin + location.pathname;
   const mailto = (para, assunto, corpo) => `mailto:${para}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
+  // Aviso de nova posição publicada: clientes com acesso à obra em cópia oculta, link direto para o report
+  function avisoPublicacao(o) {
+    const para = API.listarAcessos().filter(u => u.perfil === 'cliente' && (u.obras || []).includes(o.id) && u.email);
+    const link = `${SITE()}#obra-${o.id}/report`, corte = dBR(o.publicadoAte || o.dataCorte);
+    const corpo = `Prezados,\n\nA posição de ${corte} da obra ${o.codigo} · ${o.nome} está publicada no Painel de Obras Machine.\n\nReport: ${link}\n(acesso com o seu e-mail e senha)\n\nAtenciosamente,\nPlanejamento · Machine`;
+    const bcc = para.map(u => u.email).join(',');
+    return { codigo: o.codigo, para, href: `mailto:?${bcc ? `bcc=${encodeURIComponent(bcc)}&` : ''}subject=${encodeURIComponent(`Painel de Obras · Obra ${o.codigo} · posição de ${corte}`)}&body=${encodeURIComponent(corpo)}` };
+  }
   const mailtoSenha = email => mailto(EMAIL, 'Painel de Obras Machine · Redefinição de senha',
     `Solicito a redefinição da minha senha de acesso ao Painel de Obras Machine.\n\nE-mail de acesso: ${email || ''}\n\nAtenciosamente,`);
 
@@ -174,13 +185,13 @@
         <div class="field"><label for="c-conf">Repita a senha</label><input class="inp" id="c-conf" type="password" autocomplete="new-password" required></div>
         <div class="field"><label for="c-token">Token do GitHub</label><input class="inp" id="c-token" type="password" autocomplete="off" spellcheck="false" required>
           <small class="hint">${dicaToken()}</small></div>
-        <label class="chk"><input type="checkbox" id="c-lembrar" checked> Lembrar o token neste computador</label>
+        <label class="chk"><input type="checkbox" id="c-lembrar"> Lembrar o token neste computador por 7 dias</label>
         <label class="chk"><input type="checkbox" id="c-limpar" checked> Apagar o histórico antigo do repositório (remove as versões sem criptografia)</label>
         ${avisos()}
         <div class="bar-actions"><button class="btn" type="submit">Configurar</button></div>
       </form>`);
   }
-  const dicaToken = () => `Crie em <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com → Settings → Fine-grained tokens</a>: acesso só ao repositório <b>${esc(API.github.repo())}</b>, permissão <b>Contents: Read and write</b>. O token fica só neste navegador.`;
+  const dicaToken = () => `Crie em <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com → Settings → Fine-grained tokens</a>: acesso só ao repositório <b>${esc(API.github.repo())}</b>, permissão <b>Contents: Read and write</b> e validade de até 90 dias. O token fica só neste navegador.`;
   function viewSenha() {
     return `<div><div class="kicker">Conta</div><h1 class="h1">Trocar minha senha</h1><p class="sub">Mínimo de 12 caracteres. A senha nova vale a partir do próximo acesso.</p></div>
       <form id="f-senha" class="card card-pad steps" novalidate style="max-width:520px">
@@ -193,10 +204,10 @@
     const tem = API.github.temToken();
     return `<div><div class="kicker">Administração</div><h1 class="h1">Publicação</h1><p class="sub">As alterações feitas no painel (obras, cargas, publicações e acessos) são gravadas no repositório <b>${esc(API.github.repo())}</b> e o site atualiza em cerca de um minuto.</p></div>
       <div class="card card-pad steps" style="max-width:640px">
-        <div class="meta" style="margin:0"><span>Token <b>${tem ? (API.github.lembrado() ? 'configurado neste computador' : 'configurado até fechar o navegador') : 'não configurado'}</b></span></div>
+        <div class="meta" style="margin:0"><span>Token <b>${tem ? (API.github.lembrado() ? 'configurado neste computador (vale 7 dias)' : 'configurado até fechar o navegador') : 'não configurado'}</b></span></div>
         <form id="f-token" class="steps" novalidate>
           <div class="field"><label for="g-token">${tem ? 'Substituir token' : 'Token do GitHub'}</label><input class="inp" id="g-token" type="password" autocomplete="off" spellcheck="false"><small class="hint">${dicaToken()}</small></div>
-          <label class="chk"><input type="checkbox" id="g-lembrar" checked> Lembrar neste computador</label>
+          <label class="chk"><input type="checkbox" id="g-lembrar"> Lembrar neste computador por 7 dias (deixe desmarcado em computador compartilhado)</label>
           <div class="bar-actions"><button class="btn" type="submit">Salvar token</button>${tem ? '<button class="btn sec2" type="button" id="g-limpar">Remover token deste navegador</button>' : ''}</div>
         </form>
       </div>
@@ -216,7 +227,7 @@
       ${m.erro ? `<div class="note-box err" role="alert">${esc(m.erro)}</div>` : ''}
       <form id="f-mtoken" class="steps" novalidate>
         <div class="field"><input class="inp" id="m-token" type="password" autocomplete="off" spellcheck="false" aria-label="Token do GitHub"><small class="hint">${dicaToken()}</small></div>
-        <label class="chk"><input type="checkbox" id="m-lembrar" checked> Lembrar neste computador</label>
+        <label class="chk"><input type="checkbox" id="m-lembrar"> Lembrar neste computador por 7 dias</label>
         <div class="bar-actions"><button class="btn" type="submit">Continuar</button><button class="btn sec2" type="button" data-fecha="1">Cancelar</button></div>
       </form></div></div>`;
     if (m.tipo === 'senha') {
@@ -230,6 +241,12 @@
         <div class="bar-actions"><a class="btn" href="${mailto(u.email, 'Acesso ao Painel de Obras Machine', corpo)}">Enviar por e-mail</a><button class="btn sec2" type="button" data-fecha="1">Fechar</button></div>
       </div></div>`;
     }
+    // depois de publicar: avisar os clientes com acesso à obra (e-mail pronto, com cópia oculta e link direto)
+    if (m.tipo === 'avisar') return `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="md-t"><div class="modal-card">
+      <h2 id="md-t">Publicado. Avisar o cliente?</h2>
+      <p class="sub">${m.para.length ? `${m.para.length === 1 ? 'Uma pessoa tem' : m.para.length + ' pessoas têm'} acesso de cliente à obra ${esc(m.codigo)}: ${m.para.map(u => `<b>${esc(u.nome)}</b>`).join(', ')}. O e-mail sai do seu programa de e-mail, com os endereços em cópia oculta e o link direto para o report.` : `Nenhum acesso de cliente cadastrado para a obra ${esc(m.codigo)}. Você pode preparar o e-mail mesmo assim e escolher os destinatários.`}</p>
+      <div class="bar-actions"><a class="btn" id="m-avisar" href="${m.href}">Preparar e-mail</a><button class="btn sec2" type="button" data-fecha="1">Agora não</button></div>
+    </div></div>`;
     if (m.tipo === 'confirma') return `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="md-t"><div class="modal-card">
       <h2 id="md-t">${esc(m.titulo)}</h2><p class="sub">${m.texto}</p>
       <div class="bar-actions"><button class="btn ${m.perigo ? 'danger' : ''}" type="button" id="m-ok">${esc(m.ok || 'Confirmar')}</button><button class="btn sec2" type="button" data-fecha="1">Cancelar</button></div>
@@ -295,7 +312,8 @@
           <div class="pl"><b>${pct(r.prevCorte, 1)}</b><i style="height:${Math.max(1, r.prevCorte * 100)}%"></i><span>Planejado</span></div>
           <div><b>${pct(r.real, 1)}</b><i style="height:${Math.max(1, r.real * 100)}%"></i><span>Realizado</span></div></div></div>
         <div class="pf-cel"><h4>Situação</h4><div class="pf-sit">
-          <div>${pill(r.sem.k, r.sem.t)}<b>IDP ${fmtNum(r.idp, 2)}</b></div>
+          <div>${pill(r.sem.k, r.sem.t)}<b>${indicePrazo(r)}</b></div>
+          ${r.prazoGanho ? `<div><span>Prazo</span><b class="${clsAtraso(r)}">${Core.textoAtraso(r.prazoGanho)}</b></div>` : ''}
           <div><span>Comparado ao plano</span><b class="${corDesvio}">${cp.dir === 0 ? 'em linha' : pp(r.desvio)}</b></div>
           <div><span>Término do cronograma</span><b class="${slip > 0 ? 'neg' : slip < 0 ? 'pos' : ''}">${dCurto(P.fimCron)}${slip ? ` (${slip > 0 ? '+' : ''}${slip} d)` : ''}</b></div></div></div>
         <div class="pf-cel"><h4>Pontos de atenção</h4><div class="pf-iss">${atencao(r).map(([t, n]) => `<div class="${n ? '' : 'z'}"><span>${t}</span><i style="width:${n ? Math.max(4, n / maxAt * 100) : 4}%"></i><b>${n}</b></div>`).join('')}</div></div>
@@ -306,7 +324,7 @@
       <div class="kpi-strip">
         <div class="kpi-t neutro"><span>Obras ativas</span><b>${obras.length}</b><small>com cronograma carregado</small></div>
         <div class="kpi-t"><span>Avanço médio</span><b>${pct(realMed)}</b><small>previsto ${pct(prevMed)} na data</small></div>
-        <div class="kpi-t ${atrasadas ? 'crit' : 'ok'}"><span>Obras atrasadas</span><b class="${atrasadas ? 'crit' : ''}">${atrasadas}</b><small>IDP abaixo de ${fmtNum(Core.FAIXAS.atencao, 2)}</small></div>
+        <div class="kpi-t ${atrasadas ? 'crit' : 'ok'}"><span>Obras atrasadas</span><b class="${atrasadas ? 'crit' : ''}">${atrasadas}</b><small>índice de prazo abaixo de ${fmtNum(Core.FAIXAS.atencao, 2)}</small></div>
         <div class="kpi-t ${tarefasAtr ? 'crit' : 'ok'}"><span>Tarefas atrasadas</span><b>${tarefasAtr}</b><small>em todas as obras</small></div>
         <div class="kpi-t ${paralis ? 'crit' : 'ok'}"><span>Frentes paralisadas</span><b class="${paralis ? 'crit' : ''}">${paralis}</b><small>no último RDO de cada obra</small></div>
       </div>
@@ -337,12 +355,16 @@
     const c = r.campo;
 
     // linha do tempo: início contratual → fim contratual
-    const t0 = P.contrIni || P.iniCron, t1 = [P.contrFim, r.projecao, P.fimCron].filter(Boolean).sort().at(-1);
+    const F = r.projecaoFaixa, fx = F ? [F.atrasoMantido, F.desempenhoMantido].sort() : null;
+    const t0 = P.contrIni || P.iniCron, t1 = [P.contrFim, r.projecao, P.fimCron, ...(fx || [])].filter(Boolean).sort().at(-1);
     const X = d => Math.max(0, Math.min(100, diff(t0, d) / Math.max(1, diff(t0, t1)) * 100));
-        const marcos = [
+    const rotProj = !r.projecao ? null : F
+      ? ['proj', r.projecao, 'Projeção pelo prazo ganho', fx[0].slice(0, 7) === fx[1].slice(0, 7) ? '~' + Core.mesCurto(fx[0]) : `${Core.mesCurto(fx[0])} a ${Core.mesCurto(fx[1])}`]
+      : ['proj', r.projecao, 'Projeção no ritmo atual', '~' + Core.mesCurto(r.projecao)];
+    const marcos = [
       ['corte', r.corte, 'Data de corte', dBR(r.corte)],
       ['cron', P.fimCron, 'Fim do cronograma', dBR(P.fimCron)],
-      r.projecao ? ['proj', r.projecao, 'Projeção no ritmo atual', '~' + Core.mesCurto(r.projecao)] : null,
+      rotProj,
       P.contrFim ? ['contr', P.contrFim, 'Fim contratual', dBR(P.contrFim)] : null,
     ].filter(Boolean);
     const tl = `<div class="tl" aria-label="Linha do tempo de prazos">
@@ -368,7 +390,8 @@
           <div style="display:grid;gap:18px;align-content:start">
             <div class="kpis">
               <div class="kpi"><span>Comparado ao plano</span><b class="${r.sem.k === 'critico' ? 'crit' : r.sem.k === 'atencao' ? 'warn' : r.desvio >= Core.TOLERANCIA ? 'ok' : ''}">${Core.comparaPlano(r.desvio).dir === 0 ? 'Em linha' : pp(r.desvio)}</b><small>planejado ${pct(r.prevCorte)} na data</small></div>
-              <div class="kpi"><span>IDP</span><b>${fmtNum(r.idp, 2)}</b><small>realizado ÷ previsto</small></div>
+              ${r.prazoGanho ? `<div class="kpi"><span>Prazo</span><b class="${clsAtraso(r).replace('neg', 'crit').replace('pos', 'ok')}">${Core.textoAtraso(r.prazoGanho)}</b><small>${r.farolTempo ? `IDP(t) ${fmtNum(r.prazoGanho.idpT, 2)} · IDP em % ${fmtNum(r.idp, 2)}` : `IDP ${fmtNum(r.idp, 2)} · ${r.prazoGanho.confiavel ? 'farol pelo IDP em % (cadastro da obra)' : 'início da obra, índice em tempo ainda instável'}`}</small></div>`
+                : `<div class="kpi"><span>IDP</span><b>${fmtNum(r.idp, 2)}</b><small>realizado ÷ previsto</small></div>`}
               <div class="kpi"><span>Ritmo atual</span><b>${pct(r.ritmo)}</b><small>média/mês · últimos 3 meses</small></div>
               <div class="kpi"><span>Ritmo necessário</span><b class="${r.ritmoCron > r.ritmo * 1.05 ? 'crit' : ''}">${r.ritmoCron ? pct(r.ritmoCron) : '—'}</b><small>para fechar em ${dCurto(P.fimCron)}</small></div>
             </div>
@@ -382,6 +405,19 @@
       <p class="sec-lead">Avanço físico acumulado. A área entre as linhas é a diferença para o planejado até a data de corte (vermelha quando abaixo, verde quando acima).</p>
       <div class="legend"><span><i class="sw sw-real"></i>Realizado</span><span><i class="sw sw-prev"></i>Previsto (replanejado)</span><span><i class="sw sw-base"></i>Base (original)</span></div>
       <div class="chart" id="ch-curva"></div>`);
+
+    // Tendência do prazo: atraso em dias mês a mês (pela Curva S) e o histórico das cargas (o que foi informado em cada corte)
+    const hist = (o.historico || []).filter(h => h.corte <= r.corte).slice(-12).reverse();
+    const tendSec = r.tendencia.length ? sec('tendencia', 'Tendência do prazo', r.prazoGanho ? Core.textoAtraso(r.prazoGanho) : '', `
+      <p class="sec-lead">Atraso em dias no fim de cada mês: quantos dias atrás do plano estava o avanço realizado (prazo ganho). Barra para cima = atraso; para baixo = adiantada. Medido contra o cronograma atual: depois de um replanejamento, os meses passados são relidos no plano novo.</p>
+      <div class="legend"><span><i class="sw sw-atr"></i>Atraso</span><span><i class="sw sw-adi"></i>Adiantada</span><span class="note">* data de corte${r.tendencia.some(t => !t.confiavel) ? ' · esmaecido: início da obra, índice instável' : ''}</span></div>
+      <div class="chart" id="ch-tend"></div>
+      ${hist.length ? `<div><div class="step-t" style="margin:6px 0">Histórico de cargas · o que o painel mostrava em cada corte</div>
+        <div class="tw"><table class="t"><thead><tr><th>Corte</th><th class="n">Realizado</th><th class="n">Previsto</th><th class="n">Prazo</th><th class="n">Término do cronograma</th><th class="n">Projeção</th></tr></thead><tbody>
+        ${hist.map(h => `<tr><td>${dBR(h.corte)}</td><td class="n">${pct(h.real)}</td><td class="n">${pct(h.prev)}</td>
+          <td class="n">${h.atraso === null || h.atraso === undefined ? '—' : Core.textoAtraso(h)}</td><td class="n">${dBR(h.fimCron)}</td>
+          <td class="n">${h.projecaoFaixa ? [h.projecaoFaixa.atrasoMantido, h.projecaoFaixa.desempenhoMantido].sort().map(Core.mesCurto).filter((v, i, a) => a.indexOf(v) === i).join(' a ') : h.projecao ? Core.mesCurto(h.projecao) : '—'}</td></tr>`).join('')}
+        </tbody></table></div></div>` : `<p class="sec-lead" style="margin:0">O histórico de cargas começa a ser registrado na próxima carga física desta obra.</p>`}`, true) : '';
 
     const mesAtual = (o.mensal || []).find(m => m.mes === r.corte.slice(0, 7));
     const mensal = sec('mensal', 'Avanço por mês', mesAtual ? `${mesLongo(mesAtual.mes)}: ${pct(mesAtual.realizado)} de ${pct(mesAtual.previsto)}` : '', `
@@ -397,6 +433,9 @@
         <div class="kpi"><span>Saldo de contrato</span><b>${moeda(rf.faturamento.saldo)}</b><small>a medir</small></div>` : ''}
         <div class="kpi"><span>SPI</span><b>${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'}</b><small>${rf.spi !== null ? `EV ${Core.moedaCurta(rf.ev)} ÷ PV ${Core.moedaCurta(rf.pv)}` : 'EV ÷ PV'}</small></div>
         <div class="kpi"><span>CPI</span><b>${rf.cpi !== null ? fmtNum(rf.cpi, 2) : '—'}</b><small>${rf.cpi !== null ? 'EV ÷ AC' : 'sem dado de custo real (AC)'}</small></div>
+        ${rf.medidoVsExecutado && !ehCliente() ? (() => { const mv = rf.medidoVsExecutado;
+          return `<div class="kpi"><span>Medido × executado <em class="int">interno</em></span><b class="${mv.situacao === 'em-linha' ? '' : 'warn'}">${mv.situacao === 'em-linha' ? 'Em linha' : (mv.dif > 0 ? '+' : '−') + Core.moedaCurta(Math.abs(mv.dif))}</b>
+            <small>${mv.situacao === 'medido-acima' ? `medição à frente da execução (${pct(mv.frac, 1)} do contrato)` : mv.situacao === 'medido-abaixo' ? `execução ainda não medida (${pct(-mv.frac, 1)} do contrato)` : 'diferença até 2% do contrato'} · medido ${Core.moedaCurta(mv.medido)} × EV ${Core.moedaCurta(mv.ev)}</small></div>`; })() : ''}
       </div>
       ${rf.spi !== null ? `<div class="rx-tok">${GLOSSARIO_VA}</div>` : ''}
       ${rf.pts ? `<div class="legend"><span><i class="sw sw-real"></i>Realizado (EV)</span><span><i class="sw sw-prev"></i>Planejado (PV)</span><span><i class="sw sw-base"></i>Base</span><span class="note">${notaEscalaVA(rf)}</span></div>
@@ -429,8 +468,8 @@
         <h1 class="h1">${esc(o.nome)}</h1>
         <p class="sub">${esc(o.cliente)} · contratante ${esc(o.contratante)}</p>
         <div class="meta">${o.contrato ? `<span>Contrato <b>${esc(o.contrato)}</b></span>` : ''}<span>Prazo contratual <b>${dBR(P.contrIni)} a ${dBR(P.contrFim)}</b> (${P.total} dias${P.contrFonte ? ' · ' + P.contrFonte : ''})</span><span>Decorridos <b>${P.decorrido}</b> · a vencer <b>${P.aVencer}</b></span>${o.responsavel ? `<span>Responsável <b>${esc(o.responsavel)}</b></span>` : ''}</div>
-      </div>${ehAdmin() ? '<div class="bar-actions no-print"><button class="btn sec2" data-go="editar-obra">Editar cadastro</button></div>' : ''}</div>
-      ${situacao}${cronoSec}${curva}${mensal}${financeiro}${frentes}${tarefas}${campo}${fotosSec}${mapaSec}${restr}${conf}`;
+      </div><div class="bar-actions no-print"><button class="btn sec2" data-copialink>Copiar link</button>${ehAdmin() ? '<button class="btn sec2" data-go="editar-obra">Editar cadastro</button>' : ''}</div></div>
+      ${situacao}${cronoSec}${curva}${tendSec}${mensal}${financeiro}${frentes}${tarefas}${campo}${fotosSec}${mapaSec}${restr}${conf}`;
   }
 
   // Admin: o que o cliente está vendo e o botão de publicar
@@ -1242,6 +1281,7 @@
 
   // ---------- cadastro de obra ----------
   const OPCOES_VA = { auto: 'Automático', mostrar: 'Mostrar sempre', ocultar: 'Não mostrar' };
+  const OPCOES_IP = { tempo: 'Prazo ganho, IDP(t) (recomendado)', percentual: 'IDP em % (realizado ÷ previsto)' };
   function viewNovaObra(o) {
     const f = (id, rot, v, tipo = 'text', extra = '') => `<div class="field"><label for="${id}">${rot}</label><input class="inp" id="${id}" type="${tipo}" value="${esc(v || '')}" ${extra}></div>`;
     const pz = (o && o.prazoContratual) || {};
@@ -1255,6 +1295,8 @@
         <div class="two">${f('o-resp', 'Responsável em campo', o && o.responsavel)}<div class="two">${f('o-ini', 'Início contratual', pz.inicio, 'date')}${f('o-fim', 'Fim contratual', pz.fim, 'date')}</div></div>
         <div class="field"><label for="o-va">Valor agregado no report</label><select class="inp" id="o-va">${Object.entries(OPCOES_VA).map(([k, t]) => `<option value="${k}" ${((o && o.reportVA) || 'auto') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
           <small class="hint">Automático: o quadro só entra no report quando há SPI e a Curva S financeira está na base do contrato. Na aba Obra, administradores e diretoria continuam vendo os números.</small></div>
+        <div class="field"><label for="o-ip">Índice que acende o farol de prazo</label><select class="inp" id="o-ip">${Object.entries(OPCOES_IP).map(([k, t]) => `<option value="${k}" ${((o && o.indicePrazo) || 'tempo') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+          <small class="hint">Prazo ganho: compara datas (em quantos dias o realizado está atrás do plano) e não perde sensibilidade no fim da obra; no primeiro mês, ou com menos de 2% previsto, o painel usa o IDP em %. IDP em %: realizado ÷ previsto, a regra anterior.</small></div>
         <div class="bar-actions"><button class="btn" type="submit">Salvar obra</button><button class="btn sec2" type="button" data-go="${o ? 'obra' : 'portfolio'}">Cancelar</button></div>
       </form>`;
   }
@@ -1355,6 +1397,28 @@
       ${ativ.map(a => linha(a, 0)).join('')}</div>`;
   }
 
+  // ---------- report no celular: resumo legível antes das folhas ----------
+  // No celular a folha A4 é reduzida até caber e o texto fica pequeno demais. O resumo traz o essencial em tamanho de
+  // leitura (só na tela estreita; fora da impressão e do PDF): situação, avanço, prazo, projeção, atenções e marcos.
+  function resumoCelular(o, r, X) {
+    const P = r.prazo, F = r.projecaoFaixa;
+    const proj = F ? [F.atrasoMantido, F.desempenhoMantido].sort().map(Core.mesCurto).filter((v, i, a) => a.indexOf(v) === i).join(' a ') : r.projecao ? '~' + Core.mesCurto(r.projecao) : '—';
+    const corPrazo = clsAtraso(r).replace('neg', 'crit').replace('pos', 'ok');
+    return `<section class="rx-mob no-print" aria-label="Resumo do report">
+      <div class="rx-mob-top">${pill(r.sem.k, r.sem.t)}<span>Posição de <b>${dBR(r.corte)}</b></span></div>
+      <div class="rx-mob-g">
+        <div><small>Realizado</small><b>${pct(r.real)}</b><span>planejado ${pct(r.prevCorte)}</span></div>
+        <div><small>Prazo</small><b class="${corPrazo}">${r.prazoGanho ? Core.textoAtraso(r.prazoGanho) : '—'}</b><span>${indicePrazo(r)}</span></div>
+        <div><small>Término do cronograma</small><b>${dBR(P.fimCron)}</b><span>${P.contrFim ? 'contrato ' + dBR(P.contrFim) : 'sem linha de base'}</span></div>
+        <div><small>Projeção</small><b>${proj}</b><span>${r.projecaoFonte === 'prazo' ? 'pelo prazo ganho' : r.projecaoFonte === 'ritmo' ? 'pelo ritmo de 3 meses' : 'histórico insuficiente'}</span></div>
+      </div>
+      ${X.manchete ? `<p class="rx-mob-lead">${esc(X.manchete)}</p>` : ''}
+      ${X.atencao.length ? `<h3>Pontos de atenção</h3><ul>${X.atencao.map(a => `<li><span class="rx-dot ${/paralis|atras/i.test(a.tag) ? 'crit' : 'warn'}">${esc(a.tag)}</span><b>${esc(a.titulo)}</b><small>${esc(a.det || '')}</small></li>`).join('')}</ul>` : ''}
+      ${X.marcos.lista.length ? `<h3>Próximos marcos</h3><ul>${X.marcos.lista.slice(0, 4).map(m => `<li><span class="rx-mob-d">${m.data ? dCurto(m.data) : 'a definir'}</span><b>${esc(m.nome)}</b>${m.situacao === 'vencido' ? '<small class="crit">vencido</small>' : m.slip ? `<small>${m.slip > 0 ? '+' : '−'}${Math.abs(m.slip)} d vs base</small>` : ''}</li>`).join('')}</ul>` : ''}
+      <p class="rx-mob-nota">As folhas completas do report seguem abaixo; para ler no tamanho original, use Baixar PDF.</p>
+    </section>`;
+  }
+
   // ---------- report: folhas A4 paisagem (rev. 25/10/2026) ----------
   // Desenho fixo, o mesmo em todas as obras, com cabeçalho e rodapé iguais em todas as folhas:
   //   Visão geral — identificação, 4 indicadores, leitura do período; Curva S física (esquerda), marcos e pontos de atenção (direita)
@@ -1383,7 +1447,7 @@
         s: `posição de ${dBR(r.corte)}` },
       { k: 'Planejado', ac: 'plan', v: pct(r.prevCorte), s: r.baseCorte !== null && r.baseCorte !== undefined ? `base ${pct(r.baseCorte)}` : 'cronograma atual' },
       { k: 'Comparado ao plano', ac: dsv || 'real', cls: dsv,
-        v: cp.dir === 0 ? 'Em linha' : pp(r.desvio), s: r.idp ? `IDP ${fmtNum(r.idp, 2)}` : 'IDP indisponível' },
+        v: cp.dir === 0 ? 'Em linha' : pp(r.desvio), s: r.prazoGanho ? `${Core.textoAtraso(r.prazoGanho)} · ${indicePrazo(r)}` : r.idp ? `IDP ${fmtNum(r.idp, 2)}` : 'IDP indisponível' },
       { k: P.contrFim ? 'Término previsto (base)' : 'Término previsto', ac: 'base', v: P.contrFim ? dBR(P.contrFim) : P.fimCron ? dBR(P.fimCron) : '—',
         s: P.contrFim ? `cronograma atual ${dBR(P.fimCron)}${slipFim ? ` · <b class="${slipFim > 0 ? 'warn' : 'ok'}">${dias(slipFim)}</b>` : ''}` : 'cronograma atual (sem linha de base)', html: true },
     ];
@@ -1480,7 +1544,8 @@
     return `
       <div class="head-row no-print"><div><div class="kicker">Report</div><h1 class="h1">Obra ${esc(o.codigo)} · ${corte}</h1>
         <p class="sub">Folhas A4 paisagem, com os mesmos quadros na mesma ordem em todas as obras${mapas.length ? ' e o mapa de avanço no fim' : ''}. O detalhe completo fica na aba Obra.</p></div>
-        <div class="bar-actions"><button class="btn" id="bt-pdf">Baixar PDF</button><a class="btn sec2" href="${mailto('', `Report de planejamento · Obra ${o.codigo} · ${corte}`, `Prezados,\n\nSegue o report de planejamento da obra ${o.codigo} · ${o.nome}, com posição de ${corte}.\n\nO painel completo está disponível em ${SITE()} (acesso com e-mail e senha).\n\nAtenciosamente,\nPlanejamento · Machine`)}">Enviar por e-mail</a></div></div>
+        <div class="bar-actions"><button class="btn" id="bt-pdf">Baixar PDF</button><a class="btn sec2" href="${mailto('', `Report de planejamento · Obra ${o.codigo} · ${corte}`, `Prezados,\n\nSegue o report de planejamento da obra ${o.codigo} · ${o.nome}, com posição de ${corte}.\n\nO painel completo está disponível em ${SITE()}#obra-${o.id}/report (acesso com e-mail e senha).\n\nAtenciosamente,\nPlanejamento · Machine`)}">Enviar por e-mail</a></div></div>
+      ${resumoCelular(o, r, X)}
       <div class="folhas" id="paper" data-corte="${r.corte}">
         ${folha('Visão geral', visao, 'fl-visao')}
         ${folha('Andamento das frentes', andamento, 'fl-andamento')}
@@ -1623,8 +1688,34 @@
       : S.view === 'acessos' ? viewAcessos() : S.view === 'nova-obra' ? viewNovaObra() : S.view === 'editar-obra' ? viewNovaObra(base)
       : S.view === 'senha' ? viewSenha() : S.view === 'github' ? viewGithub() : S.view === 'manual' ? viewManual() : viewReport();
     app.innerHTML = shell(v) + lightbox() + modalHTML();
-    bind(); desenha();
+    bind(); desenha(); atualizaEndereco();
   }
+  // ---------- links diretos ----------
+  // O endereço acompanha a tela: #portfolio · #obra-208 · #obra-208/report · #manual. Abrir o link (depois do login, se
+  // preciso) leva direto à mesma tela; telas administrativas não entram no endereço.
+  const TELAS_LINK = ['portfolio', 'obra', 'report', 'manual'];
+  function hashDaTela() {
+    if (!S.user || !TELAS_LINK.includes(S.view)) return null;
+    if (S.view === 'portfolio' || S.view === 'manual') return '#' + S.view;
+    return S.obraId ? `#obra-${S.obraId}${S.view === 'report' ? '/report' : ''}` : null;
+  }
+  function atualizaEndereco() {
+    const h = hashDaTela();
+    // troca de tela entra no histórico (o Voltar do navegador/celular volta à tela anterior); a primeira só marca o endereço
+    if (h && location.hash !== h) { try { history[location.hash ? 'pushState' : 'replaceState'](null, '', h); } catch (e) { /* sem histórico: segue sem link */ } }
+  }
+  function telaDoHash(h, u) {
+    const mo = h.match(/obra-([\w-]+)/);
+    if (mo && DB.obras.some(o => o.id === mo[1])) S.obraId = mo[1];
+    if (!S.obraId || !DB.obras.some(o => o.id === S.obraId)) S.obraId = DB.obras[0]?.id;
+    S.view = /report/.test(h) ? 'report' : mo ? 'obra' : /manual/.test(h) && u.perfil !== 'cliente' ? 'manual' : /alimentar/.test(h) && ehAdmin() ? 'alimentar'
+      : /portfolio/.test(h) && (DB.obras.length > 1 || u.perfil !== 'cliente') ? 'portfolio' : DB.obras.length > 1 || ehAdmin() ? 'portfolio' : 'obra';
+  }
+  window.addEventListener('hashchange', () => {
+    if (!S.user || S.carregando || location.hash === hashDaTela()) return;
+    telaDoHash(location.hash || '', S.user); S.mapaEd = null; render(); window.scrollTo(0, 0);
+  });
+  const linkDaTela = () => location.origin + location.pathname + (hashDaTela() || '');
   const carregandoFotos = {};
   async function carregarFotos(base) {
     if (carregandoFotos[base.id]) return;
@@ -1643,6 +1734,7 @@
     const el1 = $('#ch-curva'); if (el1 && el1.closest('details').open) Core.chartCurvaS(el1, o, r);
     const el2 = $('#ch-mensal'); if (el2 && el2.closest('details').open) Core.chartMensal(el2, o, r);
     const el3 = $('#ch-efetivo'); if (el3 && r.campo && el3.closest('details').open) Core.chartEfetivo(el3, r.campo);
+    const elT = $('#ch-tend'); if (elT && elT.closest('details').open) Core.chartTendencia(elT, r.tendencia);
     const rf = Core.calcFinanceiro(o, r.corte);
     const rFin = rf && rf.pts ? { pts: rf.pts, corte: r.corte, real: rf.evFrac, prevCorte: rf.pvFrac, baseCorte: rf.baseFrac, desvio: (rf.evFrac || 0) - (rf.pvFrac || 0) } : null;
     const el5 = $('#ch-fin'); if (el5 && rFin && el5.closest('details').open) Core.chartCurvaS(el5, o, rFin);
@@ -1744,8 +1836,20 @@
       const o = DB.obras.find(x => x.id === id);
       confirma(sim ? { titulo: 'Publicar para o cliente', texto: `O cliente da obra ${esc(o.codigo)} passa a ver a posição de <b>${dBR(o.dataCorte)}</b>.`, ok: 'Publicar' }
         : { titulo: 'Recolher publicação', texto: `O cliente deixa de ver a obra ${esc(o.codigo)} até uma nova publicação.`, ok: 'Recolher', perigo: true },
-        async () => { const ok = await gravando(sim ? 'Publicando…' : 'Recolhendo…', () => API.publicar(id, sim)); if (ok) { await recarregar(); toast(sim ? 'Publicado. O cliente verá esta posição em cerca de um minuto.' : 'Publicação recolhida.'); } });
+        async () => {
+          const ok = await gravando(sim ? 'Publicando…' : 'Recolhendo…', () => API.publicar(id, sim)); if (!ok) return;
+          await recarregar();
+          if (!sim) { toast('Publicação recolhida.'); return; }
+          toast('Publicado. O cliente verá esta posição em cerca de um minuto.');
+          S.modal = { tipo: 'avisar', ...avisoPublicacao(DB.obras.find(x => x.id === id) || o) }; render();
+        });
     });
+    $$('[data-copialink]').forEach(b => b.onclick = async () => {
+      const url = linkDaTela();
+      try { await navigator.clipboard.writeText(url); toast('Link copiado. Quem abrir faz login e cai direto nesta tela.'); }
+      catch (e) { toast('Copie o endereço: ' + url); }
+    });
+    const mav = $('#m-avisar'); if (mav) mav.onclick = () => { setTimeout(() => { S.modal = null; render(); }, 300); };
 
     // ----- acessos -----
     $$('[data-editacesso]').forEach(b => b.onclick = () => { S.editAcesso = b.dataset.editacesso || null; render(); const f = $('#f-edacesso') || $('#f-acesso'); if (f) f.scrollIntoView({ block: 'center' }); });
@@ -1783,7 +1887,7 @@
       const ini = v('o-ini') || null, fim = v('o-fim') || null;
       if (ini && fim && fim < ini) { toast('O fim contratual é anterior ao início.'); return; }
       const dados = { novo, id: novo ? v('o-codigo') : S.obraId, codigo: v('o-codigo'), nome: v('o-nome'), cliente: v('o-cliente'), contratante: v('o-contratante'), cidade: v('o-cidade'),
-        contrato: v('o-contrato'), local: v('o-local'), responsavel: v('o-resp'), reportVA: v('o-va'), prazo_inicio: ini, prazo_fim: fim, prazo_dias: ini && fim ? Core.diff(ini, fim) + 1 : null };
+        contrato: v('o-contrato'), local: v('o-local'), responsavel: v('o-resp'), reportVA: v('o-va'), indicePrazo: v('o-ip'), prazo_inicio: ini, prazo_fim: fim, prazo_dias: ini && fim ? Core.diff(ini, fim) + 1 : null };
       const o = await gravando(novo ? 'Cadastrando a obra…' : 'Salvando o cadastro…', () => API.salvarObra(dados));
       if (!o) return;
       S.obraId = o.id; S.view = novo ? 'alimentar' : 'obra'; await recarregar();
@@ -1846,10 +1950,7 @@
     try { DB.obras = await API.carregarObras(); }
     catch (e) { API.sair(); S.user = null; S.loginErro = e.message; S.view = 'login'; S.carregando = false; S.ocupado = null; render(); return; }
     S.carregando = false; S.ocupado = null;
-    const h = location.hash || '';
-    const mo = h.match(/obra-([\w-]+)/); if (mo && DB.obras.some(o => o.id === mo[1])) S.obraId = mo[1];
-    if (!S.obraId || !DB.obras.some(o => o.id === S.obraId)) S.obraId = DB.obras[0]?.id;
-    S.view = /report/.test(h) ? 'report' : /manual/.test(h) && u.perfil !== 'cliente' ? 'manual' : /alimentar/.test(h) && ehAdmin() ? 'alimentar' : DB.obras.length > 1 || ehAdmin() ? 'portfolio' : 'obra';
+    telaDoHash(location.hash || '', u);
     render(); window.scrollTo(0, 0);
   }
   (async () => {

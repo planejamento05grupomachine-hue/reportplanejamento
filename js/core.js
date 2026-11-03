@@ -107,6 +107,52 @@
     return pts.at(-1)[campo];
   }
 
+  // ---------- prazo ganho (Earned Schedule, Lipke 2003) ----------
+  // O IDP em % (realizado ÷ previsto) converge para 1 no fim de qualquer obra, mesmo atrasada, e no começo transforma
+  // diferenças pequenas em índices extremos. O prazo ganho mede o mesmo desvio em tempo:
+  //   ES (prazo ganho) = data em que o plano previa o avanço que a obra tem hoje
+  //   atraso = corte − ES, em dias (negativo = adiantada)
+  //   IDP(t) = (ES − início) ÷ (corte − início)  · 1,00 = no prazo
+  // Curva de referência: o previsto (replanejado), a mesma do IDP em %.
+  function dataDoPrevisto(pts, alvo) {
+    if (!pts.length || alvo === null || alvo === undefined || isNaN(alvo)) return null;
+    if (alvo <= (pts[0].previsto || 0)) return pts[0].data;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i], va = a.previsto || 0, vb = b.previsto || 0;
+      if (vb >= alvo - 1e-9) {
+        const f = vb > va ? (alvo - va) / (vb - va) : 1;
+        return addDias(a.data, Math.round(diff(a.data, b.data) * Math.max(0, Math.min(1, f))));
+      }
+    }
+    return pts.at(-1).data;
+  }
+  // idp: o IDP em % da obra no corte. O alvo é o IDP aplicado ao previsto da própria curva no corte, para o sinal do
+  // atraso seguir o do IDP mesmo quando o previsto do Cronograma e o da Curva S diferem por arredondamento.
+  function prazoGanho(pts, { idp, real, corte, ini }) {
+    if (!pts.length || idp === null || idp === undefined || isNaN(idp) || !ini || !corte) return null;
+    const prevC = interp(pts, 'previsto', corte);
+    if (!(prevC > 0)) return null;
+    const topo = Math.max(...pts.map(p => p.previsto || 0));
+    const alvo = real >= 0.9995 ? topo : Math.min(idp * prevC, topo);
+    const es = dataDoPrevisto(pts, alvo);
+    const at = diff(ini, corte);
+    const idpT = at > 0 ? Math.max(0, diff(ini, es)) / at : null;
+    // confiável depois de 1 mês de obra e 2% de previsto: antes disso um dia de diferença vira índice extremo
+    return { es, atraso: diff(es, corte), idpT, confiavel: at >= 30 && prevC >= 0.02 };
+  }
+  // Tendência do prazo: atraso e IDP(t) no último registro de realizado de cada mês até o corte, pela própria Curva S.
+  // Medido contra o previsto atual: depois de um replanejamento, os meses passados são relidos no plano novo
+  // (o histórico de cortes, obra.historico, guarda o que foi informado em cada data).
+  function tendenciaPrazo(pts, ini, corte) {
+    const porMes = new Map();
+    pts.filter(p => p.data > ini && p.data <= corte && (p.realizado || 0) > 0).forEach(p => porMes.set(p.data.slice(0, 7), p));
+    return [...porMes.values()].map(p => {
+      const prev = interp(pts, 'previsto', p.data), idp = prev > 0 ? p.realizado / prev : null;
+      const g = prazoGanho(pts, { idp, real: p.realizado, corte: p.data, ini });
+      return g ? { data: p.data, real: p.realizado, prev, idp, atraso: g.atraso, idpT: g.idpT, confiavel: g.confiavel } : null;
+    }).filter(Boolean);
+  }
+
   // ---------- EAP ----------
   // Fração do prazo da tarefa decorrida na data de corte (distribuição linear)
   function fracTempo(t, corte) {
@@ -169,7 +215,10 @@
     const prevCorte = usaCron ? cRaiz.previsto : interp(pts, 'previsto', corte);
     const baseCorte = usaCron ? cRaiz.base : interp(pts, 'base', corte);
     const idp = prevCorte > 0 ? real / prevCorte : null;
-    const sem = semaforo(idp, obra.faixas);
+    // Farol pelo prazo ganho (IDP em tempo) quando confiável; o cadastro pode voltar ao IDP em % (indicePrazo = 'percentual')
+    const prazoT = prazoGanho(pts, { idp, real, corte, ini: pts[0] && pts[0].data });
+    const farolTempo = obra.indicePrazo !== 'percentual' && !!(prazoT && prazoT.confiavel && prazoT.idpT !== null);
+    const sem = semaforo(farolTempo ? prazoT.idpT : idp, obra.faixas);
 
     // Prazo
     // Regra: o prazo contratual é SEMPRE a linha de base do Prevision (linha nível 1 do cronograma:
@@ -194,7 +243,21 @@
     // projeção só com histórico suficiente: 3 meses fechados com realizado e obra acima de 10% (no começo da obra
     // a média dos primeiros meses não representa o ritmo de produção e jogaria a conclusão para anos depois)
     const histOk = ult3.length >= 3 && ult3.every(m => (m.realizado || 0) > 0) && real >= 0.10;
-    const projecao = ritmo > 0 && histOk ? addDias(corte, Math.round(restante / ritmo * DIAS_MES)) : null;
+    const projecaoRitmo = ritmo > 0 && histOk ? addDias(corte, Math.round(restante / ritmo * DIAS_MES)) : null;
+    // Projeção pelo prazo ganho, como faixa (a média linear do ritmo ignora o formato em S e tende a ser otimista):
+    //  · se o atraso não aumentar: término do cronograma + atraso de hoje
+    //  · se o desempenho de prazo se mantiver: início + duração planejada ÷ IDP(t)
+    // Só com obra acima de 10% e IDP(t) confiável; nunca antes do corte. Sem isso, fica a projeção pelo ritmo.
+    const aposCorte = d => d && d < corte ? corte : d;
+    const faixaOk = prazoT && prazoT.confiavel && prazoT.idpT > 0 && real >= 0.10 && real < 0.9995 && fimCron && pts[0];
+    const projecaoFaixa = faixaOk ? {
+      atrasoMantido: aposCorte(addDias(fimCron, prazoT.atraso)),
+      desempenhoMantido: aposCorte(addDias(pts[0].data, Math.round(diff(pts[0].data, fimCron) / prazoT.idpT))),
+    } : null;
+    const projecao = projecaoFaixa ? projecaoFaixa.desempenhoMantido : projecaoRitmo;
+    const tendencia = tendenciaPrazo(pts, pts[0] ? pts[0].data : corte, corte);
+    if (prazoT && tendencia.length && tendencia.at(-1).data.slice(0, 7) === corte.slice(0, 7)) tendencia.pop();
+    if (prazoT) tendencia.push({ data: corte, real, prev: prevCorte, idp, atraso: prazoT.atraso, idpT: prazoT.idpT, confiavel: prazoT.confiavel });
     // pesos do Progresso por tarefas: só valem se a raiz fecha ~100% (exportação filtrada por período traz o planejado
     // acumulado do período no lugar do peso, ex.: raiz 12,84%)
     const pesoRaiz = raiz ? (raiz.base ?? raiz.previsto ?? 0) : 0;
@@ -297,7 +360,8 @@
 
     return { corte, real, prevCorte, baseCorte, desvio: real - prevCorte, idp, sem, pts,
       prazo: { decorrido, total: pc.dias, aVencer, fracTempo: pc.dias ? decorrido / pc.dias : null, iniCron, fimCron, contrIni: pc.inicio, contrFim: pc.fim, contrFonte: pc.fonte },
-      ritmo, ult3, restante, projecao, ritmoCron, ritmoContr,
+      ritmo, ult3, restante, projecao, projecaoRitmo, projecaoFaixa, projecaoFonte: projecaoFaixa ? 'prazo' : projecaoRitmo ? 'ritmo' : null,
+      prazoGanho: prazoT, farolTempo, tendencia, ritmoCron, ritmoContr,
       pacotes, subpacotes, lista, cont, atrasadas, proximas, faltaAtrasadas, piorPacote, piorSub, campo, periodo, fotos, crono, pesosOk, pesoRaiz };
   }
 
@@ -421,12 +485,21 @@
     const totalCurva = pts ? Math.max(pts.at(-1).previsto || 0, pts.at(-1).base || 0) : null;
     const mesmaBase = !!(bac && totalCurva && Math.abs(totalCurva / bac - 1) <= 0.15);
     const base100 = (mesmaBase ? bac : totalCurva) || bac || 1;
+    // Medido × executado: só com a curva na base do contrato (senão EV e medição estão em bases diferentes).
+    // Medido acima do EV = faturamento à frente da execução; abaixo = execução ainda não medida. Até 2% do contrato
+    // conta como em linha (a medição fecha no fim do mês e o EV vai até o corte).
+    const med = resumo && resumo.medidoAcumulado !== null && resumo.medidoAcumulado !== undefined ? resumo.medidoAcumulado : null;
+    const medidoVsExecutado = mesmaBase && ev !== null && med !== null && bac > 0 ? (() => {
+      const dif = med - ev, frac = dif / bac;
+      return { medido: med, ev, dif, frac, situacao: Math.abs(frac) <= 0.02 ? 'em-linha' : dif > 0 ? 'medido-acima' : 'medido-abaixo' };
+    })() : null;
     const ptsFrac = pts ? pts.map(p => ({ data: p.data, base: (p.base || 0) / base100, previsto: (p.previsto || 0) / base100, realizado: (p.realizado || 0) / base100 })) : null;
     return { pv, ev, baseVA, bac, ac, spi, cpi, eac, vac, sem, pts: ptsFrac, pontos$: pts,
       escala: pts ? (mesmaBase ? 'contrato' : 'orcamento') : null, totalCurva,
       pvFrac: pv !== null ? pv / base100 : null, evFrac: ev !== null ? ev / base100 : null, baseFrac: baseVA !== null ? baseVA / base100 : null,
       faturamento: resumo ? { contratual: resumo.totalContrato, medido: resumo.medidoAcumulado, saldo: resumo.saldo, ultimaMedicao: resumo.ultimaMedicao,
-        pctMedido: resumo.totalContrato && resumo.medidoAcumulado !== null ? resumo.medidoAcumulado / resumo.totalContrato : null } : null };
+        pctMedido: resumo.totalContrato && resumo.medidoAcumulado !== null ? resumo.medidoAcumulado / resumo.totalContrato : null } : null,
+      medidoVsExecutado };
   }
   // Valor agregado no report (cadastro da obra: obra.reportVA = 'auto' | 'mostrar' | 'ocultar').
   // Automático: só quando há SPI e a Curva S financeira está na base do contrato — sem isso o quadro vira só faturamento,
@@ -590,6 +663,28 @@
     };
   }
 
+  // ---------- projeção de término em texto ----------
+  // Pelo prazo ganho: faixa entre as duas hipóteses (ou um mês só, quando coincidem). Sem ela, pelo ritmo dos 3 últimos meses.
+  function fraseProjecao(r, html = false) {
+    const b = s => html ? `<b>${s}</b>` : s;
+    if (r.projecaoFonte === 'prazo') {
+      const f = r.projecaoFaixa, atr = r.prazoGanho.atraso;
+      const h = [[f.atrasoMantido, atr > 0 ? 'se o atraso de hoje não aumentar' : 'se a diferença de hoje se mantiver'], [f.desempenhoMantido, 'se o desempenho de prazo se mantiver']]
+        .sort((x, y) => x[0] < y[0] ? -1 : 1);
+      if (h[0][0].slice(0, 7) === h[1][0].slice(0, 7)) return `pelo desempenho de prazo até aqui, a conclusão fica por volta de ${b(mesLongo(h[0][0]))}`;
+      return `pelo desempenho de prazo até aqui, a conclusão fica entre ${b(mesLongo(h[0][0]))} (${h[0][1]}) e ${b(mesLongo(h[1][0]))} (${h[1][1]})`;
+    }
+    if (r.projecaoFonte === 'ritmo') return `no ritmo médio dos últimos 3 meses (${b(pct(r.ritmo) + ' ao mês')}), a conclusão fica por volta de ${b(mesLongo(r.projecao))}`;
+    return '';
+  }
+  // Atraso em dias em linguagem comum: "23 dias de atraso" · "5 dias adiantada" · "no prazo"
+  function textoAtraso(g) {
+    if (!g) return '—';
+    const n = Math.abs(g.atraso);
+    if (n < 1) return 'no prazo';
+    return g.atraso > 0 ? `${n} ${n === 1 ? 'dia' : 'dias'} de atraso` : `${n} ${n === 1 ? 'dia' : 'dias'} adiantada`;
+  }
+
   // ---------- narrativa automática (painel e report) ----------
   function narrativa(obra, r) {
     const out = [];
@@ -606,7 +701,8 @@
       out.push(t + '.');
     }
     // prazos (cronograma, base e contrato) e ritmo necessário já estão nos indicadores e na linha do tempo: aqui só a projeção
-    if (r.ritmo && r.projecao) out.push(`No ritmo dos últimos 3 meses (<b>${pct(r.ritmo)} ao mês</b>), a conclusão fica por volta de <b>${mesLongo(r.projecao)}</b>.`);
+    const fp = fraseProjecao(r, true);
+    if (fp) out.push(capital(fp) + '.');
     if (r.crono && r.crono.usado && r.crono.pendentes.length) {
       const k = r.crono.pendentes;
       out.push(`${k.length === 1 ? '1 serviço segue' : k.length + ' serviços seguem'} <b>pendente${k.length > 1 ? 's' : ''} de contratação</b>: ${k.map(l => esc(l.nomeExib)).join('; ')}.`);
@@ -758,7 +854,8 @@
     // Manchete (regra 18/10/2026): o farol do cabeçalho já diz a situação e os cartões já mostram realizado × planejado.
     // A frase só acrescenta o que não está à vista (projeção e onde está a maior diferença), sem repetir o juízo da obra.
     const frases = [];
-    if (r.projecao) frases.push(`No ritmo médio dos últimos 3 meses (${pct(r.ritmo)} ao mês), a conclusão projetada é ${mesLongo(r.projecao)}`);
+    const fp = fraseProjecao(r);
+    if (fp) frases.push(fp);
     if (r.pesosOk) {
       const maior = r.piorPacote && r.piorPacote.desvio <= -TOLERANCIA ? r.piorPacote : null;
       frases.push(maior ? `a maior diferença para o plano está em ${maior.nome} (${pp(maior.desvio)})` : 'todas as frentes em linha com o plano ou acima dele');
@@ -771,7 +868,7 @@
 
     const kpis = [
       { k: 'Avanço da obra', v: pct(r.real), s: `planejado para a data: ${pct(r.prevCorte)}` },
-      { k: 'Comparado ao plano', v: `${cp.seta ? cp.seta + ' ' : ''}${cp.curto}`, s: `índice de prazo ${fmtNum(r.idp, 2)} (1,00 = no ritmo)`, cls: cp.dir < 0 ? (r.sem.e === 'atrasada' ? 'crit' : 'warn') : 'ok' },
+      { k: 'Comparado ao plano', v: `${cp.seta ? cp.seta + ' ' : ''}${cp.curto}`, s: r.prazoGanho ? `${textoAtraso(r.prazoGanho)} · índice de prazo ${fmtNum(r.farolTempo ? r.prazoGanho.idpT : r.idp, 2)}` : `índice de prazo ${fmtNum(r.idp, 2)} (1,00 = no ritmo)`, cls: cp.dir < 0 ? (r.sem.e === 'atrasada' ? 'crit' : 'warn') : 'ok' },
       { k: 'Término projetado', v: r.projecao ? mesCurto(r.projecao) : '—', s: `cronograma ${dCurto(P.fimCron)}${r.crono && r.crono.slip ? ` (${r.crono.slip > 0 ? '+' : ''}${r.crono.slip} d vs base)` : ''} · contrato ${P.contrFim ? dBR(P.contrFim).slice(0, 6) + P.contrFim.slice(2, 4) : '—'}`, cls: r.projecao && r.projecao > P.fimCron ? 'crit' : '' },
     ];
 
@@ -1059,8 +1156,47 @@
     });
   }
 
+  // Tendência do prazo: atraso em dias no fim de cada mês (barra para cima = atraso, para baixo = adiantada).
+  // Meses em que o índice ainda não é confiável (início da obra) ficam esmaecidos.
+  function chartTendencia(el, serie, opts = {}) {
+    const W = Math.max(300, el.clientWidth || 640), estreito = W < 520, H = opts.altura || (estreito ? 190 : 220);
+    const m = { t: 16, r: 8, b: 30, l: 48 };
+    const dados = (serie || []).slice(-(estreito ? 12 : 24));
+    if (!dados.length) { el.innerHTML = ''; return; }
+    const maxA = niceMax(Math.max(5, ...dados.map(d => Math.abs(d.atraso))));
+    const temNeg = dados.some(d => d.atraso <= -1), temPos = dados.some(d => d.atraso >= 1);
+    const top = temPos || !temNeg ? maxA : 0, bot = temNeg ? -maxA : 0;
+    const Y = v => m.t + (top - v) / (top - bot) * (H - m.t - m.b);
+    const n = dados.length, slot = (W - m.l - m.r) / n, bw = Math.max(4, Math.min(26, slot - 6));
+    let g = '';
+    [...new Set([top, 0, bot])].forEach(v => { g += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '" class="' + (v === 0 ? 'zero' : 'grid') + '"/><text x="' + (m.l - 8) + '" y="' + (Y(v) + 4).toFixed(1) + '" class="ax" text-anchor="end">' + (v === 0 ? '0' : (v > 0 ? '+' : '−') + fmtNum(Math.abs(v), 0) + ' d') + '</text>'; });
+    dados.forEach((d, i) => {
+      const cx = m.l + slot * i + slot / 2, y0 = Y(0), y1 = Y(d.atraso), ult = i === n - 1;
+      const cls = (d.atraso > 0 ? 'bar-atr' : 'bar-adi') + (d.confiavel ? '' : ' fraco');
+      if (Math.abs(d.atraso) >= 1) g += '<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + Math.min(y0, y1).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(1, Math.abs(y1 - y0)).toFixed(1) + '" rx="1.5" class="' + cls + '"/>';
+      if (!estreito || ult || (n - 1 - i) % 2 === 0) g += '<text x="' + cx.toFixed(1) + '" y="' + (H - 10) + '" class="ax' + (ult ? ' ax-strong' : '') + '" text-anchor="middle">' + MES[+d.data.slice(5, 7) - 1] + (ult ? '*' : '') + '</text>';
+      g += '<rect x="' + (cx - slot / 2).toFixed(1) + '" y="' + m.t + '" width="' + slot.toFixed(1) + '" height="' + (H - m.t - m.b) + '" fill="transparent" class="hit" data-i="' + i + '"/>';
+    });
+    el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" role="img" aria-label="Atraso em dias no fim de cada mês">' + g + '</svg><div class="tip" hidden></div>';
+    const svg = el.querySelector('svg'), tip = el.querySelector('.tip');
+    svg.querySelectorAll('.hit').forEach(h => {
+      h.addEventListener('pointerenter', () => {
+        const i = +h.dataset.i, d = dados[i];
+        tip.innerHTML = '<b>' + dBR(d.data) + (i === n - 1 ? ' · corte' : '') + '</b>'
+          + '<span>Prazo <em>' + textoAtraso(d) + '</em></span>'
+          + '<span>IDP(t) <em>' + fmtNum(d.idpT, 2) + '</em></span>'
+          + '<span>Realizado <em>' + pct(d.real) + '</em> · previsto <em>' + pct(d.prev) + '</em></span>'
+          + (d.confiavel ? '' : '<span>início da obra: índice pouco estável</span>');
+        tip.hidden = false;
+        const bb = svg.getBoundingClientRect(); const px = (+h.getAttribute('x') + slot / 2) / W * bb.width;
+        tip.style.left = Math.min(bb.width - 190, Math.max(0, px + 10)) + 'px'; tip.style.top = '8px';
+      });
+      h.addEventListener('pointerleave', () => { tip.hidden = true; });
+    });
+  }
+
   root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, diaSemana, diff, addDias, semaforo, FAIXAS,
-    calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, narrativa, resumoExecutivo, chartCurvaS, chartMensal, chartCombo, chartEfetivo,
+    calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, dataDoPrevisto, prazoGanho, tendenciaPrazo, textoAtraso, fraseProjecao, chartTendencia, narrativa, resumoExecutivo, chartCurvaS, chartMensal, chartCombo, chartEfetivo,
     LIM_FOTOS: LIM.fotos, calcFinanceiro, moeda, moedaCurta, vaNoReport, empresasFrente, qualidadeRdo, qualidadeDocs, LIMIAR_DIAS: { fisico: LIMIAR_DIAS_FISICO, financeiro: LIMIAR_DIAS_FINANCEIRO }, MAPA_ST, atividadesParaMapa, ptsZona, geoZona, mapasDaObra, fotoNoMapa };
 })(typeof window !== 'undefined' ? window : globalThis);
 

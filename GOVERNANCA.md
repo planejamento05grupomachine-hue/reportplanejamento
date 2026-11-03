@@ -84,3 +84,51 @@ conferência com o Progresso mensal usa o último ponto de cada mês.
 O painel avisa quando um dado está desatualizado além da cadência esperada (aba Obra →
 Conferência dos dados): mais de 10 dias sem corte físico, ou mais de 35 dias sem corte
 financeiro (`LIMIAR_DIAS_FISICO`/`LIMIAR_DIAS_FINANCEIRO` em `js/core.js`).
+
+## Prazo ganho (Earned Schedule): farol de prazo em dias
+
+O IDP em % (realizado ÷ previsto) converge para 1,00 no fim de qualquer obra, mesmo atrasada, e no começo transforma
+diferenças pequenas em índices extremos. Desde a revisão de 11/2026 o painel mede o mesmo desvio em **tempo**
+(`Core.prazoGanho`):
+
+| Termo | Cálculo | Leitura |
+|---|---|---|
+| **ES** (prazo ganho) | data em que o previsto da Curva S alcança o avanço realizado de hoje | até onde o plano chegaria com o que já foi feito |
+| **Atraso** | data de corte − ES, em dias | "23 dias de atraso" · "5 dias adiantada" |
+| **IDP(t)** | (ES − início) ÷ (corte − início) | 1,00 = no prazo; mesmas faixas do farol (0,95 / 0,85) |
+
+- Curva de referência: o **previsto (replanejado)**, a mesma do IDP em %. O alvo é o IDP aplicado ao previsto da própria
+  curva no corte, para o sinal do atraso acompanhar o do IDP mesmo quando Cronograma e Curva S diferem por arredondamento.
+- O farol usa o IDP(t) quando ele é confiável: **30 dias ou mais de obra e pelo menos 2% previsto**. Antes disso vale o IDP em %.
+- Cadastro da obra → *Índice que acende o farol de prazo*: `indicePrazo = 'tempo'` (padrão) ou `'percentual'` (regra anterior).
+- **Projeção de término em faixa** (com obra acima de 10% e IDP(t) confiável), nunca antes do corte:
+  - *se o atraso de hoje não aumentar*: término do cronograma + atraso;
+  - *se o desempenho de prazo se mantiver*: início + duração do cronograma ÷ IDP(t).
+
+  Sem essas condições, fica a projeção anterior pelo ritmo médio dos 3 últimos meses fechados.
+
+## Tendência do prazo e histórico de cargas
+
+- **Tendência** (aba Obra): atraso em dias no último realizado de cada mês, pela própria Curva S, até o corte. Medida
+  contra o cronograma atual: depois de um replanejamento os meses passados são relidos no plano novo.
+- **Histórico de cargas** (`obra.historico`, gravado por `Carga.aplicarCarga` em toda carga física, manual ou automática):
+  um registro por data de corte com realizado, previsto, IDP, atraso, IDP(t), farol, término do cronograma e projeção.
+  Recarga da mesma data substitui o registro; guarda até 156 cortes. É o que o painel mostrava em cada data, mesmo que a
+  Curva S mude depois. O cliente só vê registros até a posição publicada.
+
+## Medido × executado (interno)
+
+Com a Curva S financeira na base do contrato (±15%), o painel compara o **medido acumulado** (Controle de Medição) com o
+**EV** no corte. Diferença de até 2% do contrato = em linha; acima = medição à frente da execução; abaixo = execução ainda
+não medida. Aparece só para administradores e diretoria, na aba Obra (não vai para o report nem para o cliente).
+
+## Acesso e compartilhamento
+
+- **Links diretos**: o endereço acompanha a tela (`#portfolio`, `#obra-208`, `#obra-208/report`, `#manual`); quem abre o
+  link faz login e cai na mesma tela. Botão *Copiar link* na aba Obra. O Voltar do navegador volta à tela anterior.
+- **Aviso de publicação**: depois de *Publicar para o cliente*, o painel oferece um e-mail pronto para os clientes com
+  acesso à obra (cópia oculta, link direto para o report). O envio sai do programa de e-mail de quem publicou.
+- **Report no celular**: em tela estreita, um resumo legível (situação, avanço, prazo, projeção, atenções e marcos) vem
+  antes das folhas A4. Não entra no PDF nem na impressão.
+- **Token do GitHub**: por padrão fica só até fechar o navegador; *Lembrar neste computador* vale 7 dias. Use token
+  fine-grained, só deste repositório, com validade de até 90 dias.
