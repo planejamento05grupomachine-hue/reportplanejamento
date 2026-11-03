@@ -218,7 +218,10 @@
     // Farol pelo prazo ganho (IDP em tempo) quando confiável; o cadastro pode voltar ao IDP em % (indicePrazo = 'percentual')
     const prazoT = prazoGanho(pts, { idp, real, corte, ini: pts[0] && pts[0].data });
     const farolTempo = obra.indicePrazo !== 'percentual' && !!(prazoT && prazoT.confiavel && prazoT.idpT !== null);
-    const sem = semaforo(farolTempo ? prazoT.idpT : idp, obra.faixas);
+    // Início da obra: com menos de 2% previsto na data e sem índice em tempo confiável, o farol não acende
+    // (0,8% planejado e nada medido no primeiro dia não é atraso; é a mesma régua do IDP(t) confiável)
+    const inicioObra = !farolTempo && (prevCorte || 0) < 0.02 && (real || 0) < 0.02;
+    const sem = inicioObra ? { k: 'neutro', t: 'Início da obra', e: 'inicio' } : semaforo(farolTempo ? prazoT.idpT : idp, obra.faixas);
 
     // Prazo
     // Regra: o prazo contratual é SEMPRE a linha de base do Prevision (linha nível 1 do cronograma:
@@ -361,7 +364,7 @@
     return { corte, real, prevCorte, baseCorte, desvio: real - prevCorte, idp, sem, pts,
       prazo: { decorrido, total: pc.dias, aVencer, fracTempo: pc.dias ? decorrido / pc.dias : null, iniCron, fimCron, contrIni: pc.inicio, contrFim: pc.fim, contrFonte: pc.fonte },
       ritmo, ult3, restante, projecao, projecaoRitmo, projecaoFaixa, projecaoFonte: projecaoFaixa ? 'prazo' : projecaoRitmo ? 'ritmo' : null,
-      prazoGanho: prazoT, farolTempo, tendencia, ritmoCron, ritmoContr,
+      prazoGanho: prazoT, farolTempo, inicioObra, tendencia, ritmoCron, ritmoContr,
       pacotes, subpacotes, lista, cont, atrasadas, proximas, faltaAtrasadas, piorPacote, piorSub, campo, periodo, fotos, crono, pesosOk, pesoRaiz };
   }
 
@@ -690,8 +693,10 @@
     const out = [];
     const cp = comparaPlano(r.desvio);
     // os números do avanço e do desvio já estão nos indicadores logo acima: a leitura começa onde eles param
-    if (cp.dir >= 0) out.push(`Avanço ${cp.longo} na data de corte (${dBR(r.corte)}).`);
-    if (!r.pesosOk) {
+    if (r.inicioObra) out.push(`Obra em início: ${pct(r.prevCorte)} previsto até ${dBR(r.corte)}${r.real > 0 ? ` e ${pct(r.real)} realizado` : ', ainda sem medição'}. O farol de prazo acende a partir de 2% previsto.`);
+    else if (cp.dir >= 0) out.push(`Avanço ${cp.longo} na data de corte (${dBR(r.corte)}).`);
+    if (r.inicioObra) { /* diferença de frente no primeiro mês é ruído: fica de fora da leitura */ }
+    else if (!r.pesosOk) {
       // pesos inválidos (Progresso por tarefas filtrado por período): diferença lida no avanço da própria atividade
       const m = atividades(r).filter(a => a.plan - a.feito >= 0.05).sort((a, b) => (b.plan - b.feito) - (a.plan - a.feito))[0];
       if (m) out.push(`A maior diferença para o plano está em <b>${esc(m.nome)}</b>: ${pct(m.feito, 0)} feito de ${pct(m.plan, 0)} planejado na data.`);
@@ -944,7 +949,8 @@
     const frases = [];
     const fp = fraseProjecao(r);
     if (fp) frases.push(fp);
-    if (r.pesosOk) {
+    if (r.inicioObra) frases.push(`obra em início, com ${pct(r.prevCorte)} previsto até ${dBR(r.corte)}${r.real > 0 ? ` e ${pct(r.real)} realizado` : ' e ainda sem medição'}; término do cronograma em ${dBR(r.prazo.fimCron)}`);
+    else if (r.pesosOk) {
       const maior = r.piorPacote && r.piorPacote.desvio <= -TOLERANCIA ? r.piorPacote : null;
       frases.push(maior ? `a maior diferença para o plano está em ${maior.nome} (${pp(maior.desvio)})` : 'todas as frentes em linha com o plano ou acima dele');
     } else {
@@ -1217,8 +1223,9 @@
     g += `<text x="${f[0] + (dir ? 8 : -8)}" y="${f[1] + (sep && f[1] >= yp ? 16 : 4)}" class="lbl lbl-real" text-anchor="${dir ? 'start' : 'end'}">${pct(r.real)}</text>`;
     const ypl = yp - 7 < m.t + 4 ? yp + 15 : yp - 7;
     g += `<text x="${xc - 8}" y="${ypl}" class="lbl" text-anchor="end">${pct(r.prevCorte)}</text>`;
-    const dirC = xc + 70 < W - m.r;
-    g += `<text x="${xc + (dirC ? 5 : -5)}" y="${yB1 - 7}" class="ax" text-anchor="${dirC ? 'start' : 'end'}">corte ${dCurto(r.corte)}</text>`;
+    // corte perto do início do eixo: o rótulo passa para depois de "No mês" (senão os dois se sobrepõem)
+    const dirC = xc + 70 < W - m.r, xRot = dirC ? Math.max(xc + 5, m.l + 52) : xc - 5;
+    g += `<text x="${xRot}" y="${yB1 - 7}" class="ax" text-anchor="${dirC ? 'start' : 'end'}">corte ${dCurto(r.corte)}</text>`;
     meses.forEach((k, i) => { g += `<rect x="${m.l + slot * i}" y="${m.t}" width="${slot}" height="${yB0 - m.t}" fill="transparent" class="hit" data-i="${i}"/>`; });
     el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Avanço físico: acumulado realizado ${pct(r.real)} contra planejado ${pct(r.prevCorte)} em ${dBR(r.corte)}; abaixo, o avanço de cada mês">${g}</svg><div class="tip" hidden></div>`;
     const svg = el.querySelector('svg'), tip = el.querySelector('.tip');

@@ -108,3 +108,22 @@ test('medido × executado: só na base do contrato, com tolerância de 2%', () =
   o.medicao.resumo.totalContrato = 3e6; // curva em outra base (orçamento × contrato): não compara
   assert.equal(Core.calcFinanceiro(o, '2026-06-30').medidoVsExecutado, null);
 });
+
+test('início da obra: com menos de 2% previsto o farol fica neutro ("Início da obra"), não "Atrasada"', () => {
+  const o = obraFicticia({ corte: '2026-01-05', realPorMes: [] });
+  o.curva[1].realizado = null;
+  const r = Core.calc(o);
+  assert.ok(r.prevCorte < 0.02);
+  assert.equal(r.sem.e, 'inicio');
+  assert.equal(r.inicioObra, true);
+  assert.match(Core.narrativa(o, r)[0], /Obra em início/);
+});
+
+test('conferência: obra sem medição (Curva S sem realizado, tarefas em 0%) não acusa realizados diferentes', () => {
+  const o = obraFicticia({ corte: '2026-01-05', realPorMes: [] });
+  const curva = o.curva.map(p => ({ ...p, realizado: 0 }));
+  const tarefas = o.tarefas.map(t => ({ ...t, realizado: 0 }));
+  const out = Carga.conferencia({ codigo: '900', tarefas: [], curva: [] }, { dados: { curva, tarefas }, nomes: {} });
+  assert.ok(out.some(([k, t]) => k === 'ok' && /sem medição/.test(t)));
+  assert.ok(!out.some(([, t]) => /realizados diferentes/.test(t)));
+});

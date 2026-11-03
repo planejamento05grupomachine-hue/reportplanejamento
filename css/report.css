@@ -332,3 +332,4 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
   .fl-int { display: none !important; }
   .folha, .folha * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+.rx-st.neutro { color: var(--rx-muted, #7A828C); } .rx-st.neutro::before { background: var(--rx-faint, #B8C0CA); }

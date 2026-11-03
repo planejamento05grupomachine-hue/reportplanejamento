@@ -416,7 +416,7 @@
             <div class="kpis">
               <div class="kpi"><span>Comparado ao plano</span><b class="${r.sem.k === 'critico' ? 'crit' : r.sem.k === 'atencao' ? 'warn' : r.desvio >= Core.TOLERANCIA ? 'ok' : ''}">${Core.comparaPlano(r.desvio).dir === 0 ? 'Em linha' : pp(r.desvio)}</b><small>planejado ${pct(r.prevCorte)} na data</small></div>
               ${r.prazoGanho ? `<div class="kpi"><span>Prazo</span><b class="${clsAtraso(r).replace('neg', 'crit').replace('pos', 'ok')}">${Core.textoAtraso(r.prazoGanho)}</b><small>${r.farolTempo ? `IDP(t) ${fmtNum(r.prazoGanho.idpT, 2)} · IDP em % ${fmtNum(r.idp, 2)}` : `IDP ${fmtNum(r.idp, 2)} · ${r.prazoGanho.confiavel ? 'farol pelo IDP em % (cadastro da obra)' : 'início da obra, índice em tempo ainda instável'}`}</small></div>`
-                : `<div class="kpi"><span>IDP</span><b>${fmtNum(r.idp, 2)}</b><small>realizado ÷ previsto</small></div>`}
+                : r.inicioObra ? `<div class="kpi"><span>Prazo</span><b>—</b><small>início da obra · farol a partir de 2% previsto</small></div>` : `<div class="kpi"><span>IDP</span><b>${fmtNum(r.idp, 2)}</b><small>realizado ÷ previsto</small></div>`}
               <div class="kpi"><span>Ritmo atual</span><b>${pct(r.ritmo)}</b><small>média/mês · últimos 3 meses</small></div>
               ${(() => { const dias = diff(r.corte, P.fimCron);
                 // a menos de 30 dias do fim do cronograma, "% ao mês" vira número sem sentido (ex.: 182% ao mês): mostra o que falta e o prazo
@@ -918,18 +918,25 @@
   }
 
   function blocoConferencia(o, r) {
-    const raiz = o.tarefas.find(t => t.nivel === 1);
-    const somaF = o.tarefas.filter(t => t.folha).reduce((s, t) => s + t.previsto, 0);
-    const ultCurva = [...o.curva].reverse().find(p => p.realizado > 0);
-    const idpmZero = o.mensal.every(m => !m.idpm);
+    // tudo calculado com os dados da própria obra (obra sem medição, sem Progresso mensal ou sem RDO não quebra)
+    const tarefas = o.tarefas || [], curva = o.curva || [], mensal = o.mensal || [];
+    const raiz = tarefas.find(t => t.nivel === 1);
+    const somaF = tarefas.filter(t => t.folha).reduce((s, t) => s + (t.previsto || 0), 0);
+    const ultCurva = [...curva].reverse().find(p => p.realizado > 0);
+    const idpmZero = mensal.length && mensal.every(m => !m.idpm);
     const atrasoPrev = r.atrasadas.filter(t => (t.atrasoPrevision || 0) < t.diasAtraso - 7).length;
+    const realRaiz = raiz ? raiz.realizado || 0 : null;
+    const real = !ultCurva && realRaiz !== null && realRaiz < 0.0005 ? ['ok', 'Obra ainda sem medição: Curva S e Progresso por tarefas sem realizado.']
+      : ultCurva && realRaiz !== null && Math.abs(ultCurva.realizado - realRaiz) < 0.001 ? ['ok', `Realizado da Curva S (${pct(ultCurva.realizado, 2)}) bate com o total do Progresso por tarefas (${pct(realRaiz, 2)}).`]
+      : ['av', `Realizado da Curva S (${ultCurva ? pct(ultCurva.realizado, 2) : '—'}) e do Progresso por tarefas (${realRaiz === null ? '—' : pct(realRaiz, 2)}) diferentes: exportações de dias diferentes.`];
+    const divergeEm = (curva.find(p => Math.abs((p.base || 0) - (p.previsto || 0)) > 0.0005) || {}).data;
     const itens = [
-      ['ok', `Realizado da Curva S (${pct(ultCurva.realizado, 2)}) bate com o total do Progresso por tarefas (${pct(raiz.realizado, 2)}).`],
+      real,
       [Math.abs(somaF - 1) < 0.001 ? 'ok' : 'av', `As tarefas finais somam ${pct(somaF, 2)} de peso. A diferença vem do arredondamento do Prevision e é redistribuída no cálculo do previsto por frente.`],
-      [idpmZero ? 'av' : 'ok', idpmZero ? 'A coluna IDPM do Progresso mensal veio zerada. O IDP do painel é calculado aqui (realizado ÷ previsto).' : 'IDPM preenchido no Progresso mensal.'],
+      mensal.length ? [idpmZero ? 'av' : 'ok', idpmZero ? 'A coluna IDPM do Progresso mensal veio zerada. O IDP do painel é calculado aqui (realizado ÷ previsto).' : 'IDPM preenchido no Progresso mensal.'] : ['av', 'Sem Progresso mensal: o ritmo dos últimos meses e as barras por mês ficam de fora.'],
       [atrasoPrev ? 'av' : 'ok', `${atrasoPrev} tarefas atrasadas aparecem no Prevision com bem menos dias de atraso do que a data de término indica. O painel usa a conta pela data.`],
-      ['av', 'As atividades do RDO não trazem o código da EAP. Para ligar campo e cronograma será preciso um de-para serviço → EAP.'],
-      [o.curva.some(p => p.base !== p.previsto) ? 'ok' : 'av', o.curva.some(p => p.base !== p.previsto) ? 'Base e Previsto divergem a partir de jul/2026: houve replanejamento. O painel compara com o Previsto e mostra a Base como referência.' : 'Base igual ao Previsto.'],
+      ...((o.rdos || []).length ? [['av', 'As atividades do RDO não trazem o código da EAP. Para ligar campo e cronograma será preciso um de-para serviço → EAP.']] : []),
+      divergeEm ? ['ok', `Base e Previsto divergem a partir de ${Core.mesLongo(divergeEm)}: houve replanejamento. O painel compara com o Previsto e mostra a Base como referência.`] : ['ok', 'Base e Previsto iguais: o cronograma segue a linha de base original.'],
     ];
     return `<div class="check">${itens.map(([k, t]) => `<div class="${k}"><i>${k === 'ok' ? '✓' : k === 'av' ? '!' : '×'}</i><span>${t}</span></div>`).join('')}</div>
       <div class="meta"><span>Fontes: <b>${esc(Object.values(o.fontes || {}).join(' · '))}</b></span></div>`;
@@ -1614,7 +1621,7 @@
         s: `posição de ${dBR(r.corte)}` },
       { k: 'Planejado', ac: 'plan', v: pct(r.prevCorte), s: r.baseCorte !== null && r.baseCorte !== undefined ? `base ${pct(r.baseCorte)}` : 'cronograma atual' },
       { k: 'Comparado ao plano', ac: dsv || 'real', cls: dsv,
-        v: cp.dir === 0 ? 'Em linha' : pp(r.desvio), s: r.prazoGanho ? `${Core.textoAtraso(r.prazoGanho)} · ${indicePrazo(r)}` : r.idp ? `IDP ${fmtNum(r.idp, 2)}` : 'IDP indisponível' },
+        v: cp.dir === 0 ? 'Em linha' : pp(r.desvio), s: r.inicioObra ? 'início da obra · farol a partir de 2% previsto' : r.prazoGanho ? `${Core.textoAtraso(r.prazoGanho)} · ${indicePrazo(r)}` : r.idp ? `IDP ${fmtNum(r.idp, 2)}` : 'IDP indisponível' },
       { k: P.contrFim ? 'Término previsto (base)' : 'Término previsto', ac: 'base', v: P.contrFim ? dBR(P.contrFim) : P.fimCron ? dBR(P.fimCron) : '—',
         s: P.contrFim ? `cronograma atual ${dBR(P.fimCron)}${slipFim ? ` · <b class="${slipFim > 0 ? 'warn' : 'ok'}">${dias(slipFim)}</b>` : ''}` : 'cronograma atual (sem linha de base)', html: true },
     ];

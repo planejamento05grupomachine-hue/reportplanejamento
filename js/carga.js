@@ -75,8 +75,10 @@
       out.push([Math.abs(soma - 1) < 0.001 ? 'ok' : 'av', `Pesos das tarefas finais somam ${pct(soma, 2)}${Math.abs(soma - 1) < 0.001 ? '' : ' (arredondamento do Prevision; o painel normaliza)'}.`]);
       if (d.curva && raiz) {
         const ult = [...d.curva].reverse().find(p => p.realizado > 0);
-        const ok = ult && Math.abs(ult.realizado - raiz.realizado) < 0.001;
-        out.push([ok ? 'ok' : 'av', ok ? 'Curva S e Progresso por tarefas mostram o mesmo realizado.' : 'Curva S e Progresso por tarefas mostram realizados diferentes: confira se foram exportados no mesmo dia.']);
+        // obra que ainda não teve medição: a Curva S não traz realizado nenhum e as tarefas estão em 0% — é o mesmo realizado
+        const semMedicao = !ult && (raiz.realizado || 0) < 0.0005;
+        const ok = semMedicao || (ult && Math.abs(ult.realizado - raiz.realizado) < 0.001);
+        out.push([ok ? 'ok' : 'av', semMedicao ? 'Obra ainda sem medição: Curva S e Progresso por tarefas sem realizado.' : ok ? 'Curva S e Progresso por tarefas mostram o mesmo realizado.' : 'Curva S e Progresso por tarefas mostram realizados diferentes: confira se foram exportados no mesmo dia.']);
       }
     }
     if (d.cronograma) {
