@@ -28,7 +28,12 @@ async function carregarXLSX() {
     const bytes = Buffer.from(await r.arrayBuffer());
     if (sha256(bytes) !== XLSX_SHA256) throw Object.assign(new Error('O SheetJS baixado não confere com o SHA-256 esperado.'), { codigo: 'DEPENDENCIA' });
     fs.mkdirSync(CACHE, { recursive: true });
-    fs.writeFileSync(arq, bytes);
+    // gravação atômica: os arquivos de teste rodam em processos paralelos e, com o cache vazio (CI), um processo lia o
+    // arquivo pela metade enquanto outro gravava. Grava num temporário e renomeia: o nome final só existe completo.
+    const tmp = `${arq}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmp, bytes);
+    try { fs.renameSync(tmp, arq); }
+    catch (e) { try { fs.unlinkSync(tmp); } catch (x) { /* já removido */ } if (!fs.existsSync(arq)) throw e; }
   }
   return require(arq);
 }
