@@ -251,4 +251,6 @@ async function exportarObra(context, obra, pasta, lerCurva, naturezas = ['fisico
   return out;
 }
 
-module.exports = { abrirNavegador, exportarObra, selecionarProjeto, hashNome, normNome, primeiroDoMesAnterior, primeiroDoSegundoMesSeguinte };
+module.exports = { abrirNavegador, exportarObra, selecionarProjeto, hashNome, normNome, primeiroDoMesAnterior, primeiroDoSegundoMesSeguinte,
+  // para os diagnósticos locais (sync/diagnostico-*.cjs)
+  _internas: { irPara, definirVisao, atualizarDashboard, exportarQuadro } };

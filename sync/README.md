@@ -37,8 +37,11 @@ também não altera cadastro, prazos contratuais ou textos.
 - **Login do Prevision na exportação:** a tela de login tem **reCAPTCHA Enterprise**. A rotina **não** digita senha e
   não tenta passar pelo captcha: reaproveita uma sessão aberta por uma pessoa (`node sync/sessao.cjs`), guardada como
   segredo. Quando a sessão vence, o conjunto físico falha com `SESSAO_PREVISION_EXPIRADA` (nada dele é gravado) e o
-  Valor Agregado pela API segue normalmente. **Ainda não se sabe quanto tempo a sessão dura**: o funcionamento semanal
-  desassistido do físico só pode ser afirmado depois de algumas semanas de execução real.
+  Valor Agregado pela API segue normalmente. **A sessão dura cerca de 3 dias** (medido em 02/11/2026): o cookie
+  `_ust_valid_` vale até a meia-noite (UTC) do 3º dia depois do login e, sem ele, o Prevision volta para o login, mesmo
+  com o token `_ust_` (≈10 dias) ainda válido. Sessão salva em 28/10 funcionou em 30/10 e venceu em 31/10. Com rotina
+  semanal, o físico **não** roda sozinho: é preciso renovar a sessão no máximo 2 dias antes de cada execução (ver
+  "Sessão de 3 dias" em Operação). A rotina não forja nem estende esses cookies.
 
 ### O que vem de onde
 
@@ -92,7 +95,7 @@ configurado, e a tarefa raiz exportada tem de ser a mesma da carga atual do pain
 | Painel | Prevision (interface = API) | Vínculo | Habilitada | Fonte no `auto` | Observação |
 |---|---|---|---|---|---|
 | 198 | 32419 | confirmado | sim | físico: exportação · VA: API | exportações e API conferidas com dados reais |
-| 207 | 37748 | confirmado | sim | exportação | exportação automática simulada sem bloqueio em 28/10/2026 |
+| 207 | 37748 | confirmado | sim | exportação | a carga manual de 25/10 tinha a Curva S na perspectiva Econômica (idêntica à exportação Econômica nos 12 pontos) e tarefas/Cronograma na Física; em 02/11/2026 passou para a Física, a régua das outras obras (nenhuma linha de base nova no Prevision desde 06/08) |
 | 208 | 40210 | confirmado | sim | exportação | exportação automática simulada sem bloqueio em 28/10/2026 |
 | 211 | 41940 | confirmado | sim (só físico) | exportação | VA desligado: no Prevision a visão econômica está sem dados (orçamento não vinculado ao cronograma) |
 | — | 42195 (210), 42528 (212) | fora | — | — | projetos do Prevision sem obra no painel: não são importados |
@@ -181,6 +184,9 @@ simulando (bom para as primeiras semanas).
   por e-mail quem configurou o agendamento.
 - **Desativar:** variável `SYNC_ATIVO` diferente de `true` (ou Actions → *Disable workflow*). Para tirar uma obra:
   `"habilitada": false`; para voltar o Valor Agregado à exportação: `api.equivalenciaValidada: null`.
+- **Sessão de 3 dias:** antes de cada execução com dados físicos, renovar a sessão (`node sync/sessao.cjs`, login
+  no Chromium) e colar em `PREVISION_SESSAO` (Settings → Secrets and variables → Actions → `PREVISION_SESSAO` →
+  Update secret). O Valor Agregado pela API não depende disso.
 - **Recuperar:**
   - `SESSAO_PREVISION_EXPIRADA` / `SEM_SESSAO_PREVISION`: renovar com `node sync/sessao.cjs` e atualizar o segredo;
   - `TOKEN_PREVISION`: gerar novo token no Prevision e atualizar `PREVISION_API_TOKEN`;
