@@ -3,9 +3,10 @@ name: Sincronização Prevision
 
 on:
   schedule:
-    # quarta-feira 07:15 em America/Sao_Paulo = 10:15 UTC (o Brasil não tem horário de verão desde 2019).
-    # Para mudar o horário, mude esta linha (o GitHub só aceita cron em UTC).
-    - cron: '15 10 * * 3'
+    # sexta-feira 14:00 em America/Sao_Paulo = 17:00 UTC (o Brasil não tem horário de verão desde 2019).
+    # Para mudar o horário, mude esta linha (o GitHub só aceita cron em UTC) e EXECUCAO em sync/lib/sessao-prevision.cjs
+    # (o aviso de sessão, .github/workflows/aviso-sessao.yml, confere a validade contra este horário).
+    - cron: '0 17 * * 5'
   workflow_dispatch:
     inputs:
       obra:
@@ -87,6 +88,18 @@ jobs:
             args+=(--fonte "${FONTE:-auto}")
           fi
           node sync/sincronizar.cjs "${args[@]}" --relatorio "$RUNNER_TEMP/relatorio-sync.bin"
+
+      # Sienge e Diário de Obra: só confere conexão e credencial (somente leitura; não grava nada e não bloqueia a
+      # carga do Prevision). Sem os segredos, aparece "não configurado". Ver sync/README.md → Fontes externas.
+      - name: Fontes externas (Sienge, Diário de Obra) — conexão
+        if: always()
+        continue-on-error: true
+        env:
+          SIENGE_SUBDOMINIO: ${{ secrets.SIENGE_SUBDOMINIO }}
+          SIENGE_USUARIO: ${{ secrets.SIENGE_USUARIO }}
+          SIENGE_SENHA: ${{ secrets.SIENGE_SENHA }}
+          DIARIO_TOKEN: ${{ secrets.DIARIO_TOKEN }}
+        run: node sync/fontes-externas.cjs --verificar
 
       - name: Relatório detalhado (cifrado com a chave interna do painel)
         if: always()

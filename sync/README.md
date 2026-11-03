@@ -1,6 +1,6 @@
 # Sincronização semanal Prevision → Painel de Obras Machine
 
-Toda quarta-feira às 07:15 (America/Sao_Paulo) a rotina coleta no Prevision os **Dados físicos (%)** e os **Dados
+Toda **sexta-feira às 14:00** (America/Sao_Paulo; desde 03/11/2026, antes quarta 07:15) a rotina coleta no Prevision os **Dados físicos (%)** e os **Dados
 financeiros — Valor Agregado** das obras configuradas, confere com as mesmas regras da tela **Alimentar** (mais estritas,
 porque ninguém revisa) e grava a carga como **rascunho**. **Publicar para o cliente continua manual**, na tela da obra.
 
@@ -15,7 +15,8 @@ também não altera cadastro, prazos contratuais ou textos.
 | Testado com dados fictícios | 24 testes automatizados (`node --test "sync/test/*.test.cjs"`) e, no navegador, o painel abrindo o rascunho gravado pela rotina (cofre fictício, contas Administrador e Diretoria) |
 | Testado com dados reais (obra 198) | Exportações reais coletadas e **simulação** dos dois conjuntos sem bloqueio · navegador e Node leem os mesmos arquivos com o mesmo resultado (SHA-256 dos dados, data de corte e conferência iguais) · **API oficial**: projetos e ids confirmados, equivalência API × exportação comprovada (ver abaixo) e simulação do Valor Agregado pela API sem bloqueio |
 | **Não testado** | Gravação real no painel (faltam os segredos do GitHub e da conta da automação) · exportação automática por Playwright contra o Prevision (falta a sessão salva; os seletores foram conferidos na página real, o roteiro não rodou) |
-| **Agendamento** | **Inativo.** O workflow só roda agendado com a variável `SYNC_ATIVO = true`. Não ative antes de uma execução manual real concluída e conferida |
+| **Agendamento** | Sexta 14:00 (cron `0 17 * * 5`, UTC). Só roda agendado com a variável `SYNC_ATIVO = true`. Execuções manuais reais concluídas em 30/10 e 02/11/2026 (rascunho das quatro obras) |
+| **Aviso de sessão** | `.github/workflows/aviso-sessao.yml`: quinta 09:00 e sexta 08:00 lê a validade de `PREVISION_SESSAO` e fica vermelho (o GitHub avisa por e-mail) se ela não cobre a execução de sexta |
 
 ## Arquitetura e por quê
 
@@ -167,7 +168,9 @@ em falhas de rede/servidor; sessão vencida ou token recusado param aquela fonte
 | `PREVISION_API_TOKEN` | token da API oficial (Valor Agregado e conferências) | Prevision → Configurações → Token de API (perfil Administrador do Prevision). Já gerado em 27/10/2026: cole o valor no segredo |
 | `PAINEL_GH_TOKEN` | token para gravar no repositório | GitHub → Settings → Developer settings → Fine-grained tokens: só este repositório, *Contents: Read and write*, validade curta (ex.: 90 dias) |
 | `PAINEL_EMAIL` / `PAINEL_SENHA` | conta da automação no painel | No painel, **Acessos → criar acesso** com perfil **Diretoria** (lê tudo, inclusive rascunhos; não publica nem mexe em acessos). Use um e-mail próprio da automação |
-| `PREVISION_SESSAO` | sessão do Prevision para a exportação (não é a senha) | Num computador com a conta do Prevision: `cd sync && npm install && npx playwright install chromium`, depois `node sync/sessao.cjs` e `gh secret set PREVISION_SESSAO < arquivo` |
+| `PREVISION_SESSAO` | sessão do Prevision para a exportação (não é a senha) | Num computador com a conta do Prevision: `cd sync && npm install && npx playwright install chromium`, depois, toda semana, `node sync/sessao.cjs --enviar` (grava direto neste segredo; ver "Sessão de 3 dias") |
+| `SIENGE_SUBDOMINIO` / `SIENGE_USUARIO` / `SIENGE_SENHA` | usuário de API do Sienge, só consulta | ver "Fontes externas" (em implantação) |
+| `DIARIO_TOKEN` | token da API externa do Diário de Obra | ver "Fontes externas" (em implantação) |
 
 Variáveis (aba *Variables*): `SYNC_ATIVO` = `true` liga o agendamento; `SYNC_MODO` = `simular` mantém o agendamento só
 simulando (bom para as primeiras semanas).
@@ -184,9 +187,12 @@ simulando (bom para as primeiras semanas).
   por e-mail quem configurou o agendamento.
 - **Desativar:** variável `SYNC_ATIVO` diferente de `true` (ou Actions → *Disable workflow*). Para tirar uma obra:
   `"habilitada": false`; para voltar o Valor Agregado à exportação: `api.equivalenciaValidada: null`.
-- **Sessão de 3 dias:** antes de cada execução com dados físicos, renovar a sessão (`node sync/sessao.cjs`, login
-  no Chromium) e colar em `PREVISION_SESSAO` (Settings → Secrets and variables → Actions → `PREVISION_SESSAO` →
-  Update secret). O Valor Agregado pela API não depende disso.
+- **Sessão de 3 dias (rotina semanal):** entre **quarta à tarde e sexta antes das 14:00**, uma pessoa renova a sessão:
+  `node sync/sessao.cjs --enviar` (abre o Chromium, você entra no Prevision, a sessão vai direto para o segredo
+  `PREVISION_SESSAO`, sem copiar e colar). `node sync/sessao.cjs --validade` diz até quando a sessão vale e se cobre a
+  próxima sexta. Se ninguém renovar, o aviso de quinta/sexta fica vermelho e, na sexta, só o Valor Agregado (API) entra.
+  Token do `--enviar`: fine-grained, só este repositório, **Secrets: Read and write**, em `PAINEL_SEGREDOS_TOKEN` ou no
+  arquivo `~/.painel-sync/github-segredos.token` (nunca no repositório).
 - **Recuperar:**
   - `SESSAO_PREVISION_EXPIRADA` / `SEM_SESSAO_PREVISION`: renovar com `node sync/sessao.cjs` e atualizar o segredo;
   - `TOKEN_PREVISION`: gerar novo token no Prevision e atualizar `PREVISION_API_TOKEN`;
@@ -201,6 +207,53 @@ simulando (bom para as primeiras semanas).
 
 Observações do GitHub: horários agendados podem atrasar alguns minutos; em repositório público sem atividade por 60 dias
 o agendamento é suspenso (as cargas mantêm o repositório ativo).
+
+## Fontes externas: Sienge e Diário de Obra (em implantação, 03/11/2026)
+
+Objetivo: na mesma rotina de sexta, colher também no **Sienge** (medição, custo realizado, compras e contratos) e no
+**Diário de Obra** (RDOs, hoje enviados em PDF pela tela Alimentar), **sem alterar nada nas ferramentas**.
+
+**Somente leitura, por construção.** Os dois clientes (`sync/lib/sienge.cjs`, `sync/lib/diario-obra.cjs`) passam por
+`sync/lib/somente-leitura.cjs`, que só sabe fazer **GET**: qualquer outro método é recusado antes de sair da máquina
+(`SOMENTE_LEITURA`), mesmo que o usuário da API tenha mais permissões. Credenciais só em cabeçalho (nunca em URL ou log).
+
+| Fonte | API | Autenticação | Segredos |
+|---|---|---|---|
+| Sienge | `https://api.sienge.com.br/{subdominio}/public/api/v1/…` e `/public/api/bulk-data/v1/…` | Basic, com um **usuário de API** do Painel de Integrações | `SIENGE_SUBDOMINIO`, `SIENGE_USUARIO`, `SIENGE_SENHA` |
+| Diário de Obra | `https://apiexterna.diariodeobra.app/v1/…` (`obras`, `obras/{id}/relatorios`, `obras/{id}/relatorios/{id}`) | cabeçalho `token` | `DIARIO_TOKEN` |
+
+**Etapas**
+
+1. ✅ Clientes somente leitura, diagnóstico (`sync/fontes-externas.cjs`), vínculo vazio em `sync/obras.json`
+   (`sienge.obraId`, `diarioObra.obraId`), conferência de conexão na rotina de sexta (não bloqueia o Prevision), testes.
+2. ⏳ **Credenciais** (abaixo).
+3. ⏳ **Diagnóstico com as credenciais**: `node sync/fontes-externas.cjs --explorar --detalhar` no seu terminal. Mostra as
+   obras de cada sistema com o código achado no nome (proposta de vínculo), quais recursos o usuário alcança e a
+   **estrutura** das respostas (nomes de campos, sem valores). Com isso: preencher os ids em `sync/obras.json`.
+4. ⏳ **Leitura para o painel**, sobre a estrutura real: RDO do Diário de Obra no mesmo formato do PDF (fotos, efetivo,
+   clima, frentes); medição e custo realizado do Sienge para o valor agregado (libera CPI e EAC, hoje sem AC); solicitações,
+   pedidos e contratos pendentes por obra, cruzados com as restrições de Contratação/Material. Tudo grava como rascunho,
+   com as mesmas regras de validação.
+
+### Criar o usuário de API do Sienge (somente consulta)
+
+1. No Sienge, com um administrador: **Painel de Integrações → APIs → Usuários de API → Novo usuário**. Nome sugerido:
+   `painel-obras-leitura`. Guarde usuário e senha (a senha só aparece na criação).
+2. Libere **apenas** os recursos de consulta que a rotina lê (lista em `RECURSOS`, `sync/lib/sienge.cjs`): empreendimentos/obras,
+   solicitações de compra, pedidos de compra, contratos de suprimentos e suas medições, notas fiscais de compra, contas a
+   pagar (bulk-data), orçamento da obra e medições de avanço. Quando a tela permitir escolher o método, só **GET/consulta**.
+3. O **subdomínio** é o nome da empresa no endereço da API (`https://api.sienge.com.br/<subdominio>/…`), o mesmo que aparece
+   no endereço do Sienge da empresa.
+4. GitHub → Settings → Secrets and variables → Actions: `SIENGE_SUBDOMINIO`, `SIENGE_USUARIO`, `SIENGE_SENHA`.
+
+### Token do Diário de Obra
+
+1. No Diário de Obra (web.diariodeobra.app), com o usuário administrador da empresa: procure em **Configurações da
+   empresa → Integrações / API** a opção de gerar o token da **API externa**. Se não aparecer no plano atual, peça ao
+   suporte do Diário de Obra o token da API externa (`apiexterna.diariodeobra.app`) para leitura.
+2. GitHub → Secrets: `DIARIO_TOKEN`.
+
+Depois dos segredos, a execução de sexta passa a mostrar, no passo *Fontes externas — conexão*, se cada credencial funciona.
 
 ## Testes
 

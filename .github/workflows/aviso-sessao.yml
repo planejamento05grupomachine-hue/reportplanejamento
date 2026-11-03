@@ -1,0 +1,32 @@
+# Aviso da sessão do Prevision antes da sincronização de sexta 14:00 (sync-prevision.yml).
+# A sessão vale ~3 dias e só uma pessoa consegue renová-la (o login tem reCAPTCHA). Na quinta 09:00 e na sexta 08:00
+# (Brasília), este workflow lê a validade da sessão guardada em PREVISION_SESSAO, sem abrir o Prevision e sem gravar
+# nada. Se ela não cobre a execução de sexta, a execução fica vermelha e o GitHub avisa por e-mail: renove com
+#   node sync/sessao.cjs --enviar
+name: Aviso da sessão do Prevision
+
+on:
+  schedule:
+    - cron: '0 12 * * 4'   # quinta 09:00 em Brasília
+    - cron: '0 11 * * 5'   # sexta 08:00 em Brasília (última chamada antes das 14:00)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validade:
+    if: github.event_name == 'workflow_dispatch' || vars.SYNC_ATIVO == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: A sessão cobre a sincronização de sexta 14:00?
+        env:
+          PREVISION_SESSAO: ${{ secrets.PREVISION_SESSAO }}
+        run: node sync/sessao.cjs --validade

@@ -16,7 +16,7 @@
     {
       "painelId": "198", "codigo": "198",
       "conferenciaNome": { "sha256": "0aee1d724d7e3f1caff6e8ed486d55ffdb66ac4e22ea39f4478cbedeaf446cab" },
-      "prevision": { "ganttId": 32419, "apiProjectId": "32419" },
+      "prevision": { "ganttId": 32419, "apiProjectId": "32419" }, "sienge": { "obraId": null }, "diarioObra": { "obraId": null },
       "vinculo": "confirmado",
       "evidencia": "27/10/2026: código 198 no nome do projeto, nome confere com o hash e id 32419 igual na interface (Gantt) e na API oficial. Exportações reais conferidas: Cronograma e Progresso por tarefas com 410 linhas ligadas e o mesmo realizado da Curva S física. Na execução, a tarefa raiz ainda é comparada com a da carga atual do painel.",
       "habilitada": true,
@@ -31,7 +31,7 @@
     {
       "painelId": "207", "codigo": "207",
       "conferenciaNome": { "sha256": "d95bf71a5a6642f77e07befbf3dda44a34af6032c2f20cbef190fc4a3a3b830b" },
-      "prevision": { "ganttId": 37748, "apiProjectId": "37748" },
+      "prevision": { "ganttId": 37748, "apiProjectId": "37748" }, "sienge": { "obraId": null }, "diarioObra": { "obraId": null },
       "vinculo": "confirmado",
       "evidencia": "27/10/2026: código 207 no nome do projeto, nome confere com o hash e id 37748 igual na interface e na API. 28/10/2026: exportação automática simulada sem bloqueio (340 de 340 linhas do Cronograma ligadas às tarefas; Valor Agregado válido).",
       "habilitada": true,
@@ -40,7 +40,7 @@
     {
       "painelId": "208", "codigo": "208",
       "conferenciaNome": { "sha256": "0e1570c9c66cf17e1ff5d2481e4b8e1ad980979d5f44d201622e710260f68c62" },
-      "prevision": { "ganttId": 40210, "apiProjectId": "40210" },
+      "prevision": { "ganttId": 40210, "apiProjectId": "40210" }, "sienge": { "obraId": null }, "diarioObra": { "obraId": null },
       "vinculo": "confirmado",
       "evidencia": "27/10/2026: código 208 no nome do projeto, nome confere com o hash e id 40210 igual na interface e na API. 28/10/2026: exportação automática simulada sem bloqueio (físico e Valor Agregado).",
       "habilitada": true,
@@ -49,7 +49,7 @@
     {
       "painelId": "211", "codigo": "211",
       "conferenciaNome": { "sha256": "f332bc74383ea0a8bcda9bc5ea0033d6281d1f5b385cd7eae26b156d74fad357" },
-      "prevision": { "ganttId": 41940, "apiProjectId": "41940" },
+      "prevision": { "ganttId": 41940, "apiProjectId": "41940" }, "sienge": { "obraId": null }, "diarioObra": { "obraId": null },
       "vinculo": "confirmado",
       "evidencia": "27/10/2026: código 211 no nome do projeto, nome confere com o hash e id 41940 igual na interface e na API. 28/10/2026: físico simulado sem bloqueio (602 de 602 linhas ligadas, depois de atualizar o Dashboard do Prevision). Valor Agregado desligado: no Prevision a perspectiva econômica está sem dados (falta vincular o orçamento ao cronograma) — religar quando vincular.",
       "habilitada": true,
