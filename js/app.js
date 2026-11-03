@@ -125,6 +125,8 @@
     return `<details class="sec" data-sec="${id}" ${open ? 'open' : ''}><summary><span class="mk"></span><h2>${titulo}</h2><span class="rt"><span class="rtxt">${direita || ''}</span><span class="chev">${IC.chev}</span></span></summary><div class="sec-body">${corpo}</div></details>`;
   };
   const pill = (k, t) => `<span class="pill ${k}">${esc(t)}</span>`;
+  // Atalhos da aba Obra (fixos no topo ao rolar): a página tem até 13 seções; o toque abre a seção e rola até ela
+  const navSecoes = itens => { const v = itens.filter(i => i[0]); return v.length < 4 ? '' : `<nav class="sec-nav no-print" aria-label="Seções da obra">${v.map(([, id, t]) => `<button data-irsec="${id}">${t}</button>`).join('')}</nav>`; };
   // Índice que acende o farol: IDP(t) (prazo ganho, em tempo) quando confiável; senão, o IDP em % (início da obra ou cadastro)
   const indicePrazo = r => r.farolTempo ? `IDP(t) ${fmtNum(r.prazoGanho.idpT, 2)}` : `IDP ${fmtNum(r.idp, 2)}`;
   const clsAtraso = r => !r.prazoGanho || Math.abs(r.prazoGanho.atraso) < 1 ? '' : r.prazoGanho.atraso < 0 ? 'pos' : r.sem.k === 'critico' ? 'neg' : r.sem.k === 'atencao' ? 'warn' : '';
@@ -313,38 +315,46 @@
     // pontos de atenção na mesma escala para todas as obras
     // restrições vencidas: só para a equipe interna (o cliente não recebe as restrições)
     const hojeP = hojeLocal(), vencidasDe = o => (o.restricoes || []).filter(x => Core.farolRestricao(x, hojeP).k === 'critico').length;
-    const atencao = (r, o) => [['Tarefas atrasadas', r.cont.atrasada], ['Frentes paralisadas', r.campo ? r.campo.paralisadas.length : 0], ['A contratar', r.crono ? r.crono.pendentes.length : 0], ...(ehCliente() ? [] : [['Restrições vencidas', vencidasDe(o)]])];
-    const maxAt = Math.max(1, ...obras.flatMap(x => atencao(x.r, x.o).map(a => a[1])));
+    const atencao = r => [['Tarefas atrasadas', r.cont.atrasada], ['Frentes paralisadas', r.campo ? r.campo.paralisadas.length : 0], ['A contratar', r.crono ? r.crono.pendentes.length : 0]];
+    const maxAt = Math.max(1, ...obras.flatMap(x => atencao(x.r).map(a => a[1])));
+    // equipe interna: uma linha de restrições por obra (a mesma conta da aba Restrições)
+    const interno = !ehCliente();
+    const indRes = o => Core.indicadoresRestricoes(o.restricoes || [], hojeP);
+    const resVencidas = interno ? obras.reduce((s, x) => s + vencidasDe(x.o), 0) : 0;
     const coluna = ({ o, r, cor }) => {
       const P = r.prazo, slip = r.crono && r.crono.slip, cp = Core.comparaPlano(r.desvio);
       const corDesvio = r.sem.k === 'critico' ? 'neg' : r.desvio >= Core.TOLERANCIA ? 'pos' : '';
       return `<article class="pf-col" style="--ac:${cor}">
-        <button class="pf-cab" data-obra="${esc(o.id)}" aria-label="Abrir a obra ${esc(o.codigo)}"><small>Obra ${esc(o.codigo)}</small><b>${esc(o.nome)}</b><span>${esc([o.cliente, o.cidade].filter(Boolean).join(' · '))}</span></button>
+        <button class="pf-cab" data-obra="${esc(o.id)}" aria-label="Abrir a obra ${esc(o.codigo)}"><small>Obra ${esc(o.codigo)} · corte ${dCurto(r.corte)}${diff(r.corte, hojeP) > Core.LIMIAR_DIAS.fisico ? ` · <span class="pf-velho">há ${diff(r.corte, hojeP)} dias</span>` : ''}</small><b>${esc(o.nome)}</b><span>${esc([o.cliente, o.cidade].filter(Boolean).join(' · '))}</span></button>
         <div class="pf-cel"><h4>Prazo</h4><dl class="pf-dt"><dt>Início</dt><dd>${dBR(P.contrIni || P.iniCron)}</dd><dt>Término</dt><dd>${dBR(P.contrFim || P.fimCron)}</dd>
           <dd class="rest">${!P.contrFim ? 'datas do cronograma' : P.aVencer >= 0 ? `${P.aVencer} dias a vencer` : `vencido há ${-P.aVencer} dias`}</dd></dl></div>
-        <div class="pf-cel"><h4>Avanço físico</h4><div class="pf-donut">${donutObra(r.real, r.prevCorte)}<p><span>Realizado</span><b>${pct(r.real)}</b><span>previsto ${pct(r.prevCorte)}</span></p></div></div>
-        <div class="pf-cel"><h4>Planejado × realizado</h4><div class="pf-bars">
-          <div class="pl"><b>${pct(r.prevCorte, 1)}</b><i style="height:${Math.max(1, r.prevCorte * 100)}%"></i><span>Planejado</span></div>
-          <div><b>${pct(r.real, 1)}</b><i style="height:${Math.max(1, r.real * 100)}%"></i><span>Realizado</span></div></div></div>
+        <div class="pf-cel"><h4>Avanço físico</h4><div class="pf-av"><p><b>${pct(r.real)}</b><span>realizado · planejado ${pct(r.prevCorte)}</span></p>
+          <div class="pf-bul" role="img" aria-label="Realizado ${pct(r.real)}, planejado ${pct(r.prevCorte)}"><i style="width:${Math.min(100, r.real * 100)}%"></i><em style="left:${Math.min(100, r.prevCorte * 100)}%"></em></div>
+          <div class="pf-bul-l"><span>0%</span><span>100%</span></div></div></div>
+        ${interno ? (() => { const I = indRes(o); return `<div class="pf-cel"><h4>Restrições</h4><div class="pf-sit">
+          <div><span>Vencidas</span><b class="${I.vencidas ? 'neg' : ''}">${I.vencidas}</b></div>
+          <div><span>Abertas · vencem em 7 dias</span><b>${I.abertas} · ${I.vencem7}</b></div>
+          <div><span>IRR · 4 semanas</span><b class="${I.irr4 === null ? '' : I.irr4 >= I.meta ? 'pos' : 'neg'}">${I.irr4 === null ? '—' : pct(I.irr4, 0)}</b></div>
+          <button class="pf-res" data-obrares="${esc(o.id)}">Abrir restrições ${IC.right}</button></div></div>`; })() : ''}
         <div class="pf-cel"><h4>Situação</h4><div class="pf-sit">
           <div>${pill(r.sem.k, r.sem.t)}<b>${indicePrazo(r)}</b></div>
           ${r.prazoGanho ? `<div><span>Prazo</span><b class="${clsAtraso(r)}">${Core.textoAtraso(r.prazoGanho)}</b></div>` : ''}
           <div><span>Comparado ao plano</span><b class="${corDesvio}">${cp.dir === 0 ? 'em linha' : pp(r.desvio)}</b></div>
           <div><span>Término do cronograma</span><b class="${slip > 0 ? 'neg' : slip < 0 ? 'pos' : ''}">${dCurto(P.fimCron)}${slip ? ` (${slip > 0 ? '+' : ''}${slip} d)` : ''}</b></div></div></div>
-        <div class="pf-cel"><h4>Pontos de atenção</h4><div class="pf-iss">${atencao(r, o).map(([t, n]) => `<div class="${n ? '' : 'z'}"><span>${t}</span><i style="width:${n ? Math.max(4, n / maxAt * 100) : 4}%"></i><b>${n}</b></div>`).join('')}</div></div>
+        <div class="pf-cel"><h4>Pontos de atenção</h4><div class="pf-iss">${atencao(r).map(([t, n]) => `<div class="${n ? '' : 'z'}"><span>${t}</span><i style="width:${n ? Math.max(4, n / maxAt * 100) : 4}%"></i><b>${n}</b></div>`).join('')}</div></div>
         <button class="pf-abre" data-obra="${esc(o.id)}">Abrir a obra ${IC.right}</button>
       </article>`;
     };
     return `${cabecalho}<p class="sub">Posição física das obras até ${dBR(corte)}.</p></div>
       <div class="kpi-strip">
         <div class="kpi-t neutro"><span>Obras ativas</span><b>${obras.length}</b><small>com cronograma carregado</small></div>
-        <div class="kpi-t"><span>Avanço médio</span><b>${pct(realMed)}</b><small>previsto ${pct(prevMed)} na data</small></div>
+        ${interno ? `<div class="kpi-t ${resVencidas ? 'crit' : 'ok'}"><span>Restrições vencidas</span><b class="${resVencidas ? 'crit' : ''}">${resVencidas}</b><small>em todas as obras</small></div>` : `<div class="kpi-t"><span>Avanço médio</span><b>${pct(realMed)}</b><small>previsto ${pct(prevMed)} na data</small></div>`}
         <div class="kpi-t ${atrasadas ? 'crit' : 'ok'}"><span>Obras atrasadas</span><b class="${atrasadas ? 'crit' : ''}">${atrasadas}</b><small>índice de prazo abaixo de ${fmtNum(Core.FAIXAS.atencao, 2)}</small></div>
         <div class="kpi-t ${tarefasAtr ? 'crit' : 'ok'}"><span>Tarefas atrasadas</span><b>${tarefasAtr}</b><small>em todas as obras</small></div>
         <div class="kpi-t ${paralis ? 'crit' : 'ok'}"><span>Frentes paralisadas</span><b class="${paralis ? 'crit' : ''}">${paralis}</b><small>no último RDO de cada obra</small></div>
       </div>
-      <section class="pf" style="--n:${obras.length}" aria-label="Obras">
-        <div class="pf-lab" aria-hidden="true"><div>${esc(Core.mesLongo(corte))}</div><div>${ICP.prazo}Prazo</div><div>${ICP.avanco}Avanço físico</div><div>${ICP.barras}Planejado × realizado</div><div>${ICP.sit}Situação</div><div>${IC.alert}Pontos de atenção</div><div class="pf-vazio"></div></div>
+      <section class="pf" style="--n:${obras.length};--l:${interno ? 7 : 6}" aria-label="Obras">
+        <div class="pf-lab" aria-hidden="true"><div>${esc(Core.mesLongo(corte))}</div><div>${ICP.prazo}Prazo</div><div>${ICP.avanco}Avanço físico</div>${interno ? `<div>${IC.rlist}Restrições</div>` : ''}<div>${ICP.sit}Situação</div><div>${IC.alert}Pontos de atenção</div><div class="pf-vazio"></div></div>
         ${obras.map(coluna).join('')}
       </section>
       ${vazias.length || ehAdmin() ? `<div class="obras-sem">
@@ -374,26 +384,26 @@
     const t0 = P.contrIni || P.iniCron, t1 = [P.contrFim, r.projecao, P.fimCron, ...(fx || [])].filter(Boolean).sort().at(-1);
     const X = d => Math.max(0, Math.min(100, diff(t0, d) / Math.max(1, diff(t0, t1)) * 100));
     const rotProj = !r.projecao ? null : F
-      ? ['proj', r.projecao, 'Projeção pelo prazo ganho', fx[0].slice(0, 7) === fx[1].slice(0, 7) ? '~' + Core.mesCurto(fx[0]) : `${Core.mesCurto(fx[0])} a ${Core.mesCurto(fx[1])}`]
-      : ['proj', r.projecao, 'Projeção no ritmo atual', '~' + Core.mesCurto(r.projecao)];
+      ? ['proj', r.projecao, 'Projeção', fx[0].slice(0, 7) === fx[1].slice(0, 7) ? '~' + Core.mesCurto(fx[0]) : `${Core.mesCurto(fx[0])} a ${Core.mesCurto(fx[1])}`]
+      : ['proj', r.projecao, 'Projeção (ritmo)', '~' + Core.mesCurto(r.projecao)];
     const marcos = [
-      ['corte', r.corte, 'Data de corte', dBR(r.corte)],
-      ['cron', P.fimCron, 'Fim do cronograma', dBR(P.fimCron)],
+      ['corte', r.corte, 'Corte', dBR(r.corte)],
+      ['cron', P.fimCron, 'Término cron.', dBR(P.fimCron)],
       rotProj,
-      P.contrFim ? ['contr', P.contrFim, 'Fim contratual', dBR(P.contrFim)] : null,
+      P.contrFim ? ['contr', P.contrFim, 'Contrato', dBR(P.contrFim)] : null,
     ].filter(Boolean);
     const tl = `<div class="tl" aria-label="Linha do tempo de prazos">
         <div class="tl-bar"><div class="axis"></div><div class="done" style="width:${X(r.corte)}%"></div>
           ${marcos.map(([k, d]) => `<i class="mk mk-${k}" style="left:${X(d)}%"></i>`).join('')}</div>
         <div class="tl-ends"><span>${dBR(t0)}</span><span>${dBR(t1)}</span></div>
-        <div class="tl-leg">${marcos.map(([k, d, t, v]) => `<span><i class="mk-${k}"></i>${t} <b>${v}</b></span>`).join('')}</div>
+        <dl class="tl-leg">${marcos.map(([k, d, t, v]) => `<div><dt><i class="mk-${k}"></i>${t}</dt><dd>${v}</dd></div>`).join('')}</dl>
       </div>`;
 
     const situacao = `
       <div class="card" style="overflow:hidden">
         <div class="sit">
           <div>
-            <div class="chips">${pill(r.sem.k, r.sem.t)}<span class="pill plain">Corte ${dBR(r.corte)}</span>${ehCliente() ? '' : (c && c.rdosPendentes ? `<span class="pill atencao">${c.rdosPendentes} RDO em preenchimento</span>` : '')}</div>
+            <div class="chips">${pill(r.sem.k, r.sem.t)}${(() => { const idade = diff(r.corte, hojeLocal()); return `<span class="pill ${idade > Core.LIMIAR_DIAS.fisico ? 'atencao' : 'plain'}" title="Data de corte dos dados físicos">Corte ${dBR(r.corte)}${idade > Core.LIMIAR_DIAS.fisico ? ` · há ${idade} dias` : ''}</span>`; })()}${ehCliente() ? '' : (c && c.rdosPendentes ? `<span class="pill atencao">${c.rdosPendentes} RDO em preenchimento</span>` : '')}</div>
             <div style="margin-top:14px" class="kicker">Avanço físico realizado</div>
             <div class="hero-n num">${fmtNum(r.real * 100, 1)}<small>%</small></div>
             <div class="hero-sub">previsto para a data: <b>${pct(r.prevCorte)}</b> · base original ${pct(r.baseCorte)}</div>
@@ -408,7 +418,10 @@
               ${r.prazoGanho ? `<div class="kpi"><span>Prazo</span><b class="${clsAtraso(r).replace('neg', 'crit').replace('pos', 'ok')}">${Core.textoAtraso(r.prazoGanho)}</b><small>${r.farolTempo ? `IDP(t) ${fmtNum(r.prazoGanho.idpT, 2)} · IDP em % ${fmtNum(r.idp, 2)}` : `IDP ${fmtNum(r.idp, 2)} · ${r.prazoGanho.confiavel ? 'farol pelo IDP em % (cadastro da obra)' : 'início da obra, índice em tempo ainda instável'}`}</small></div>`
                 : `<div class="kpi"><span>IDP</span><b>${fmtNum(r.idp, 2)}</b><small>realizado ÷ previsto</small></div>`}
               <div class="kpi"><span>Ritmo atual</span><b>${pct(r.ritmo)}</b><small>média/mês · últimos 3 meses</small></div>
-              <div class="kpi"><span>Ritmo necessário</span><b class="${r.ritmoCron > r.ritmo * 1.05 ? 'crit' : ''}">${r.ritmoCron ? pct(r.ritmoCron) : '—'}</b><small>para fechar em ${dCurto(P.fimCron)}</small></div>
+              ${(() => { const dias = diff(r.corte, P.fimCron);
+                // a menos de 30 dias do fim do cronograma, "% ao mês" vira número sem sentido (ex.: 182% ao mês): mostra o que falta e o prazo
+                if (!r.ritmoCron || dias < 30) return `<div class="kpi"><span>Para concluir</span><b class="${r.restante > 0.005 ? 'crit' : 'ok'}">${pct(r.restante)}</b><small>${dias > 0 ? `em ${dias} ${dias === 1 ? 'dia' : 'dias'}, até ${dCurto(P.fimCron)}` : `fim do cronograma em ${dCurto(P.fimCron)} já passou`}</small></div>`;
+                return `<div class="kpi"><span>Ritmo necessário</span><b class="${r.ritmoCron > r.ritmo * 1.05 ? 'crit' : ''}">${pct(r.ritmoCron)}</b><small>ao mês, para fechar em ${dCurto(P.fimCron)}</small></div>`; })()}
             </div>
             ${tl}
           </div>
@@ -436,7 +449,7 @@
 
     const mesAtual = (o.mensal || []).find(m => m.mes === r.corte.slice(0, 7));
     const mensal = sec('mensal', 'Avanço por mês', mesAtual ? `${mesLongo(mesAtual.mes)}: ${pct(mesAtual.realizado)} de ${pct(mesAtual.previsto)}` : '', `
-      <div class="legend"><span><i class="sw sw-prev" style="height:8px;width:8px"></i>Previsto no mês</span><span><i class="sw sw-real" style="height:8px;width:8px"></i>Realizado no mês</span><span class="note">* mês do corte, parcial até ${dCurto(r.corte)}</span></div>
+      <div class="legend"><span><i class="sw sw-bplan"></i>Previsto no mês</span><span><i class="sw sw-breal"></i>Realizado no mês</span><span class="note">* mês do corte, parcial até ${dCurto(r.corte)}</span></div>
       <div class="chart" id="ch-mensal"></div>`, true);
 
     const rf = Core.calcFinanceiro(o, r.corte);
@@ -460,7 +473,7 @@
       <p class="sec-lead">Avanço de cada atividade no cronograma do Prevision: barra = realizado da atividade; traço = planejado na data. Farol = realizado ÷ planejado. Toque numa frente para abrir as etapas.</p>
       ${ehAdmin() ? `<div class="note-box">O Progresso por tarefas veio filtrado por período (raiz ${pct(r.pesoRaiz, 2)}), então o peso de cada frente na obra não aparece. Exporte sem filtro de datas para ter os pesos.</div>` : ''}
       <div class="rx-tok">${atividadesHTML(Core.atividades(r), o)}</div>`) : sec('frentes', 'Avanço por frente', `${r.pacotes.length} frentes da EAP`, `
-      <p class="sec-lead">Barra azul: realizado. Traço cobre: previsto na data de corte. Fundo: peso da frente na obra. Toque numa frente para abrir as etapas.</p>
+      <p class="sec-lead">Barra azul: realizado. Traço escuro: previsto na data de corte. Fundo: peso da frente na obra. Toque numa frente para abrir as etapas.</p>
       <div class="frentes">${r.pacotes.filter(p => p.peso > 0.0005).map(p => linhaFrente(p, r, 0)).join('')}</div>`);
 
     const tarefas = sec('tarefas', 'Tarefas', `${r.cont.atrasada} atrasadas`, blocoTarefas(r));
@@ -473,7 +486,21 @@
     const fotosSec = base.fotosPendentes ? sec('fotos', 'Fotos do diário de obra', 'carregando…', '<p class="sub" role="status" style="margin:0">Carregando as fotos…</p>') : r.fotos.length ? sec('fotos', 'Fotos do diário de obra', `${r.fotos.length} fotos · ${new Set(r.fotos.map(f => f.rdo)).size} RDOs`, blocoFotos(base, r)) : '';
     const nMapas = (o.mapas || []).filter(m => m.img).length;
     const mapaSec = ehAdmin() || nMapas ? sec('mapa', 'Mapa de avanço', S.mapaEd ? 'editando' : nMapas ? `${nMapas} ${nMapas === 1 ? 'planta' : 'plantas'}` : 'nenhum mapa', blocoMapas(base, o, r), !!S.mapaEd || nMapas > 0) : '';
-    const restr = c ? sec('restricoes', 'Paralisações e restrições', c.paralisadas.length ? `<span class="pill critico">${c.paralisadas.length} abertas</span>` : 'nenhuma', blocoRestricoes(c)) : '';
+    const restr = c ? sec('restricoes', 'Paralisações no RDO', c.paralisadas.length ? `<span class="pill critico">${c.paralisadas.length} abertas</span>` : 'nenhuma', blocoRestricoes(c)) : '';
+    // restrições da obra (equipe interna): o essencial da aba Restrições, para a obra ficar toda num lugar só
+    const resResumo = !ehCliente() ? (() => {
+      const hoje = hojeLocal(), itens = base.restricoes || [], I = Core.indicadoresRestricoes(itens, hoje);
+      const top = Core.ordenarRestricoes(itens.filter(x => x.status !== 'removida'), hoje).slice(0, 4);
+      return sec('restricoes-resumo', 'Restrições', itens.length ? `${I.vencidas ? `<span class="pill critico">${I.vencidas} vencidas</span> ` : ''}${I.abertas} abertas` : 'nenhuma registrada', `
+        <div class="rdo-head">
+          <div class="mini"><span>Abertas</span><b class="num">${I.abertas}</b><small>${I.semData ? `${I.semData} sem data` : 'com data limite'}</small></div>
+          <div class="mini"><span>Vencidas</span><b class="num" style="color:${I.vencidas ? 'var(--crit)' : 'inherit'}">${I.vencidas}</b><small>data limite já passou</small></div>
+          <div class="mini"><span>Vencem em 7 dias</span><b class="num">${I.vencem7}</b><small>prioridade da semana</small></div>
+          <div class="mini"><span>IRR · 4 semanas</span><b class="num">${I.irr4 === null ? '—' : pct(I.irr4, 0)}</b><small>meta ${pct(I.meta, 0)}</small></div>
+        </div>
+        ${top.length ? `<ul class="rs-top">${top.map(x => { const f = Core.farolRestricao(x, hoje); return `<li>${pill(f.k, f.t)}<span><b>${esc(x.frente || '—')}</b> · ${esc(x.acao || '')}</span><small>${esc(x.responsavel || '—')}${x.dataLimite ? ' · ' + dCurto(x.dataLimite) : ''}</small></li>`; }).join('')}</ul>` : ''}
+        <div class="bar-actions"><button class="btn sec2" data-go="restricoes">Abrir o mapa de restrições</button></div>`, I.vencidas > 0);
+    })() : '';
     const conf = ehAdmin() ? sec('conferencia', 'Conferência dos dados', 'só administrador', blocoConferencia(o, r), false) : '';
 
     return `
@@ -484,7 +511,8 @@
         <p class="sub">${esc(o.cliente)} · contratante ${esc(o.contratante)}</p>
         <div class="meta">${o.contrato ? `<span>Contrato <b>${esc(o.contrato)}</b></span>` : ''}<span>Prazo contratual <b>${dBR(P.contrIni)} a ${dBR(P.contrFim)}</b> (${P.total} dias${P.contrFonte ? ' · ' + P.contrFonte : ''})</span><span>Decorridos <b>${P.decorrido}</b> · a vencer <b>${P.aVencer}</b></span>${o.responsavel ? `<span>Responsável <b>${esc(o.responsavel)}</b></span>` : ''}</div>
       </div><div class="bar-actions no-print"><button class="btn sec2" data-copialink>Copiar link</button>${ehAdmin() ? '<button class="btn sec2" data-go="editar-obra">Editar cadastro</button>' : ''}</div></div>
-      ${situacao}${cronoSec}${curva}${tendSec}${mensal}${financeiro}${frentes}${tarefas}${campo}${fotosSec}${mapaSec}${restr}${conf}`;
+      ${navSecoes([[resResumo, 'restricoes-resumo', 'Restrições'], [cronoSec, 'cronograma', 'Cronograma'], [curva, 'curva', 'Curva S'], [tendSec, 'tendencia', 'Prazo'], [mensal, 'mensal', 'Mês a mês'], [financeiro, 'financeiro', 'Financeiro'], [frentes, 'frentes', 'Frentes'], [tarefas, 'tarefas', 'Tarefas'], [campo, 'campo', 'Campo'], [fotosSec, 'fotos', 'Fotos'], [mapaSec, 'mapa', 'Mapa'], [restr, 'restricoes', 'Paralisações'], [conf, 'conferencia', 'Conferência']])}
+      ${situacao}${resResumo}${cronoSec}${curva}${tendSec}${mensal}${financeiro}${frentes}${tarefas}${campo}${fotosSec}${mapaSec}${restr}${conf}`;
   }
 
   // Admin: o que o cliente está vendo e o botão de publicar
@@ -543,7 +571,7 @@
       </div>
       <div class="two">
         <div style="min-width:0"><div class="step-t" style="margin-bottom:6px">Efetivo por dia · ${c.serie.length} RDOs</div>
-          <div class="legend" style="margin-bottom:4px"><span><i class="sw sw-terc"></i>Terceiros</span><span><i class="sw sw-prop"></i>Próprios</span></div>
+          <div class="legend" style="margin-bottom:4px"><span><i class="sw sw-terc"></i>Terceiros</span><span><i class="sw sw-prop"></i>Próprios</span>${c.diasImpraticaveis ? `<span><i class="sw sw-chuva"></i>Impraticável (${c.diasImpraticaveis} d)</span>` : ''}</div>
           <div class="chart" id="ch-efetivo"></div></div>
         <div style="min-width:0"><div class="step-t" style="margin-bottom:6px">Mão de obra no RDO ${u.numero}</div>
           <div class="tw"><table class="t" style="min-width:0"><thead><tr><th>Função / empresa</th><th>Tipo</th><th class="n">Qtd</th></tr></thead><tbody>
@@ -615,8 +643,11 @@
     };
     const linhas = k.linhas.filter(visivel);
     const corteX = X(r.corte), contrX = r.prazo.contrFim ? X(r.prazo.contrFim) : null;
-    const grade = `<div class="gt-grid">${meses.map(m => `<i style="left:${X(m)}%"></i>`).join('')}<b class="gt-corte" style="left:${corteX}%"></b>${contrX !== null ? `<b class="gt-contr" style="left:${contrX}%"></b>` : ''}</div>`;
-    const cab = `<div class="gt-row gt-head"><div class="gt-nm">Linha do cronograma</div><div class="gt-tl">${meses.map(m => X(m) > 93 ? '' : `<span style="left:${X(m)}%">${Core.mesCurto(m).slice(0, 3)}</span>`).join('')}</div><div class="gt-pc">Real / prev.</div><div class="gt-sl">Término</div></div>`;
+    // rótulos de mês sem embolar: todo mês até 1 ano; trimestral até 2 anos; semestral até 4; anual acima (sempre com o ano)
+    const passoM = meses.length <= 12 ? 1 : meses.length <= 24 ? 3 : meses.length <= 48 ? 6 : 12;
+    const rotM = (m, i) => Core.mesCurto(m).slice(0, 3) + (i === 0 || passoM > 1 || m.slice(5, 7) === '01' ? '/' + m.slice(2, 4) : '');
+    const grade = `<div class="gt-grid">${meses.map((m, i) => `<i style="left:${X(m)}%"${i % passoM ? ' class="fr"' : ''}></i>`).join('')}<b class="gt-corte" style="left:${corteX}%"></b>${contrX !== null ? `<b class="gt-contr" style="left:${contrX}%"></b>` : ''}</div>`;
+    const cab = `<div class="gt-row gt-head"><div class="gt-nm">Linha do cronograma</div><div class="gt-tl">${meses.map((m, i) => X(m) > 93 || i % passoM ? '' : `<span style="left:${X(m)}%">${rotM(m, i)}</span>`).join('')}</div><div class="gt-pc">Real / prev.</div><div class="gt-sl">Término</div></div>`;
     const row = l => {
       const tem = l.nivel >= 2 && filhos(l).length > 0, ab = !!S.abertos['g' + l.eap];
       const nome = l.nivel === 1 ? esc(String(l.nome || '').replace(/\s+/g, ' ').trim()) : `${esc(l.nomeExib)}${l.area ? ` <small class="gt-area">${esc(l.area)}</small>` : ''}`;
@@ -1643,7 +1674,7 @@
             <ul class="rx-fr" data-corta>${frentesCampo.map(f => { const par = /paralis/i.test(f.situacao), conc = /conclu/i.test(f.situacao);
               const det = detFrente(f);
               return `<li><span class="rx-fr-n"><b>${esc(f.servico || f.descricao || '—')}</b>${det ? `<small>${esc(det)}</small>` : ''}</span><span class="rx-fr-p">${f.pct === null || f.pct === undefined ? '' : pct(f.pct, 0)}</span><span class="rx-dot ${par ? 'crit' : conc ? 'ok' : 'info'}">${par ? 'Paralisada' : conc ? 'Concluída' : 'Em andamento'}</span></li>`; }).join('')}</ul></div>
-          <div class="legend rx-leg"><span class="rx-leg-g">Efetivo por dia</span><span><i class="sw sw-terc"></i>Terceiros</span><span><i class="sw sw-prop"></i>Próprios</span><span class="note">${c.serie.length} RDOs</span></div>
+          <div class="legend rx-leg"><span class="rx-leg-g">Efetivo por dia</span><span><i class="sw sw-terc"></i>Terceiros</span><span><i class="sw sw-prop"></i>Próprios</span>${c.diasImpraticaveis ? `<span><i class="sw sw-chuva"></i>Impraticável (${c.diasImpraticaveis} d)</span>` : ''}<span class="note">${c.serie.length} RDOs</span></div>
           <div class="chart" id="ch-efetivo-r" data-fill></div></section>`;
     }
     const andamento = `<div class="p-duas${campoSec ? '' : ' so'}"><section class="rx-s fx p-ativ" data-bloco="atividades"><h2><i class="rx-ic">${IC.rlist}</i>Avanço por atividade${legFarol}</h2>${atividadesHTML(ativ, o, true)}</section>${campoSec}</div>`;
@@ -1709,6 +1740,17 @@
       const cabe = () => box.lastElementChild.getBoundingClientRect().bottom <= lim;
       // (etapa que a pessoa fechou à mão fica fechada: S.abertos[k] === false)
       if (cabe()) $$(':scope > details[data-parte]:not([open])', box).filter(d => S.abertos[d.dataset.k] === undefined).forEach(d => { d.open = true; if (cabe()) d.dataset.auto = '1'; else d.open = false; });
+    }
+    // espaço que sobra abaixo do avanço por atividade (todas as etapas couberam): entra a tendência do prazo em dias.
+    // Só quando cabe com folga; obra com muitas etapas segue como antes (as etapas têm prioridade sobre o gráfico).
+    if (sec && graf.__tend) {
+      const box = sec.querySelector('[data-partes-box]'), ult = box && box.lastElementChild;
+      const todas = [...sec.querySelectorAll('[data-partes-box] > [data-parte]')].every(p => p.getBoundingClientRect().bottom <= sec.getBoundingClientRect().bottom + 0.5);
+      const livre = ult ? sec.getBoundingClientRect().bottom - ult.getBoundingClientRect().bottom - 24 : 0;
+      if (todas && livre >= 190) {
+        box.insertAdjacentHTML('afterend', '<div class="rx-tend"><h3 class="rx-sub">Prazo · atraso em dias no fim de cada mês</h3><div class="legend rx-leg"><span><i class="sw sw-atr"></i>Atraso</span><span><i class="sw sw-adi"></i>Adiantada</span><span class="note">prazo ganho, contra o cronograma atual</span></div><div class="chart" id="ch-tend-r"></div></div>');
+        graf.__tend($('#ch-tend-r', fl), Math.min(240, Math.floor(livre - 56)));
+      }
     }
     for (let guarda = 0; sec && guarda < 12; guarda++) {
       const lim = sec.getBoundingClientRect().bottom;
@@ -1880,6 +1922,7 @@
     if (el4) graf['ch-combo-r'] = h => Core.chartCombo(el4, o, r, { altura: h });
     if (el6 && rFin) graf['ch-fin-r'] = h => Core.chartCurvaS(el6, o, rFin, { altura: h });
     if (el7 && r.campo) graf['ch-efetivo-r'] = h => Core.chartEfetivo(el7, r.campo, { altura: h });
+    if (r.tendencia && r.tendencia.length >= 2) graf.__tend = (el, h) => Core.chartTendencia(el, r.tendencia, { altura: h });
     montaFolhas(graf); ajustaZoomFolhas();
   }
 
@@ -1892,6 +1935,12 @@
   function bind() {
     const atualiza = () => { if (S.user) DB.obras = API.listar(); };
     $$('[data-go]').forEach(b => b.onclick = () => { atualiza(); S.view = b.dataset.go; S.menu = false; S.loginErro = null; S.loginMsg = null; S.editAcesso = null; render(); window.scrollTo(0, 0); });
+    $$('[data-irsec]').forEach(b => b.onclick = () => {
+      const id = b.dataset.irsec, d = $(`details.sec[data-sec="${id}"]`); if (!d) return;
+      if (!d.open) { d.open = true; S.abertos[id] = true; }
+      d.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+    $$('[data-obrares]').forEach(b => b.onclick = () => { atualiza(); S.obraId = b.dataset.obrares; S.resEd = null; S.resPessoa = null; S.view = 'restricoes'; render(); window.scrollTo(0, 0); });
     $$('[data-obra]').forEach(b => b.onclick = () => { atualiza(); if (S.obraId !== b.dataset.obra) S.mapaEd = null; S.obraId = b.dataset.obra; S.view = 'obra'; render(); window.scrollTo(0, 0); });
     $$('[data-toast]').forEach(b => b.onclick = () => toast(b.dataset.toast));
     // manual: o índice rola até o documento; imprimir usa o CSS de impressão das telas (A4 retrato)

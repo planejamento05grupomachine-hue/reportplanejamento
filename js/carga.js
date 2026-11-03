@@ -98,7 +98,7 @@
       // conferida pelo cabeçalho do RDO; contrato diferente é aviso, não bloqueia a carga.
       const contr = r.at(-1).contrato, dig = s => String(s || '').replace(/\D/g, '');
       if (dig(contr) && dig(o.contrato) && dig(contr) !== dig(o.contrato)) out.push(['av', `O contrato do RDO (${contr}) não coincide com o do cadastro da obra (${o.contrato}). Confira o cadastro.`]);
-      out.push([par ? 'av' : 'ok', par ? `${par} frentes paralisadas no último RDO; vão para Paralisações e restrições.` : 'Nenhuma frente paralisada no último RDO.']);
+      out.push([par ? 'av' : 'ok', par ? `${par} frentes paralisadas no último RDO; vão para Paralisações no RDO (aba Obra).` : 'Nenhuma frente paralisada no último RDO.']);
     }
     return out;
   }

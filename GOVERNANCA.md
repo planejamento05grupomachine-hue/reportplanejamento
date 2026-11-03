@@ -161,3 +161,12 @@ precisa estar resolvido para uma frente avançar (projeto, contratação, materi
   do arquivo indica outra obra, o painel avisa antes de importar.
 - **Imprimir**: a aba imprime o mapa (indicadores, IRR e a lista no filtro escolhido) para a reunião.
 - **Portfólio**: para a equipe interna, "Restrições vencidas" entra nos pontos de atenção de cada obra.
+
+## Revisão visual e de operação (11/2026)
+
+- **Report, Curva S física e avanço mensal**: dois painéis alinhados no mesmo eixo de tempo (acumulado em cima, mês a mês embaixo), cada um com a sua escala. Antes as barras do mês dividiam o quadro com a curva em dois eixos Y, o que sugeria comparação entre escalas diferentes. Rótulos de mês com espaçamento automático.
+- **Report, folha de andamento**: quando todas as etapas cabem e sobra espaço, entra o gráfico de atraso em dias (prazo ganho) mês a mês. Obra com muitas etapas segue como antes.
+- **Efetivo diário**: dias com clima impraticável no RDO marcados no fundo do gráfico e linha da média do período (base para pleito de prazo por chuva).
+- **Cronograma (Gantt)**: meses rotulados por trimestre ou semestre em obras longas, com o ano.
+- **Aba Obra**: atalhos fixos para as seções; resumo das restrições (equipe interna); a menos de 30 dias do fim do cronograma, o "ritmo necessário" dá lugar ao "para concluir" (o que falta e em quantos dias); corte com mais de 10 dias aparece em destaque; avanço por mês com a mesma notação do report (planejado em contorno).
+- **Portfólio**: avanço físico numa célula (número e barra com a marca do planejado), no lugar da rosca e das barras que repetiam os mesmos dois números; linha de restrições por obra (equipe interna); corte de cada obra no cabeçalho, com aviso quando desatualizado; para a equipe interna, "Restrições vencidas" no lugar de "Avanço médio" (média simples de obras de portes diferentes não é indicador).

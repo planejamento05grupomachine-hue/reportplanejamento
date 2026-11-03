@@ -426,7 +426,7 @@ label.chk input { margin: 0; }
 .gt-leg .lg-corte { width: 0; height: 12px; border-left: 1.5px dashed var(--ink-2); border-radius: 0; }
 .gt-leg .lg-contr { width: 0; height: 12px; border-left: 2px solid var(--ink); border-radius: 0; }
 .gt-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; }
-.gt { min-width: 760px; }
+.gt { min-width: 700px; }
 .gt-row { display: grid; grid-template-columns: minmax(220px, 34%) minmax(0, 1fr) 70px 74px; align-items: center; border-top: 1px solid var(--grid); position: relative; }
 .gt-row > div { padding: 7px 10px; min-width: 0; }
 .gt-head { border-top: 0; background: var(--head); color: #E9ECF0; border-bottom: 2px solid #154CB0; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; }
@@ -637,3 +637,53 @@ label.chk input { margin: 0; }
   .rs-t th, .rs-t td { padding: 6px 8px; }
   .rs-t td small.rs-obs { font-size: 10px; }
 }
+
+/* ---------- melhorias de leitura (revisão 11/2026) ---------- */
+/* linha do tempo da obra: rótulo à esquerda, data à direita, uma linha por marco */
+.tl-leg { margin: 0; }
+.tl-leg > div { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.tl-leg dt { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tl-leg dd { margin: 0 0 0 auto; color: var(--ink); font-weight: 600; white-space: nowrap; }
+/* atalhos das seções da aba Obra, fixos no topo ao rolar */
+.sec-nav { position: sticky; top: calc(var(--mast-h) + env(safe-area-inset-top, 0px)); z-index: 5; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 8px 0; margin: -4px 0 0; background: var(--bg); }
+.sec-nav::-webkit-scrollbar { display: none; }
+.sec-nav button { flex: none; border: 1px solid var(--rule); background: var(--card); border-radius: 999px; padding: 5px 12px; font-size: 13px; color: var(--ink-2); }
+.sec-nav button:hover { border-color: var(--brand); color: var(--brand-ink); }
+details.sec { scroll-margin-top: calc(var(--mast-h) + 64px); }
+/* cronograma: grade mensal mais leve nos meses sem rótulo */
+.gt-grid i.fr { border-left-color: var(--rule-2); opacity: .6; }
+/* avanço por mês na aba Obra: mesma notação do report (planejado = contorno, realizado = cheio) */
+.chart .bar-prev { fill: var(--card); stroke: var(--plan); stroke-width: 1.25; }
+.sw-bplan { background: var(--card); }
+/* efetivo diário: dia impraticável e média do período */
+.chart .dia-chuva { fill: var(--warn-bg); }
+.chart .media { stroke: var(--ink-2); stroke-width: 1; opacity: .7; }
+.sw-chuva { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--warn-bg); box-shadow: inset 0 0 0 1px var(--warn); }
+.folha.exec .chart .dia-chuva { fill: #FBF1DC; }
+/* portfólio: avanço numa célula só (número + barra com a marca do planejado) e linha de restrições */
+.pf { grid-template-rows: repeat(var(--l, 7), auto); }
+.pf-lab, .pf-col { grid-row: 1 / span var(--l, 7); }
+.pf-col > .pf-cel:nth-child(3), .pf-col > .pf-cel:nth-child(4) { min-height: 0; }
+.pf-av { display: grid; gap: 8px; }
+.pf-av p { margin: 0; display: grid; gap: 2px; }
+.pf-av p b { font-family: var(--f-display); font-size: 28px; font-weight: 600; line-height: 1.1; color: var(--ink); }
+.pf-av p span { font-size: 12.5px; color: var(--muted); }
+.pf-bul { position: relative; height: 10px; border-radius: 5px; background: var(--rule-2); }
+.pf-bul i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--real); }
+.pf-bul em { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--ink); border-radius: 1px; }
+.pf-bul-l { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.pf-res { justify-self: start; display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; padding: 4px 0 0; font-size: 13px; font-weight: 600; color: var(--brand); }
+.pf-res svg { width: 14px; height: 14px; }
+/* restrições na aba Obra */
+.rs-top { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rs-top li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 13.5px; padding-bottom: 8px; border-bottom: 1px solid var(--rule-2); }
+.rs-top li:last-child { border-bottom: 0; padding-bottom: 0; }
+.rs-top li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.rs-top li span b { color: var(--ink); }
+.rs-top li small { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+@media (max-width: 640px) { .rs-top li { grid-template-columns: minmax(0, 1fr); gap: 2px; } .rs-top li span { white-space: normal; } }
+/* report: tendência do prazo no espaço livre da folha de andamento */
+.rx-tend { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rx-line, #E3E7ED); display: grid; gap: 4px; }
+.folha.exec .chart .bar-atr { fill: var(--rx-crit, #D0505F); } .folha.exec .chart .bar-adi { fill: var(--rx-ok, #3E9B62); }
+.folha.exec .chart .zero { stroke: var(--rx-muted, #7A828C); }
+.pf-velho { background: #FBF1DC; color: #7A5200; border-radius: 4px; padding: 0 5px; letter-spacing: .04em; }

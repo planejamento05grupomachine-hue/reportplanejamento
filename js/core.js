@@ -712,7 +712,7 @@
       const c = r.campo, u = c.ultimo;
       const ef = u.maoDeObra.reduce((s, m) => s + m.qtd, 0);
       let t = `Em campo (RDO nº ${u.numero}, ${dBR(u.data)}): ${ef} pessoas e ${c.frentes.length} frentes`;
-      if (c.paralisadas.length) t += `, <b>${c.paralisadas.length} paralisadas</b>`;
+      if (c.paralisadas.length) t += `, <b>${c.paralisadas.length} ${c.paralisadas.length === 1 ? 'paralisada' : 'paralisadas'}</b>`;
       out.push(t + '.');
     }
     return out;
@@ -980,10 +980,10 @@
     // Ordem fixa: uma de cada tipo primeiro (paralisada com motivo, pendente de contratação, atrasada),
     // depois completa com as demais paralisadas
     const par = c ? [...c.paralisadas].sort((a, b) => (b.motivo ? 1 : 0) - (a.motivo ? 1 : 0)).map(f => ({ tag: 'Paralisada', titulo: `${f.servico}${f.empresa ? ' · ' + f.empresa : ''}`, det: motivoCurto(f.motivo) || `Motivo não informado no RDO. Parada desde ${dCurto(f.paralisadaDesde)}.`, fonte: `RDO nº ${c.ultimo.numero}${c.ultimo.status && c.ultimo.status !== 'aprovado' ? ' · em preenchimento' : ''}` })) : [];
-    const pen = r.crono ? r.crono.pendentes.map(l => ({ tag: 'Contratação', titulo: l.nomeExib, det: `${(l.responsaveis || '').replace(/,?\s*Pendente de contratação/i, '')} · término ${dBR(l.fim)} · ${pct(l.realizado, 0)} feito`, fonte: 'Cronograma · responsável pendente de contratação' })) : [];
+    const pen = r.crono ? r.crono.pendentes.map(l => ({ tag: 'Contratação', titulo: l.nomeExib, det: [(l.responsaveis || '').replace(/,?\s*Pendente de contratação/i, '').trim(), `término ${dBR(l.fim)}`, `${pct(l.realizado, 0)} feito`].filter(Boolean).join(' · '), fonte: 'Cronograma · responsável pendente de contratação' })) : [];
     const jaCitadas = new Set(pen.map(x => normNome(x.titulo)));
     const ta = r.atrasadas.find(t => !jaCitadas.has(normNome(t.nome)));
-    const atr = ta ? [{ tag: 'Atrasada', titulo: ta.nome, det: `${ta.caminho[0] || ''} · venceu em ${dBR(ta.fim)} (${ta.diasAtraso} dias) · ${pct(ta.pctTarefa, 0)} feito`, fonte: 'Cronograma · término vencido sem 100%' }] : [];
+    const atr = ta ? [{ tag: 'Atrasada', titulo: ta.nome, det: [ta.caminho[0], `venceu em ${dBR(ta.fim)} (${ta.diasAtraso} dias)`, `${pct(ta.pctTarefa, 0)} feito`].filter(Boolean).join(' · '), fonte: 'Cronograma · término vencido sem 100%' }] : [];
     const atencao = [par[0], pen[0], atr[0], ...par.slice(1), ...pen.slice(1)].filter(Boolean);
     const atencaoMais = Math.max(0, atencao.length - LIM.atencao);
 
@@ -1143,58 +1143,84 @@
     });
   }
 
-  // Avanço físico (report): curva S acumulada (eixo esquerdo) sobreposta ao avanço de cada mês em barras (eixo direito).
-  // Notação no padrão IBCS: realizado = cheio escuro · planejado = contorno · base = tracejado claro.
+  // Rótulos de mês sem sobrepor: um a cada "passo" meses (o bastante para ~38 px entre rótulos), sempre o mês do corte;
+  // o ano aparece no primeiro mês e em janeiro.
+  function rotulosMeses(meses, slot, mesCorte) {
+    const passo = Math.max(1, Math.ceil(38 / Math.max(1, slot)));
+    return meses.map((k, i) => {
+      const forte = k === mesCorte;
+      if (!forte && i % passo) return null;
+      if (!forte && Math.abs(meses.indexOf(mesCorte) - i) < passo && meses.includes(mesCorte)) return null; // abre espaço para o mês do corte
+      const ano = i === 0 || k.slice(5) === '01';
+      return { i, k, t: MES[+k.slice(5, 7) - 1] + (ano ? '/' + k.slice(2, 4) : ''), forte };
+    }).filter(Boolean);
+  }
+  // Avanço físico (report): dois painéis alinhados no mesmo eixo de tempo, cada um com a sua escala
+  //   em cima: curva S acumulada (realizado · planejado · base) e a diferença até o corte
+  //   embaixo: avanço de cada mês, planejado (contorno) × realizado (cheio); mês do corte parcial
+  // Antes as barras do mês dividiam o quadro com a curva em dois eixos Y (0–100% e 0–20%), o que fazia as barras
+  // parecerem comparáveis à curva. Notação IBCS: realizado = cheio escuro · planejado = contorno · base = tracejado claro.
   function chartCombo(el, obra, r, opts = {}) {
     const W = Math.max(300, el.clientWidth || 760), estreito = W < 560;
-    const H = opts.altura || (estreito ? 240 : 280);
-    const m = { t: 22, r: 44, b: 28, l: 44 };
+    const H = Math.max(240, opts.altura || (estreito ? 300 : 340));
+    const m = { t: 22, r: 16, b: 26, l: 44 }, gap = 22;
+    const hTop = Math.round((H - m.t - m.b - gap) * 0.64), hBot = H - m.t - m.b - gap - hTop;
+    const yT0 = m.t + hTop, yB1 = yT0 + gap, yB0 = yB1 + hBot; // base do painel de cima · topo e base do de baixo
     const pts = r.pts, mesCorte = r.corte.slice(0, 7);
-    // meses do eixo: do início ao fim do cronograma
     const ini = pts[0].data.slice(0, 7), fim = [pts.at(-1).data, r.prazo.fimCron].sort().at(-1).slice(0, 7);
     const meses = []; for (let k = ini; k <= fim;) { meses.push(k); const [y, mo] = k.split('-').map(Number); k = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`; }
     const porMes = Object.fromEntries((obra.mensal || []).map(d => [d.mes, d]));
     const n = meses.length, slot = (W - m.l - m.r) / n;
     const X = d => { const i = Math.max(0, Math.min(n - 1, meses.indexOf(d.slice(0, 7)))); const dim = +fimDoMes(d.slice(0, 7)).slice(8, 10); return m.l + slot * (i + Math.min(1, +d.slice(8, 10) / dim)); };
-    const Y = v => H - m.b - v * (H - m.t - m.b);
+    const Y = v => yT0 - v * hTop;
     const realMes = d => d.mes > mesCorte ? null : d.mes === mesCorte ? Math.max(0, r.periodo.real) : d.realizado;
     const maxBar = Math.max(0.01, ...meses.map(k => porMes[k]).filter(Boolean).map(d => Math.max(d.previsto || 0, realMes(d) || 0)));
-    const passo = niceMax(maxBar * 1.4 / 4), maxR = passo * 4;
-    const YR = v => H - m.b - v / maxR * (H - m.t - m.b);
+    const topoR = niceMax(maxBar * 1.1);
+    const YR = v => yB0 - v / topoR * hBot;
+    const fmtP = v => fmtNum(v * 100, Number.isInteger(Math.round(v * 1000) / 10) ? 0 : 1) + '%';
     let g = '';
-    [0, 0.25, 0.5, 0.75, 1].forEach((v, i) => {
+    // painel de cima: grade e escala acumulada
+    [0, 0.25, 0.5, 0.75, 1].forEach(v => {
       g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" class="grid"/>`;
       g += `<text x="${m.l - 8}" y="${Y(v) + 4}" class="ax" text-anchor="end">${v * 100}%</text>`;
-      g += `<text x="${W - m.r + 8}" y="${Y(v) + 4}" class="ax ax-r" text-anchor="start">${fmtNum(passo * i * 100, Number.isInteger(Math.round(passo * i * 1000) / 10) ? 0 : 1)}%</text>`;
     });
-    g += `<text x="${m.l - 8}" y="${m.t - 10}" class="ax ax-t" text-anchor="end">acum.</text><text x="${W - m.r + 8}" y="${m.t - 10}" class="ax ax-t" text-anchor="start">no mês</text>`;
-    // barras do mês: planejado (contorno) e realizado (cheio); mês do corte parcial
-    const bw = Math.max(4, Math.min(13, slot * 0.27));
-    const bar = (x, v, cls) => { if (!v || v <= 0) return ''; const y = YR(v), h = H - m.b - y; return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw}" height="${Math.max(0.5, h).toFixed(1)}" rx="1.5" class="${cls}"/>`; };
+    g += `<text x="${m.l}" y="${m.t - 9}" class="ax ax-t">Acumulado</text>`;
+    // painel de baixo: grade e escala do mês
+    [0, topoR / 2, topoR].forEach(v => {
+      g += `<line x1="${m.l}" x2="${W - m.r}" y1="${YR(v)}" y2="${YR(v)}" class="grid"/>`;
+      g += `<text x="${m.l - 8}" y="${YR(v) + 4}" class="ax" text-anchor="end">${fmtP(v)}</text>`;
+    });
+    g += `<text x="${m.l}" y="${yB1 - 7}" class="ax ax-t">No mês</text>`;
+    const bw = Math.max(3, Math.min(12, slot * 0.3));
+    const bar = (x, v, cls) => { if (!v || v <= 0) return ''; const y = YR(v), h = yB0 - y; return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, h).toFixed(1)}" rx="1.5" class="${cls}"/>`; };
     meses.forEach((k, i) => {
       const d = porMes[k], cx = m.l + slot * i + slot / 2;
-      if (d) { g += bar(cx - bw - 1.5, d.previsto, 'cb-plan'); g += bar(cx + 1.5, realMes(d), 'cb-real' + (k === mesCorte ? ' parcial' : '')); }
-      const ano = i === 0 || k.slice(5) === '01';
-      if (!estreito || i % 2 === 0) g += `<text x="${cx}" y="${H - 9}" class="ax${k === mesCorte ? ' ax-strong' : ''}" text-anchor="middle">${MES[+k.slice(5, 7) - 1]}${ano ? '/' + k.slice(2, 4) : ''}</text>`;
+      if (d) { g += bar(cx - bw - 1, d.previsto, 'cb-plan'); g += bar(cx + 1, realMes(d), 'cb-real' + (k === mesCorte ? ' parcial' : '')); }
     });
-    // curvas acumuladas
+    rotulosMeses(meses, slot, mesCorte).forEach(l => { g += `<text x="${(m.l + slot * l.i + slot / 2).toFixed(1)}" y="${H - 8}" class="ax${l.forte ? ' ax-strong' : ''}" text-anchor="middle">${l.t}</text>`; });
+    // curvas acumuladas e a diferença até o corte
     const realPts = pts.filter(p => p.data <= r.corte).map(p => [p.data, p.realizado]);
     if (!realPts.length || realPts.at(-1)[0] !== r.corte) realPts.push([r.corte, r.real]);
     const realXY = realPts.map(p => [X(p[0]), Y(p[1])]);
     const prevAte = pts.filter(p => p.data <= r.corte).map(p => [X(p.data), Y(p.previsto)]).concat([[X(r.corte), Y(r.prevCorte)]]);
     g += `<path d="${linhaPath(prevAte)} ${realXY.slice().reverse().map(p => 'L' + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')}Z" class="gap-area${r.desvio >= 0 ? ' pos' : ''}"/>`;
-    g += `<line x1="${X(r.corte)}" x2="${X(r.corte)}" y1="${m.t}" y2="${H - m.b}" class="corte"/>`;
+    const xc = X(r.corte);
+    g += `<line x1="${xc}" x2="${xc}" y1="${m.t}" y2="${yB0}" class="corte"/>`;
     g += `<path d="${linhaPath(pts.map(p => [X(p.data), Y(p.base)]))}" class="ln ln-base"/>`;
     g += `<path d="${linhaPath(pts.map(p => [X(p.data), Y(p.previsto)]))}" class="ln ln-prev"/>`;
     g += `<path d="${linhaPath(realXY)}" class="ln ln-real"/>`;
-    const f = realXY.at(-1);
-    g += `<circle cx="${f[0]}" cy="${f[1]}" r="4.5" class="dot-real"/><circle cx="${X(r.corte)}" cy="${Y(r.prevCorte)}" r="3.5" class="dot-prev"/>`;
-    const sep = Math.abs(f[1] - Y(r.prevCorte)) < 16;
-    const dir = f[0] + 56 < W - m.r, baixo = f[1] > H - m.b - 22; g += `<text x="${f[0] + (dir ? 8 : -8)}" y="${baixo ? f[1] - 9 : f[1] + (sep ? 18 : 16)}" class="lbl lbl-real" text-anchor="${dir ? 'start' : 'end'}">${pct(r.real)}</text>`;
-    g += `<text x="${X(r.corte) - 8}" y="${Y(r.prevCorte) - 6}" class="lbl" text-anchor="end">${pct(r.prevCorte)}</text>`;
-    g += `<text x="${X(r.corte) + 4}" y="${m.t - 10}" class="ax" text-anchor="middle">corte ${dCurto(r.corte)}</text>`;
-    meses.forEach((k, i) => { g += `<rect x="${m.l + slot * i}" y="${m.t}" width="${slot}" height="${H - m.t - m.b}" fill="transparent" class="hit" data-i="${i}"/>`; });
-    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Avanço físico: acumulado realizado ${pct(r.real)} contra planejado ${pct(r.prevCorte)} em ${dBR(r.corte)}, e avanço de cada mês">${g}</svg><div class="tip" hidden></div>`;
+    const f = realXY.at(-1), yp = Y(r.prevCorte);
+    g += `<circle cx="${f[0]}" cy="${f[1]}" r="4.5" class="dot-real"/><circle cx="${xc}" cy="${yp}" r="3.5" class="dot-prev"/>`;
+    // rótulos do corte: realizado à direita (ou à esquerda, sem espaço); planejado acima do ponto, ou abaixo quando o
+    // ponto está colado no topo; "corte dd/mm" na faixa entre os painéis, longe dos valores
+    const dir = f[0] + 56 < W - m.r, sep = Math.abs(f[1] - yp) < 16;
+    g += `<text x="${f[0] + (dir ? 8 : -8)}" y="${f[1] + (sep && f[1] >= yp ? 16 : 4)}" class="lbl lbl-real" text-anchor="${dir ? 'start' : 'end'}">${pct(r.real)}</text>`;
+    const ypl = yp - 7 < m.t + 4 ? yp + 15 : yp - 7;
+    g += `<text x="${xc - 8}" y="${ypl}" class="lbl" text-anchor="end">${pct(r.prevCorte)}</text>`;
+    const dirC = xc + 70 < W - m.r;
+    g += `<text x="${xc + (dirC ? 5 : -5)}" y="${yB1 - 7}" class="ax" text-anchor="${dirC ? 'start' : 'end'}">corte ${dCurto(r.corte)}</text>`;
+    meses.forEach((k, i) => { g += `<rect x="${m.l + slot * i}" y="${m.t}" width="${slot}" height="${yB0 - m.t}" fill="transparent" class="hit" data-i="${i}"/>`; });
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Avanço físico: acumulado realizado ${pct(r.real)} contra planejado ${pct(r.prevCorte)} em ${dBR(r.corte)}; abaixo, o avanço de cada mês">${g}</svg><div class="tip" hidden></div>`;
     const svg = el.querySelector('svg'), tip = el.querySelector('.tip');
     svg.querySelectorAll('.hit').forEach(h => {
       h.addEventListener('pointerenter', () => {
@@ -1218,11 +1244,15 @@
 
   // Efetivo diário (empilhado: próprio + terceiros)
   function chartEfetivo(el, campo, opts = {}) {
-    const W = Math.max(260, el.clientWidth || 400), H = opts.altura || 120, m = { t: 10, r: 4, b: 22, l: 26 };
+    // altura até 220 px: no report o quadro sobra na folha e barras de 300 px não acrescentam leitura
+    const W = Math.max(260, el.clientWidth || 400), H = Math.min(220, opts.altura || 120), m = { t: 14, r: 4, b: 22, l: 26 };
     const s = campo.serie, max = niceMax(Math.max(...s.map(x => x.propria + x.terceiros)) * 1.1);
+    const media = s.reduce((a, x) => a + x.propria + x.terceiros, 0) / Math.max(1, s.length);
     const slot = (W - m.l - m.r) / s.length, bw = Math.max(4, Math.min(22, slot - 6));
     const Y = v => H - m.b - v / max * (H - m.t - m.b);
     let g = `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(0)}" y2="${Y(0)}" class="grid"/><line x1="${m.l}" x2="${W - m.r}" y1="${Y(max)}" y2="${Y(max)}" class="grid"/><text x="${m.l - 6}" y="${Y(max) + 4}" class="ax" text-anchor="end">${max}</text><text x="${m.l - 6}" y="${Y(0) + 4}" class="ax" text-anchor="end">0</text>`;
+    // dia com clima impraticável no RDO: faixa de fundo (base para pleito de prazo por chuva)
+    s.forEach((d, i) => { if (d.impraticavel) g += `<rect x="${(m.l + slot * i).toFixed(1)}" y="${m.t}" width="${slot.toFixed(1)}" height="${H - m.t - m.b}" class="dia-chuva"/>`; });
     s.forEach((d, i) => {
       const x = m.l + slot * i + (slot - bw) / 2;
       const yT = Y(d.terceiros), yP = Y(d.terceiros + d.propria);
@@ -1231,12 +1261,13 @@
       if (s.length <= 16 || i % 2 === 0) g += `<text x="${x + bw / 2}" y="${H - 6}" class="ax" text-anchor="middle">${d.data.slice(8, 10)}</text>`;
       g += `<rect x="${m.l + slot * i}" y="${m.t}" width="${slot}" height="${H - m.t - m.b}" fill="transparent" class="hit" data-i="${i}"/>`;
     });
-    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Efetivo diário em campo">${g}</svg><div class="tip" hidden></div>`;
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(media).toFixed(1)}" y2="${Y(media).toFixed(1)}" class="media"/><text x="${W - m.r}" y="${(Y(media) - 4).toFixed(1)}" class="ax ax-strong" text-anchor="end">média ${fmtNum(media, 0)}</text>`;
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Efetivo diário em campo, média ${fmtNum(media, 0)} pessoas${campo.diasImpraticaveis ? `, ${campo.diasImpraticaveis} dias impraticáveis` : ''}">${g}</svg><div class="tip" hidden></div>`;
     const svg = el.querySelector('svg'), tip = el.querySelector('.tip');
     svg.querySelectorAll('.hit').forEach(h => {
       h.addEventListener('pointerenter', () => {
         const d = s[+h.dataset.i];
-        tip.innerHTML = `<b>RDO ${d.numero} · ${dBR(d.data)}</b><span><i class="sw sw-prop"></i>Próprios <em>${d.propria}</em></span><span><i class="sw sw-terc"></i>Terceiros <em>${d.terceiros}</em></span><span>Paralisadas <em>${d.paralisadas}</em></span>`;
+        tip.innerHTML = `<b>RDO ${d.numero} · ${dBR(d.data)}</b><span><i class="sw sw-prop"></i>Próprios <em>${d.propria}</em></span><span><i class="sw sw-terc"></i>Terceiros <em>${d.terceiros}</em></span><span>Paralisadas <em>${d.paralisadas}</em></span>${d.impraticavel ? '<span>Clima impraticável em algum turno</span>' : ''}`;
         tip.hidden = false; const bb = svg.getBoundingClientRect(); const px = (+h.getAttribute('x')) / W * bb.width;
         tip.style.left = Math.min(bb.width - 170, Math.max(0, px + 10)) + 'px'; tip.style.top = '0px';
       });
