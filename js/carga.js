@@ -136,10 +136,34 @@
     ras.fontes = { ...(base.fontes || {}), ...fontes };
     delete ras.publicadoEm;
     if (!pacote.fotos && !temRascunho) ras.fotosProprias = false;
+    if (['curva', 'mensal', 'tarefas', 'rdos', 'cronograma'].some(k => pacote[k])) registrarHistorico(ras, hoje);
     return ras;
   }
 
-  const api = { codigoEm, identidade, conferencia, estimarCorte, montarPacote, aplicarCarga };
+  // Histórico de cortes: a posição de cada carga física fica guardada na obra (um registro por data de corte; recarga
+  // da mesma data substitui). Mostra como o atraso e o término projetado evoluíram, mesmo depois de um replanejamento
+  // reescrever a Curva S. Até 156 registros (3 anos de cargas semanais). Falha de cálculo não impede a carga.
+  const LIMITE_HISTORICO = 156;
+  function registrarHistorico(ras, hoje) {
+    const C = core();
+    const temDados = (ras.curva || []).some(p => p && p.data) && (ras.tarefas || []).some(t => t && t.nivel === 1);
+    if (!C || !C.calc || !temDados) return;
+    let r;
+    try { r = C.calc(ras); } catch (e) { return; }
+    const g = r.prazoGanho;
+    const item = {
+      corte: r.corte, real: r.real, prev: r.prevCorte, idp: r.idp,
+      atraso: g ? g.atraso : null, idpT: g ? g.idpT : null, farol: r.sem.e,
+      fimCron: r.prazo.fimCron, fimBase: r.crono ? r.crono.fimBase : null,
+      projecao: r.projecao, projecaoFaixa: r.projecaoFaixa, registradoEm: hoje,
+    };
+    const h = (ras.historico || []).filter(x => x.corte !== item.corte);
+    h.push(item);
+    h.sort((a, b) => a.corte < b.corte ? -1 : 1);
+    ras.historico = h.slice(-LIMITE_HISTORICO);
+  }
+
+  const api = { codigoEm, identidade, conferencia, estimarCorte, montarPacote, aplicarCarga, registrarHistorico };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Carga = api;
 })(typeof window !== 'undefined' ? window : globalThis);

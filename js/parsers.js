@@ -633,7 +633,72 @@
     return out;
   }
 
-  const api = { num, dataISO, mesISO, lerLinhas, wbDe, linhasDaAba, ehMedicao, parseMedicaoContrato, tipoPlanilha, parseCurva, parseMensal, parseTarefas, parseCronograma, pdfItens, pdfFotos, linhasDe, parseRDOs };
+  // ---------- mapa de restrições (planilha da reunião semanal) ----------
+  // Layouts aceitos (os três mapas atuais): cabeçalho com Status e Ação, e Frente/Item, Disciplina, Responsável,
+  // Data limite, Observação em qualquer ordem. Células mescladas (frente que agrupa várias linhas, ação única para um
+  // bloco de aditivos) valem para todas as linhas do bloco. Faixas de título no meio da tabela ("ADITIVOS DE ESCOPO")
+  // são puladas. Data que não é data ("3 dias após envio da carta") vira condição. Status "Atrasado" é pendente: o
+  // atraso o painel calcula pela data limite. Core.dataRestricao resolve "27/out", "28-out", "29/10/2026" e datas do Excel.
+  const COL_RESTR = {
+    frente: /^(frente|item|servico|atividade|restricao)\b/, tipo: /^(disciplina|tipo|categoria)\b/, responsavel: /^responsave/,
+    data: /^(data limite|data|prazo)\b/, status: /^(status|situacao)\b/, acao: /^(acao|providencia|acoes)\b/, obs: /^(observac|obs\b)/,
+  };
+  function statusRestricao(s) {
+    const t = norm(s);
+    if (!t) return null;
+    if (/^(ok|concluid|removid|resolvid|feito|liberad)/.test(t)) return 'removida';
+    if (/aprova/.test(t)) return 'aprovacao';
+    if (/andamento|execu/.test(t)) return 'andamento';
+    return 'pendente';
+  }
+  function parseRestricoes(XLSX, wb, { arquivo = '', hoje, dataRestricao } = {}) {
+    for (const nome of wb.SheetNames) {
+      const ws = wb.Sheets[nome]; if (!ws || !ws['!ref']) continue;
+      const R = XLSX.utils.decode_range(ws['!ref']);
+      const M = [];
+      for (let r = R.s.r; r <= R.e.r; r++) {
+        const lin = [];
+        for (let c = R.s.c; c <= R.e.c; c++) { const cel = ws[XLSX.utils.encode_cell({ r, c })]; lin.push(cel ? cel.v : null); }
+        M.push(lin);
+      }
+      (ws['!merges'] || []).forEach(m => {
+        const v = M[m.s.r - R.s.r] ? M[m.s.r - R.s.r][m.s.c - R.s.c] : null;
+        for (let r = m.s.r; r <= m.e.r; r++) for (let c = m.s.c; c <= m.e.c; c++) if (M[r - R.s.r]) M[r - R.s.r][c - R.s.c] = v;
+      });
+      const txt = v => v === null || v === undefined ? '' : String(v).replace(/\s+/g, ' ').trim();
+      const iCab = M.findIndex(l => { const n = l.map(v => norm(txt(v))); return n.some(x => COL_RESTR.status.test(x)) && n.some(x => COL_RESTR.acao.test(x)); });
+      if (iCab < 0) continue;
+      const col = {};
+      M[iCab].forEach((v, j) => { const n = norm(txt(v)); for (const [k, re] of Object.entries(COL_RESTR)) if (col[k] === undefined && re.test(n)) { col[k] = j; break; } });
+      if (col.frente === undefined) col.frente = 0;
+      const titulo = M.slice(0, iCab).map(l => l.map(txt).find(Boolean)).find(Boolean) || '';
+      const md = (titulo + ' ' + arquivo).match(/(\d{2})[.\/-](\d{2})[.\/-](\d{4})/);
+      const dataMapa = md ? `${md[3]}-${md[2]}-${md[1]}` : (hoje || null);
+      const itens = [], avisos = [];
+      let frenteAnt = '';
+      for (const l of M.slice(iCab + 1)) {
+        const cel = k => col[k] === undefined ? '' : txt(l[col[k]]);
+        const cheias = l.map(txt).filter(Boolean);
+        if (!cheias.length) continue;
+        if (cheias.length > 1 && cheias.every(v => v === cheias[0])) continue;            // faixa de título mesclada
+        if (COL_RESTR.status.test(norm(cel('status'))) && COL_RESTR.acao.test(norm(cel('acao')))) continue; // cabeçalho repetido
+        const frente = cel('frente') || frenteAnt; frenteAnt = frente;
+        const acao = cel('acao'), status = statusRestricao(cel('status')) || 'pendente';
+        if (!frente && !acao) continue;
+        const bruto = col.data === undefined ? null : l[col.data];
+        const dataLimite = dataRestricao ? dataRestricao(bruto, dataMapa) : null;
+        const condicao = !dataLimite && txt(bruto) ? txt(bruto) : '';
+        const removidaEm = status === 'removida' ? (dataLimite && dataMapa && dataLimite < dataMapa ? dataLimite : dataMapa) : null;
+        itens.push({ frente, tipo: cel('tipo'), responsavel: cel('responsavel'), dataLimite, dataOriginal: dataLimite, condicao,
+          acao, obs: cel('obs'), status, removidaEm, reprogramacoes: 0, atrasadoNoMapa: /atras/i.test(cel('status')) });
+      }
+      if (!itens.length) avisos.push('A tabela foi encontrada, mas sem linhas de restrição.');
+      return { aba: nome, titulo, dataMapa, itens, avisos };
+    }
+    return null;
+  }
+
+  const api = { num, dataISO, mesISO, lerLinhas, wbDe, linhasDaAba, ehMedicao, parseMedicaoContrato, tipoPlanilha, parseCurva, parseMensal, parseTarefas, parseCronograma, pdfItens, pdfFotos, linhasDe, parseRDOs, parseRestricoes, statusRestricao };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Parsers = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -84,3 +84,80 @@ conferência com o Progresso mensal usa o último ponto de cada mês.
 O painel avisa quando um dado está desatualizado além da cadência esperada (aba Obra →
 Conferência dos dados): mais de 10 dias sem corte físico, ou mais de 35 dias sem corte
 financeiro (`LIMIAR_DIAS_FISICO`/`LIMIAR_DIAS_FINANCEIRO` em `js/core.js`).
+
+## Prazo ganho (Earned Schedule): farol de prazo em dias
+
+O IDP em % (realizado ÷ previsto) converge para 1,00 no fim de qualquer obra, mesmo atrasada, e no começo transforma
+diferenças pequenas em índices extremos. Desde a revisão de 11/2026 o painel mede o mesmo desvio em **tempo**
+(`Core.prazoGanho`):
+
+| Termo | Cálculo | Leitura |
+|---|---|---|
+| **ES** (prazo ganho) | data em que o previsto da Curva S alcança o avanço realizado de hoje | até onde o plano chegaria com o que já foi feito |
+| **Atraso** | data de corte − ES, em dias | "23 dias de atraso" · "5 dias adiantada" |
+| **IDP(t)** | (ES − início) ÷ (corte − início) | 1,00 = no prazo; mesmas faixas do farol (0,95 / 0,85) |
+
+- Curva de referência: o **previsto (replanejado)**, a mesma do IDP em %. O alvo é o IDP aplicado ao previsto da própria
+  curva no corte, para o sinal do atraso acompanhar o do IDP mesmo quando Cronograma e Curva S diferem por arredondamento.
+- O farol usa o IDP(t) quando ele é confiável: **30 dias ou mais de obra e pelo menos 2% previsto**. Antes disso vale o IDP em %.
+- Cadastro da obra → *Índice que acende o farol de prazo*: `indicePrazo = 'tempo'` (padrão) ou `'percentual'` (regra anterior).
+- **Projeção de término em faixa** (com obra acima de 10% e IDP(t) confiável), nunca antes do corte:
+  - *se o atraso de hoje não aumentar*: término do cronograma + atraso;
+  - *se o desempenho de prazo se mantiver*: início + duração do cronograma ÷ IDP(t).
+
+  Sem essas condições, fica a projeção anterior pelo ritmo médio dos 3 últimos meses fechados.
+
+## Tendência do prazo e histórico de cargas
+
+- **Tendência** (aba Obra): atraso em dias no último realizado de cada mês, pela própria Curva S, até o corte. Medida
+  contra o cronograma atual: depois de um replanejamento os meses passados são relidos no plano novo.
+- **Histórico de cargas** (`obra.historico`, gravado por `Carga.aplicarCarga` em toda carga física, manual ou automática):
+  um registro por data de corte com realizado, previsto, IDP, atraso, IDP(t), farol, término do cronograma e projeção.
+  Recarga da mesma data substitui o registro; guarda até 156 cortes. É o que o painel mostrava em cada data, mesmo que a
+  Curva S mude depois. O cliente só vê registros até a posição publicada.
+
+## Medido × executado (interno)
+
+Com a Curva S financeira na base do contrato (±15%), o painel compara o **medido acumulado** (Controle de Medição) com o
+**EV** no corte. Diferença de até 2% do contrato = em linha; acima = medição à frente da execução; abaixo = execução ainda
+não medida. Aparece só para administradores e diretoria, na aba Obra (não vai para o report nem para o cliente).
+
+## Acesso e compartilhamento
+
+- **Links diretos**: o endereço acompanha a tela (`#portfolio`, `#obra-208`, `#obra-208/report`, `#manual`); quem abre o
+  link faz login e cai na mesma tela. Botão *Copiar link* na aba Obra. O Voltar do navegador volta à tela anterior.
+- **Aviso de publicação**: depois de *Publicar para o cliente*, o painel oferece um e-mail pronto para os clientes com
+  acesso à obra (cópia oculta, link direto para o report). O envio sai do programa de e-mail de quem publicou.
+- **Report no celular**: em tela estreita, um resumo legível (situação, avanço, prazo, projeção, atenções e marcos) vem
+  antes das folhas A4. Não entra no PDF nem na impressão.
+- **Token do GitHub**: por padrão fica só até fechar o navegador; *Lembrar neste computador* vale 7 dias. Use token
+  fine-grained, só deste repositório, com validade de até 90 dias.
+
+## Mapa de restrições (aba Restrições, uso interno)
+
+Registro e gestão das restrições revisadas na reunião semanal, no padrão do Last Planner System: restrição é o que
+precisa estar resolvido para uma frente avançar (projeto, contratação, material, mão de obra, aprovação, cliente...).
+
+- **Quem vê**: administradores registram e atualizam; diretoria consulta; cliente não vê a aba nem recebe os dados.
+- **Onde fica**: `data/restricoes/<obra>.bin`, cifrado com a chave interna (a mesma do rascunho), fora do arquivo publicado
+  ao cliente. Entra na troca de chaves. A gravação é item a item sobre a versão mais recente do repositório.
+- **Campos**: frente/item, tipo, ação para remover, responsável (aceita "Ana / Bia", "André + Gisele"), data limite ou
+  condição ("3 dias após envio da carta"), status (Pendente, Em andamento, Em aprovação, Removida), observação e, opcional,
+  a atividade do cronograma que a restrição libera.
+- **Farol automático** (`Core.farolRestricao`), pela data de hoje: vencida (data limite passou) · vence em até 7 dias ·
+  sem data ou condicionada · no prazo · removida. "Atrasado" não é status: é calculado.
+- **IRR, índice de remoção de restrições** (`Core.indicadoresRestricoes`): por semana (segunda a domingo), restrições
+  removidas até a data prevista ÷ restrições previstas para a semana. O cartão mostra as 4 últimas semanas somadas;
+  referência de 80%, a mesma usada para o PPC no Last Planner. A data prevista é a **original** (a primeira data limite
+  informada): reprogramar a data conta como reprogramação, aparece na linha e não melhora o índice.
+- **Por que IRR e não PPC**: o PPC mede o cumprimento da programação semanal de tarefas (o compromisso do planejamento de
+  curto prazo), que o painel não recebe. Para o mapa de restrições, o indicador correspondente é o IRR.
+- **Vínculo com o cronograma**: quando a atividade vinculada começa antes da data limite da restrição (e ainda não está
+  concluída), a linha mostra o alerta; é a restrição no caminho da obra.
+- **Importar planilha**: aceita os mapas atuais em .xlsx (cabeçalho com Status e Ação; Frente/Item, Disciplina,
+  Responsável, Data limite e Observação em qualquer ordem). Células mescladas valem para o bloco; faixas de título
+  ("ADITIVOS DE ESCOPO") são puladas; datas "27/out", "28-out", "29/10/2026" e datas do Excel são lidas. *Somar* atualiza
+  as restrições já existentes (mesma frente, tipo e ação) e acrescenta as novas; *Substituir* apaga as atuais. Se o nome
+  do arquivo indica outra obra, o painel avisa antes de importar.
+- **Imprimir**: a aba imprime o mapa (indicadores, IRR e a lista no filtro escolhido) para a reunião.
+- **Portfólio**: para a equipe interna, "Restrições vencidas" entra nos pontos de atenção de cada obra.
