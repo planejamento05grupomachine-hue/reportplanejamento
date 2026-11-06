@@ -698,7 +698,68 @@
     return null;
   }
 
-  const api = { num, dataISO, mesISO, lerLinhas, wbDe, linhasDaAba, ehMedicao, parseMedicaoContrato, tipoPlanilha, parseCurva, parseMensal, parseTarefas, parseCronograma, pdfItens, pdfFotos, linhasDe, parseRDOs, parseRestricoes, statusRestricao };
+  // ---------- Remoção de Restrições em PDF (Departamento de Operações, enviado no grupo semanal) ----------
+  // "MACHINE / SOTREQ (211) · CONTROLE DE AÇÕES E RESTRIÇÕES · 05 NOV 2026", indicadores (AÇÕES, EXIGÍVEIS, PONTUAIS,
+  // ATRASADAS ABERTAS, IRR) e a tabela Nº | AÇÃO / ENTREGA | RESPONSÁVEL / TITULAR | PRAZO | STATUS | OBSERVAÇÕES.
+  // As colunas saem das posições do cabeçalho da tabela em cada página. Cada linha é ancorada no seu Nº, que fica na
+  // altura da 1ª linha da ação; as observações longas descem até logo acima do Nº seguinte.
+  // Sai no mesmo formato de parseRestricoes (itens do mapa de restrições), com o que o PDF traz a mais: código da obra
+  // (quando o título tem), time, gestor e os indicadores do documento, para conferir a leitura.
+  const RE_RESTR_PDF = /CONTROLE DE A[ÇC][ÕO]ES E RESTRI[ÇC][ÕO]ES/i;
+  const ehRestricoesPdf = paginas => paginas.slice(0, 2).some(p => linhasDe(p).some(l => RE_RESTR_PDF.test(l.txt)));
+  function parseRestricoesPdf(paginas) {
+    const out = { aba: 'PDF', titulo: '', equipe: null, codigo: null, dataMapa: null, gestor: null, indicadores: {}, itens: [], avisos: [] };
+    const ls1 = linhasDe(paginas[0] || []);
+    const tit = ls1.find(l => /^MACHINE\s*(\|\s*)?\/\s*(\|\s*)?\S/.test(l.txt));
+    if (tit) {
+      out.equipe = tit.txt.replace(/\s*\|?\s*DEPARTAMENTO DE OPERA.*$/i, '').replace(/^MACHINE\s*(\|\s*)?\/\s*(\|\s*)?/, '').replace(/\s*\|\s*/g, ' ').trim();
+      const c = out.equipe.match(/\((\d{3,4})\)/); if (c) out.codigo = c[1];
+      out.titulo = `Remoção de Restrições · ${out.equipe}`;
+    }
+    const g = ls1.find(l => /^GESTOR DA OBRA:/i.test(l.txt)); if (g) out.gestor = g.txt.replace(/^GESTOR DA OBRA:\s*/i, '').split(/\.\s/)[0].replace(/\.$/, '');
+    for (const p of paginas) for (const l of linhasDe(p)) { const c = l.txt.match(/corte (\d{2}\/\d{2}\/\d{4})/i); if (c && !out.dataMapa) out.dataMapa = dataISO(c[1]); }
+    const cab = ls1.find(l => RE_RESTR_PDF.test(l.txt)), dm = cab && cab.txt.match(/(\d{1,2}) ([A-Z]{3}) (\d{4})/i);
+    if (!out.dataMapa && dm && MESES[dm[2].toLowerCase()]) out.dataMapa = `${dm[3]}-${String(MESES[dm[2].toLowerCase()]).padStart(2, '0')}-${dm[1].padStart(2, '0')}`;
+    // indicadores: linha de rótulos e, logo abaixo, a de valores (mesmo x)
+    const iRot = ls1.findIndex(l => /^A[ÇC][ÕO]ES\b/.test(l.txt) && /\bIRR\b/.test(l.txt));
+    if (iRot >= 0 && ls1[iRot + 1]) {
+      const chave = { 'acoes': 'acoes', 'exigiveis': 'exigiveis', 'pontuais': 'pontuais', 'atrasadas abertas': 'atrasadasAbertas', 'irr': 'irr' };
+      ls1[iRot].itens.forEach(r => { const k = chave[norm(r.s)]; const v = ls1[iRot + 1].itens.find(x => Math.abs(x.x - r.x) < 15); if (k && v) out.indicadores[k] = num(v.s); });
+    }
+    const juntar = (its, sep) => linhasDe(its).map(l => l.itens.map(i => i.s).join(' ').replace(/\s+/g, ' ').trim()).filter(Boolean).join(sep);
+    const brutos = [];
+    for (const itens of paginas) {
+      const ls = linhasDe(itens);
+      const h = ls.find(l => /^N[ºo°]\s*\|/.test(l.txt) && /A[ÇC][ÃA]O \/ ENTREGA/i.test(l.txt));
+      if (!h) continue;
+      const xDe = re => { const it = h.itens.find(i => re.test(i.s)); return it ? it.x : null; };
+      const X = { acao: xDe(/A[ÇC][ÃA]O/i), resp: xDe(/RESPONS/i), prazo: xDe(/PRAZO/i), status: xDe(/STATUS/i), obs: xDe(/OBSERVA/i) };
+      if (Object.values(X).some(v => v === null)) continue;
+      const rod = ls.find(l => /P[ÁA]G\.\s*\d+/.test(l.txt)), yRod = rod ? rod.y : -Infinity;
+      const corpo = itens.filter(i => i.y < h.y - 3 && i.y > yRod + 3);
+      const col = i => i.x < X.acao - 5 ? 'n' : i.x < X.resp - 5 ? 'acao' : i.x < X.prazo - 5 ? 'resp' : i.x < X.status - 5 ? 'prazo' : i.x < X.obs - 5 ? 'status' : 'obs';
+      const anc = corpo.filter(i => col(i) === 'n' && /^\d{1,3}$/.test(i.s.trim())).sort((a, b) => b.y - a.y);
+      anc.forEach((a, k) => {
+        const topo = k ? a.y + 14 : h.y - 3, base = k < anc.length - 1 ? anc[k + 1].y + 14 : yRod + 3;
+        const da = corpo.filter(i => i.y <= topo && i.y > base), c = nome => da.filter(i => col(i) === nome);
+        brutos.push({ n: +a.s.trim(), acao: juntar(c('acao'), ' '), responsavel: juntar(c('resp'), ' / '), prazo: juntar(c('prazo'), ' '), status: juntar(c('status'), ' ').toUpperCase(), obs: juntar(c('obs'), ' ') });
+      });
+    }
+    brutos.sort((a, b) => a.n - b.n);
+    // no mapa: frente = a ação/entrega do documento (o que precisa acontecer), observação = evidência e devolutivas.
+    // EXECUTADO = removida (na data do prazo, se anterior ao documento, como na planilha); ATRASADO e PREVISTO = pendente.
+    out.itens = brutos.map(b => {
+      const dataLimite = dataISO(b.prazo), status = /EXECUTAD|CONCLU/.test(b.status) ? 'removida' : /EM EXECU|ANDAMENTO/.test(b.status) ? 'andamento' : 'pendente';
+      return { frente: b.acao, tipo: '', responsavel: b.responsavel, dataLimite, dataOriginal: dataLimite, condicao: dataLimite ? '' : (b.prazo || 'sem data'),
+        acao: '', obs: b.obs, status, removidaEm: status === 'removida' ? (dataLimite && out.dataMapa && dataLimite < out.dataMapa ? dataLimite : out.dataMapa) : null,
+        reprogramacoes: 0, atrasadoNoMapa: /ATRAS/.test(b.status), numero: b.n };
+    });
+    if (!out.itens.length) out.avisos.push('O título é de Remoção de Restrições, mas nenhuma ação foi lida na tabela.');
+    else if (out.indicadores.acoes !== undefined && out.indicadores.acoes !== null && out.indicadores.acoes !== out.itens.length) out.avisos.push(`O PDF indica ${out.indicadores.acoes} ações e foram lidas ${out.itens.length}: confira antes de importar.`);
+    return out;
+  }
+
+  const api = { num, dataISO, mesISO, lerLinhas, wbDe, linhasDaAba, ehMedicao, parseMedicaoContrato, tipoPlanilha, parseCurva, parseMensal, parseTarefas, parseCronograma, pdfItens, pdfFotos, linhasDe, parseRDOs, parseRestricoes, statusRestricao, ehRestricoesPdf, parseRestricoesPdf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Parsers = api;
 })(typeof window !== 'undefined' ? window : globalThis);

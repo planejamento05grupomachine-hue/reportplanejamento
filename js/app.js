@@ -251,7 +251,9 @@
       return `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="md-t"><div class="modal-card">
       <h2 id="md-t">Importar mapa de restrições</h2>
       <p class="sub"><b>${esc(r.arquivo)}</b>${r.dataMapa ? ` · mapa de ${dBR(r.dataMapa)}` : ''}: ${r.itens.length} restrições (${ab} abertas, ${r.itens.length - ab} removidas${cond ? `, ${cond} com data condicionada` : ''}).</p>
+      ${r.equipe ? `<p class="sub">Time <b>${esc(r.equipe)}</b>${r.gestor ? ` · gestor ${esc(r.gestor)}` : ''}${r.indicadores && r.indicadores.irr !== undefined ? ` · IRR do documento ${pct(r.indicadores.irr, 1)}` : ''}. Cada ação do PDF entra como uma restrição; a observação traz as devolutivas.</p>` : ''}
       ${r.outraObra ? `<div class="note-box err" role="alert">O arquivo indica a obra <b>${esc(r.outraObra)}</b>, mas a obra aberta é a <b>${esc(base.codigo)}</b>. Confira antes de importar.</div>` : ''}
+      ${(r.avisos || []).map(a => `<div class="note-box" role="status">${esc(a)}</div>`).join('')}
       <p class="sub">${atuais ? `A obra ${esc(base.codigo)} já tem ${atuais} restrições. <b>Somar</b> atualiza as que já existem (mesma frente, tipo e ação) e acrescenta as novas; <b>Substituir</b> apaga as atuais.` : `As restrições entram na obra ${esc(base.codigo)}.`} O farol é recalculado pela data limite; "Atrasado" da planilha vira pendente vencida.</p>
       <div class="bar-actions"><button class="btn" type="button" data-resimp="somar">${atuais ? 'Somar às atuais' : 'Importar'}</button>${atuais ? '<button class="btn sec2" type="button" data-resimp="substituir">Substituir as atuais</button>' : ''}<button class="btn sec2" type="button" data-fecha="1">Cancelar</button></div>
     </div></div>`;
@@ -1516,7 +1518,7 @@
         <p class="sub">O que precisa estar resolvido para cada frente avançar. Farol pela data limite; revisão na reunião semanal.${base.restricoesEm ? ` Atualizado em ${new Date(base.restricoesEm).toLocaleDateString('pt-BR')}.` : ''}</p>
         <p class="print-only">Posição de ${dBR(hoje)} · ${esc(base.nome)}</p>
       </div><div class="bar-actions no-print">${seletorObra}
-        ${adm ? '<button class="btn" data-resnova>Nova restrição</button><button class="btn sec2" id="rs-importar">Importar planilha</button><input type="file" id="rs-arq" accept=".xlsx,.xls" hidden>' : ''}
+        ${adm ? '<button class="btn" data-resnova>Nova restrição</button><button class="btn sec2" id="rs-importar">Importar planilha ou PDF</button><input type="file" id="rs-arq" accept=".xlsx,.xls,.pdf" hidden>' : ''}
         <button class="btn sec2" id="rs-imprimir">Imprimir</button><button class="btn sec2" data-copialink>Copiar link</button></div></div>
       ${S.resEd ? formRestricao(base, linhasCron) : ''}
       ${kpis}
@@ -1560,6 +1562,7 @@
     return true;
   }
   async function importarPlanilhaRestricoes(f) {
+    if (/\.pdf$/i.test(f.name)) return importarPdfRestricoes(f);
     try { if (!window.XLSX) await carregaScript(CDN + 'xlsx/0.18.5/xlsx.full.min.js'); } catch (e) { toast(e.message + '. Confira a conexão e tente de novo.'); return; }
     try {
       const wb = Parsers.wbDe(window.XLSX, new Uint8Array(await f.arrayBuffer()));
@@ -1570,6 +1573,24 @@
       S.resImp = { ...r, arquivo: f.name, outraObra: cod && base && cod !== String(base.codigo) ? cod : null };
       S.modal = { tipo: 'resimp' }; render();
     } catch (e) { toast('Não consegui ler a planilha: ' + e.message); }
+  }
+  // PDF "Remoção de Restrições" do Departamento de Operações: mesma importação da planilha (somar atualiza o status das
+  // ações que já estão no mapa). A obra sai do código no título ("SOTREQ (211)") ou do nome do time no cadastro.
+  async function importarPdfRestricoes(f) {
+    try { if (!window.pdfjsLib) await carregaScript(CDN + 'pdf.js/3.11.174/pdf.min.js').then(() => carregaScript(CDN + 'pdf.js/3.11.174/pdf.worker.min.js')); } catch (e) { toast(e.message + '. Confira a conexão e tente de novo.'); return; }
+    try {
+      const pags = await Parsers.pdfItens(window.pdfjsLib, new Uint8Array(await f.arrayBuffer()));
+      if (!Parsers.ehRestricoesPdf(pags)) { toast('Este PDF não é uma Remoção de Restrições (Controle de ações e restrições).'); return; }
+      const r = Parsers.parseRestricoesPdf(pags);
+      if (!r.itens.length) { toast(r.avisos[0] || 'Nenhuma ação lida no PDF.'); return; }
+      const base = DB.obras.find(x => x.id === S.obraId) || {};
+      const nrm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+      const time = nrm(String(r.equipe || '').split(/[\/(]/)[0]).trim();
+      const outraObra = r.codigo && r.codigo !== String(base.codigo) ? r.codigo : null;
+      if (!r.codigo && time && !nrm([base.nome, base.cliente, base.contratante].join(' ')).includes(time)) r.avisos.push(`O time "${r.equipe}" não aparece no nome nem no cliente da obra ${base.codigo}: confira se é a obra certa.`);
+      S.resImp = { ...r, arquivo: f.name, outraObra };
+      S.modal = { tipo: 'resimp' }; render();
+    } catch (e) { toast('Não consegui ler o PDF: ' + e.message); }
   }
   // ---------- report no celular: resumo legível antes das folhas ----------
   // No celular a folha A4 é reduzida até caber e o texto fica pequeno demais. O resumo traz o essencial em tamanho de
