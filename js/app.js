@@ -681,7 +681,7 @@
     if (ed && ehAdmin()) return editorMapa(ed, r);
     const mapas = Core.mapasDaObra(o, r);
     return `<p class="sec-lead">Planta da obra com as áreas de cada frente de serviço classificadas em <b>Executado</b>, <b>Executando</b> e <b>A executar</b>. Área vinculada a uma atividade do cronograma muda de cor sozinha a cada carga.${ehAdmin() ? ' O mapa salvo vai para o rascunho e entra no report depois de publicado.' : ''}</p>
-      ${mapas.length ? `<div class="mp-lista">${mapas.map((m, i) => `<figure class="mp-card"><figcaption><b>${esc(m.titulo || 'Sem título')}</b><small>${PAGINA_MAPA[m.pagina || 'retrato']} · ${m.zonas.length} ${m.zonas.length === 1 ? 'área' : 'áreas'}</small></figcaption>
+      ${mapas.length ? `<div class="mp-lista">${mapas.map((m, i) => `<figure class="mp-card"><figcaption><b>${esc(m.titulo || 'Sem título')}</b><small>${PAGINA_MAPA[m.pagina || 'retrato']} · ${m.zonas.length} ${m.zonas.length === 1 ? 'área' : 'áreas'}${(m.fotos || []).length ? ` · ${m.fotos.length} ${m.fotos.length === 1 ? 'foto' : 'fotos'} no report` : ''}</small></figcaption>
         ${plantaHTML(m)}${quadroMapa(m)}
         ${ehAdmin() ? `<div class="bar-actions"><button class="btn sec2" data-mapaed="${i}">Editar</button><button class="more neg" data-mapadel="${i}">Remover</button></div>` : ''}</figure>`).join('')}</div>`
       : `<p class="sub" style="margin:0">${ehAdmin() ? 'Nenhum mapa ainda. Envie a planta (PDF ou imagem) e demarque as áreas.' : 'Nenhum mapa de avanço publicado.'}</p>`}
@@ -719,6 +719,11 @@
       ${m.img ? `<div class="mp-edit${modo === 'poligono' ? ' desenhando' : ''}">${plantaHTML(vis, { sel: rasc.length ? null : ed.sel, editor: true })}</div>${legMapa(vis)}` : ''}
       ${painel}
       ${zonas.length ? `<div class="tw">${tabelaMapa(vis, false).replace(/<tr><td class="mp-n">/g, '<tr class="mp-linha"><td class="mp-n">')}</div>` : ''}
+      <div class="field"><label for="mp-fotos">Fotos da frente no report <small class="hint">— evidências do período, duas por folha, logo depois da planta</small></label>
+        ${(m.fotos || []).length ? `<div class="mp-fotos">${m.fotos.map((f, i) => `<div class="mp-foto"><img src="${f.src}" alt="Foto ${i + 1} da frente"><input class="inp" data-mpfleg="${i}" value="${esc(f.legenda || '')}" placeholder="Legenda (ex.: Montagem do Pipe Rack)" aria-label="Legenda da foto ${i + 1}"><button class="more neg" type="button" data-mpfdel="${i}">Remover</button></div>`).join('')}</div>` : ''}
+        <input class="inp" type="file" id="mp-fotos" accept="image/png,image/jpeg,image/webp" multiple>
+        ${ed.lendoFotos ? `<small class="hint" role="status">${esc(ed.lendoFotos)}</small>` : ''}
+        <small class="hint">Quando alguma frente tem fotos aqui, o report usa só as fotos escolhidas nas frentes (sem a seleção automática dos RDOs).</small></div>
       <div class="bar-actions"><button class="btn" id="mp-salvar" ${m.img ? '' : 'disabled'}>Salvar mapa</button><button class="btn sec2" id="mp-cancelar">Cancelar</button></div>
     </div>`;
   }
@@ -780,6 +785,23 @@
     const pg = $('#mp-pagina'); if (pg) pg.onchange = () => { m.pagina = pg.value; render(); };
     const fa = $('#mp-arq'); if (fa) fa.onchange = () => { if (fa.files[0]) lerPlanta(fa.files[0]); };
     const up = $('#mp-usapag'); if (up) up.onclick = async () => { const n = Math.max(1, Math.min(ed.pdfPaginas, +$('#mp-pag').value || 1)); ed.pdfPagina = n; ed.lendo = `Lendo a página ${n}…`; render(); try { Object.assign(m, await plantaDoPdf(n)); ed.lendo = null; } catch (e) { ed.lendo = 'Não consegui ler a página: ' + e.message; } render(); };
+    // fotos da frente (report): JPEG de até 1400 px no lado maior, guardadas com o mapa no rascunho
+    const ff = $('#mp-fotos'); if (ff) ff.onchange = async () => {
+      const arqs = [...ff.files]; if (!arqs.length) return;
+      ed.lendoFotos = `Lendo ${arqs.length} ${arqs.length === 1 ? 'foto' : 'fotos'}…`; render();
+      try {
+        for (const f of arqs) {
+          const bmp = await createImageBitmap(f), k = Math.min(1, 1400 / Math.max(bmp.width, bmp.height));
+          const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+          const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(bmp, 0, 0, cv.width, cv.height);
+          (m.fotos = m.fotos || []).push({ id: novoId(), src: cv.toDataURL('image/jpeg', 0.8), legenda: '' });
+        }
+        ed.lendoFotos = null;
+      } catch (e) { ed.lendoFotos = 'Não consegui ler a foto: ' + e.message; }
+      render();
+    };
+    $$('[data-mpfleg]').forEach(i => i.oninput = () => { const f = (m.fotos || [])[+i.dataset.mpfleg]; if (f) f.legenda = i.value; });
+    $$('[data-mpfdel]').forEach(b => b.onclick = () => { m.fotos.splice(+b.dataset.mpfdel, 1); render(); });
     const zona = () => m.zonas.find(z => z.id === ed.sel);
     const rot = $('#mp-rot'); if (rot) rot.oninput = () => { const z = zona(); if (z) z.rotulo = rot.value; };
     const vc = $('#mp-vinc'); if (vc) vc.onchange = () => { const z = zona(); if (!z) return; const base = DB.obras.find(x => x.id === S.obraId); const a = Core.atividadesParaMapa(calcObra(base)).find(x => x.chave === vc.value); z.vinculo = a ? { chave: a.chave, eap: a.eap, nome: a.nome } : null; render(); };
@@ -1732,9 +1754,14 @@
     // período daquela frente, duas por folha, com legenda. Fotos sem frente no mapa (ou obra sem mapa) vêm no fim, também
     // duas por folha. A escolha das fotos continua a do report (Core.resumoExecutivo: uma por serviço, até 12).
     const mapas = Core.mapasDaObra(o, r);
-    const porMapa = new Map(mapas.map(m => [m.id, []])), soltas = [];
-    X.fotos.forEach(f => { const v = mapas.length ? Core.fotoNoMapa(f, mapas) : null; if (v && porMapa.has(v.mapa.id)) porMapa.get(v.mapa.id).push(f); else soltas.push(f); });
-    const figFoto = f => `<figure class="rx-f2"><div class="rx-f2-img"><img src="${urlImg(f.src)}" alt="${esc(legendaCurta(f) || `Foto do RDO nº ${f.rdo}, ${dBR(f.data)}`)}"></div>
+    // Fotos escolhidas na própria frente (editor do mapa, como no relatório mensal): com elas, o report usa só essas.
+    // Sem nenhuma, vale a seleção automática dos RDOs, ligada à frente pela EAP/serviço da legenda.
+    const curadas = mapas.some(m => (m.fotos || []).length);
+    const porMapa = new Map(mapas.map(m => [m.id, curadas ? (m.fotos || []).map(f => ({ ...f, curada: true })) : []])), soltas = [];
+    if (!curadas) X.fotos.forEach(f => { const v = mapas.length ? Core.fotoNoMapa(f, mapas) : null; if (v && porMapa.has(v.mapa.id)) porMapa.get(v.mapa.id).push(f); else soltas.push(f); });
+    const figFoto = f => f.curada
+      ? `<figure class="rx-f2"><div class="rx-f2-img"><img src="${f.src}" alt="${esc(f.legenda || 'Foto da frente de serviço')}"></div>${f.legenda ? `<figcaption><span>${esc(f.legenda)}</span></figcaption>` : ''}</figure>`
+      : `<figure class="rx-f2"><div class="rx-f2-img"><img src="${urlImg(f.src)}" alt="${esc(legendaCurta(f) || `Foto do RDO nº ${f.rdo}, ${dBR(f.data)}`)}"></div>
         <figcaption><span>${esc(legendaCurta(f) || 'Registro do diário de obra')}</span><small>RDO nº ${f.rdo} · ${dBR(f.data)}</small></figcaption></figure>`;
     const folhasFotos = (fs, sub) => { const out = []; for (let i = 0; i < fs.length; i += 2) out.push(folha('Fotos · registros — evidências do período', `<div class="rx-fotos2">${fs.slice(i, i + 2).map(figFoto).join('')}</div>`, 'fl-fotos2', sub)); return out.join(''); };
     const frentes = [];

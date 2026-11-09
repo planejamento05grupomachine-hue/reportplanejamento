@@ -693,3 +693,7 @@ details.sec { scroll-margin-top: calc(var(--mast-h) + 64px); }
 .rp-mes .inp { width: auto; min-height: 36px; padding: 4px 10px; }
 .cp-logo-ed { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .cp-logo-ed img { max-height: 56px; max-width: 200px; padding: 6px 10px; background: #F4F5F8; border: 1px solid var(--rule); border-radius: 6px; }
+/* editor do mapa: fotos da frente para o report */
+.mp-fotos { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 8px; }
+.mp-foto { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); }
+.mp-foto img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 4px; display: block; }

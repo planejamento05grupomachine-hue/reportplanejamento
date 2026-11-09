@@ -457,7 +457,8 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .rx-fotos2 { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .rx-f2 { margin: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 10px; padding: 12px; background: #fff; border: 1px solid var(--rx-line); border-radius: 12px; box-shadow: 0 1px 3px rgba(16, 24, 40, .06); }
 .rx-f2-img { min-height: 0; display: grid; place-items: center; overflow: hidden; border-radius: 6px; background: var(--rx-bg); }
-.rx-f2-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rx-f2-img { background: #fff; }
+.rx-f2-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .rx-f2 figcaption { display: grid; gap: 2px; padding: 9px 12px; background: var(--rx-bg); border: 1px solid var(--rx-line); border-radius: 4px; text-align: center; }
 .rx-f2 figcaption span { font-size: 13.5px; line-height: 1.35; color: var(--rx-navy); }
 .rx-f2 figcaption small { font-size: 11px; color: var(--rx-muted); }
