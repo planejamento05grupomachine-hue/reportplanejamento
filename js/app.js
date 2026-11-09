@@ -1711,16 +1711,6 @@
     // ----- Dashboard · status geral (2ª folha, mesmo desenho em todas as obras) -----
     const folhaDash = dashboardStatus(o, r, capa);
 
-    // ----- Visão geral -----
-    const fimMs = `<li class="fim"><span class="rx-ms-d">${P.fimCron ? dCurto(P.fimCron) : '—'}</span><span class="rx-ms-n">Término da obra</span><span class="rx-ms-v ${slipFim > 0 ? 'neg' : ''}">${slipFim ? dias(slipFim) : 'na base'}</span></li>`;
-    const marcosSec = `<section class="rx-s rx-box"><h2><i class="rx-ic">${IC.rflag}</i>Próximos marcos</h2>
-        <ul class="rx-ms" data-corta>${X.marcos.lista.slice(0, 5).map(m => `<li class="${m.situacao}"><span class="rx-ms-d">${m.data ? dCurto(m.data) : 'a definir'}</span><span class="rx-ms-n">${m.codigo ? `<em>${esc(m.codigo)}</em> ` : ''}${esc(m.nome)}${m.interface ? ' <i title="Interface com o cliente">cliente</i>' : ''}</span><span class="rx-ms-v ${m.slip > 0 ? 'neg' : ''}">${m.situacao === 'vencido' ? 'vencido' : m.slip ? dias(m.slip) : ''}</span></li>`).join('')}${fimMs}</ul>
-      </section>`;
-    const corta = (t, n) => (t || '').length > n ? t.slice(0, n - 3).replace(/\s+\S*$/, '') + '…' : (t || '');
-    const temCritico = X.atencao.some(a => /paralis|atras/i.test(a.tag));
-    const atencaoSec = X.atencao.length ? `<section class="rx-s rx-box${temCritico ? ' rx-alert' : ''}"><h2><i class="rx-ic">${IC.alert}</i>Pontos de atenção</h2>
-        <ul class="rx-at" data-corta${X.atencaoMais ? ` data-cortados="${X.atencaoMais}"` : ''}>${X.atencao.map(a => `<li><span class="rx-dot ${/paralis|atras/i.test(a.tag) ? 'crit' : 'warn'}">${a.tag}</span><span class="rx-at-t"><b>${esc(a.titulo)}</b><small>${esc(corta(a.det, 90))}</small></span></li>`).join('')}</ul>
-      </section>` : '';
     // ----- Físico (3ª folha): a curva física num quadro só — acumulado em cima, avanço de cada mês na faixa de baixo, no
     // mesmo eixo de meses — e as barras Base / Previsto / Realizado na data. Cartões e identificação já estão no dashboard.
     const tri = [['Base', r.baseCorte, 'base'], ['Previsto', r.prevCorte, 'prev'], ['Realizado', r.real, 'real']];
@@ -1728,41 +1718,7 @@
           <div class="legend rx-leg"><span class="rx-leg-g">Acumulado</span><span><i class="sw sw-base"></i>Base</span><span><i class="sw sw-prev"></i>Previsto</span><span><i class="sw sw-real"></i>Realizado</span>
             <span class="rx-leg-g">No mês</span><span><i class="sw sw-bbase"></i>Base</span><span><i class="sw sw-bplan"></i>Previsto</span><span><i class="sw sw-breal"></i>Realizado</span><span class="note">${Core.mesCurto(r.corte)} parcial até ${dCurto(r.corte)}</span></div>
           <div class="chart" id="ch-combo-r" data-fill></div></section>
-      <div class="rx-tri">${tri.map(([t, v, k]) => `<div class="rx-tri-i ${k}"><span>${t}</span><b>${pct(v, 2)}</b><i><em style="width:${lim01(v)}%"></em></i></div>`).join('')}</div>
-      ${X.manchete ? `<div class="rx-lead"><i class="rx-lead-ic">${IC.trend}</i><p>${esc(X.manchete)}</p></div>` : ''}`;
-
-    // ----- Andamento -----
-    const ativ = Core.atividades(r), c = r.campo;
-    let campoSec = '';
-    if (c) {
-      const u = c.ultimo, qtd = t => u.maoDeObra.filter(m => m.tipo === t).reduce((s, m) => s + m.qtd, 0), prop = qtd('propria'), terc = qtd('terceiros');
-      const pratic = u.clima.every(x => /pratic/i.test(x.condicao || '') && !/impratic/i.test(x.condicao || ''));
-      const empDe = Core.empresasFrente;
-      const empresas = new Set(u.atividades.flatMap(empDe)).size;
-      const ordem = f => /paralis/i.test(f.situacao) ? 0 : /conclu/i.test(f.situacao) ? 2 : 1;
-      const nSit = ['paralisadas', 'em andamento', 'concluídas'].map((t, k) => [u.atividades.filter(a => ordem(a) === k).length, t]).filter(x => x[0] && x[1] !== 'paralisadas');
-      // paralisadas primeiro, depois em andamento (menos avançadas antes), concluídas por último
-      const frentesCampo = [...c.frentes].sort((a, b) => ordem(a) - ordem(b) || (a.pct || 0) - (b.pct || 0));
-      // 2ª linha da frente: empresa · local · área; sem nada disso, o que foi feito (descrição, se diferente do serviço)
-      const detFrente = f => { const d = [...new Set(empDe(f))].concat([f.local, f.area].filter(Boolean)).join(' · ');
-        const desc = String(f.descricao || '').replace(/\s*[|.]?\s*[A-Za-zÀ-ú0-9][^.|()]*?\s*\(\d+\)/g, '').replace(/[.\s]+$/, '').trim();
-        return d || (desc && desc.toLowerCase() !== String(f.servico || '').toLowerCase() ? desc : ''); };
-      campoSec = `<section class="rx-s rx-box fx"><h2><i class="rx-ic">${IC.obra}</i>Campo<em>último RDO · nº ${u.numero} · ${dCurto(u.data)}</em></h2>
-          <div class="rx-mini">
-            <div><small>Efetivo</small><b>${prop + terc}</b><span>${prop} próprios · ${terc} terceiros</span></div>
-            <div><small>Frentes de serviço</small><b>${u.atividades.length}</b><span>${empresas ? `${empresas} ${empresas === 1 ? 'empresa' : 'empresas'}` : nSit.map(x => x.join(' ')).join(' · ') || '—'}</span></div>
-            <div class="${c.paralisadas.length ? 'crit' : ''}"><small>Frentes paralisadas</small><b>${c.paralisadas.length}</b><span>${c.paralisadas.length ? esc(corta(c.paralisadas.map(f => f.servico).join(' · '), 44)) : 'nenhuma'}</span></div>
-            <div><small>Clima</small><b>${pratic ? 'Praticável' : 'Impraticável'}</b><span>${esc(u.clima.map(x => `${x.turno.toLowerCase()} ${(x.tempo || '').toLowerCase()}`).join(' · '))}</span></div>
-          </div>
-          <div class="rx-fr-box" data-ajusta><h3 class="rx-sub">Frentes no último RDO</h3>
-            <ul class="rx-fr" data-corta>${frentesCampo.map(f => { const par = /paralis/i.test(f.situacao), conc = /conclu/i.test(f.situacao);
-              const det = detFrente(f);
-              return `<li><span class="rx-fr-n"><b>${esc(f.servico || f.descricao || '—')}</b>${det ? `<small>${esc(det)}</small>` : ''}</span><span class="rx-fr-p">${f.pct === null || f.pct === undefined ? '' : pct(f.pct, 0)}</span><span class="rx-dot ${par ? 'crit' : conc ? 'ok' : 'info'}">${par ? 'Paralisada' : conc ? 'Concluída' : 'Em andamento'}</span></li>`; }).join('')}</ul></div>
-          <div class="legend rx-leg"><span class="rx-leg-g">Efetivo por dia</span><span><i class="sw sw-terc"></i>Terceiros</span><span><i class="sw sw-prop"></i>Próprios</span>${c.diasImpraticaveis ? `<span><i class="sw sw-chuva"></i>Impraticável (${c.diasImpraticaveis} d)</span>` : ''}<span class="note">${c.serie.length} RDOs</span></div>
-          <div class="chart" id="ch-efetivo-r" data-fill></div></section>`;
-    }
-    // ----- Campo, marcos e atenção (4ª folha): o avanço por atividade saiu (está na tabela da EAP do dashboard)
-    const andamento = `<div class="p-duas${campoSec ? '' : ' so'}">${campoSec}<div class="p-lado" data-ajusta>${marcosSec}${atencaoSec}</div></div>`;
+      <div class="rx-tri">${tri.map(([t, v, k]) => `<div class="rx-tri-i ${k}"><span>${t}</span><b>${pct(v, 2)}</b><i><em style="width:${lim01(v)}%"></em></i></div>`).join('')}</div>`;
 
     // ----- Valor agregado -----
     const rf = Core.calcFinanceiro(o, r.corte);
@@ -1789,16 +1745,16 @@
 
     return `
       <div class="head-row no-print"><div><div class="kicker">Report</div><h1 class="h1">Obra ${esc(o.codigo)} · ${corte}</h1>
-        <p class="sub">Folhas A4 paisagem, com os mesmos quadros na mesma ordem em todas as obras: capa, dashboard, curva física, campo, ${mapas.length ? 'cada frente com a planta e as fotos do período' : 'fotos do período'} e valor agregado. O detalhe completo fica na aba Obra.</p></div>
+        <p class="sub">Folhas A4 paisagem, com os mesmos quadros na mesma ordem em todas as obras: capa, dashboard, curva física, ${mapas.length ? 'cada frente com a planta e as fotos do período' : 'fotos do período'}, valor agregado e medições. O detalhe completo fica na aba Obra.</p></div>
         <div class="bar-actions">${ehAdmin() ? `<label class="rp-mes" title="Só o mês muda na capa de um mês para o outro">Mês da capa<input class="inp" type="month" id="rp-mes" value="${mesRefIso}"></label>` : ''}<button class="btn" id="bt-pdf">Baixar PDF</button><a class="btn sec2" href="${mailto('', `Report de planejamento · Obra ${o.codigo} · ${corte}`, `Prezados,\n\nSegue o report de planejamento da obra ${o.codigo} · ${o.nome}, com posição de ${corte}.\n\nO painel completo está disponível em ${SITE()}#obra-${o.id}/report (acesso com e-mail e senha).\n\nAtenciosamente,\nPlanejamento · Machine`)}">Enviar por e-mail</a></div></div>
       ${resumoCelular(o, r, X)}
       <div class="folhas" id="paper" data-corte="${r.corte}">
         ${folhaCapa}
         ${folhaDash}
         ${folha('Físico (previsto x realizado)', visao, 'fl-visao fl-fisico')}
-        ${folha('Campo, marcos e pontos de atenção', andamento, 'fl-andamento')}
         ${fotos}
         ${valor ? folha('Valor agregado', valor, 'fl-valor') : ''}
+        ${folhasMedicao(o, folha)}
       </div>`;
   }
 
@@ -1864,6 +1820,43 @@
         <div class="ds-corpo">${cards}${prazo}${tabela}</div>
         <footer class="ds-pe"><span>Obra ${esc(o.codigo)} · ${esc((capa && capa.titulo) || o.nome)}</span><span class="fl-n"></span>${capa && capa.logo ? `<img class="ds-cli" src="${capa.logo}" alt="${esc(o.cliente || 'Cliente')}">` : '<i></i>'}</footer>
       </article>`;
+  }
+
+  // ---------- Medições / Faturamento — controle (folhas finais do report) ----------
+  // Do Controle de Medição da obra (Alimentar → Controle de Medição; depois, o Sienge): o histórico mês a mês com
+  // faturamento direto e medição Machine, os totais do contrato e o boletim da última medição por item da EAP.
+  // Colunas sem nenhum valor na planilha da obra não aparecem (cada obra tem o seu formato).
+  function folhasMedicao(o, folha) {
+    const M = o.medicao; if (!M || !M.resumo) return '';
+    const R = M.resumo, meses = R.meses || [], $$v = v => v === null || v === undefined ? '' : moeda(v);
+    const COLS = [['previstoCT', 'Previsto (CT)'], ['realizadoCT', 'Realizado (CT)'], ['faturamentoDireto', 'Faturamento direto'], ['medicaoPrevista', 'Medição Machine prevista'], ['medicaoRealizada', 'Medição Machine realizada']]
+      .filter(([k]) => meses.some(m => m[k] !== null && m[k] !== undefined));
+    const temSt = meses.some(m => m.status);
+    const soma = k => meses.reduce((s, m) => s + (m[k] || 0), 0);
+    const pctMed = R.totalContrato && R.medidoAcumulado !== null ? R.medidoAcumulado / R.totalContrato : null;
+    const cards = [['Valor do contrato', R.totalContrato, R.contrato || ''], ['Medido acumulado', R.medidoAcumulado, pctMed !== null ? pct(pctMed, 1) + ' do contrato' : ''],
+      ['Saldo de contrato', R.saldo, pctMed !== null ? pct(1 - pctMed, 1) + ' a medir' : ''], ['Última medição', null, R.ultimaMedicao || '—']]
+      .map(([t, v, s]) => `<div class="md-card"><small>${t}</small><b>${v === null ? esc(s) : moeda(v)}</b>${v === null ? '' : `<span>${esc(s)}</span>`}</div>`).join('');
+    const hist = meses.length ? `<table class="md-tab"><thead><tr><th>Mês</th>${COLS.map(([, t]) => `<th class="n">${t}</th>`).join('')}${temSt ? '<th>Status</th>' : ''}</tr></thead>
+        <tbody>${meses.map(m => `<tr><td>${esc(m.mes)}</td>${COLS.map(([k]) => `<td class="n">${$$v(m[k])}</td>`).join('')}${temSt ? `<td>${esc(m.status || '')}</td>` : ''}</tr>`).join('')}</tbody>
+        <tfoot><tr><td>Total</td>${COLS.map(([k]) => `<td class="n">${moeda(soma(k))}</td>`).join('')}${temSt ? '<td></td>' : ''}</tr></tfoot></table>` : '<p class="sub">Sem série mensal no Controle de Medição.</p>';
+    const out = [folha('Medições / faturamento — controle', `<div class="md-cards">${cards}</div><section class="rx-s rx-box md-box"><h2>Histórico de medição</h2>${hist}</section>`, 'fl-medicao', 'histórico de medição')];
+    // boletim da última medição: o de maior número (o contrato principal antes dos aditivos)
+    const nBol = b => +((String(b.aba).match(/\d+/) || [0])[0]);
+    const bols = [...(M.boletins || [])].sort((a, b) => nBol(a) - nBol(b) || (/aditivo/i.test(a.aba) ? 1 : 0) - (/aditivo/i.test(b.aba) ? 1 : 0));
+    const prin = bols.filter(b => !/aditivo/i.test(b.aba)), ult = (prin.length ? prin : bols).at(-1);
+    if (ult) {
+      const prof = e => String(e).split('.').length, minP = Math.min(...ult.itens.map(i => prof(i.eap)));
+      const itens = ult.itens.filter(i => prof(i.eap) <= minP + 1).slice(0, 22);
+      const pc = v => v === null || v === undefined ? '' : pct(v, 2);
+      const total = ult.itens.filter(i => prof(i.eap) === minP).reduce((s, i) => s + (i.medicao || 0), 0);
+      const mesBol = meses.find(m => m.boletim && String(m.boletim).replace(/\D/g, '') === String(nBol(ult)));
+      const tab = `<table class="md-tab md-bol"><thead><tr><th>Referência</th><th>Descrição</th><th class="n">Acum. anterior</th><th class="n">Medida</th><th class="n">% Exe.</th><th class="n">Preço unitário</th><th class="n">Medição</th></tr></thead>
+          <tbody>${itens.map(i => `<tr class="${prof(i.eap) === minP ? 'md-n1' : ''}"><td>${esc(i.eap)}</td><td>${esc(i.descricao)}</td><td class="n">${pc(i.acumuladoAnterior)}</td><td class="n">${pc(i.medida)}</td><td class="n">${pc(i.pctExec)}</td><td class="n">${$$v(i.precoUnitario)}</td><td class="n">${$$v(i.medicao)}</td></tr>`).join('')}</tbody>
+          <tfoot><tr><td colspan="6">Total da medição</td><td class="n">${moeda(total)}</td></tr></tfoot></table>`;
+      out.push(folha('Medições / faturamento — controle', `<section class="rx-s rx-box md-box"><h2>Resumo de medição<em>Medição ${nBol(ult) || ''}${mesBol ? ` · competência ${esc(mesBol.mes)}` : ''}${R.contrato ? ` · contrato ${esc(R.contrato)}` : ''}</em></h2>${tab}</section>`, 'fl-medicao', 'resumo de medição'));
+    }
+    return out.join('');
   }
 
   // ---------- montagem das folhas ----------

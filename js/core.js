@@ -1058,16 +1058,24 @@
     const x0 = dia(pts[0].data).getTime(), x1 = dia(pts.at(-1).data).getTime();
     const X = d => m.l + (dia(d).getTime() - x0) / (x1 - x0) * (W - m.l - m.r);
     const Y = v => H - m.b - v * (H - m.t - m.b);
-    const realPts = pts.filter(p => p.data <= r.corte).map(p => [p.data, p.realizado]);
-    if (!realPts.length || realPts.at(-1)[0] !== r.corte) realPts.push([r.corte, r.real]);
+    // Curva diária do Prevision (física e financeira): o realizado só vem nos dias de medição e é 0 nos demais. O
+    // realizado acumulado é o último valor medido até cada data; a linha liga só os dias com medição (antes ligava os
+    // zeros e "subia e descia"). Curva mensal (um ponto por mês) continua igual.
+    const medido = pts.filter(p => p.data <= r.corte && (p.realizado || 0) > 0);
+    const acumAte = d => { let v = 0; for (const p of medido) { if (p.data > d) break; v = Math.max(v, p.realizado); } return v; };
+    const realPts = [[pts[0].data, 0], ...medido.map(p => [p.data, p.realizado])];
+    if (realPts.at(-1)[0] !== r.corte) realPts.push([r.corte, r.real]);
     let g = '';
     for (const v of [0, 0.25, 0.5, 0.75, 1]) {
       g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" class="grid"/>`;
       g += `<text x="${m.l - 8}" y="${Y(v) + 4}" class="ax" text-anchor="end">${v * 100}%</text>`;
     }
-    const meses = pts.slice(1).map(p => p.data);
-    const passo = estreito ? 2 : 1;
-    meses.forEach((d, i) => { if (i % passo === 0) g += `<text x="${X(d)}" y="${H - 10}" class="ax" text-anchor="middle">${MES[+d.slice(5, 7) - 1]}</text>`; });
+    // eixo X: um rótulo por mês (no meio do mês), espaçados para não encostar — antes saía um por ponto da curva,
+    // e na curva diária isso dava um rótulo por dia
+    const mesesX = []; for (let k = pts[0].data.slice(0, 7); k <= pts.at(-1).data.slice(0, 7);) { mesesX.push(k); const [y, mo] = k.split('-').map(Number); k = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`; }
+    const meioMes = k => { const md = `${k}-15`; return md < pts[0].data ? pts[0].data : md > pts.at(-1).data ? pts.at(-1).data : md; };
+    const slotX = (W - m.l - m.r) / Math.max(1, mesesX.length);
+    rotulosMeses(mesesX, slotX, r.corte.slice(0, 7)).forEach(l => { g += `<text x="${X(meioMes(l.k)).toFixed(1)}" y="${H - 10}" class="ax${l.forte ? ' ax-strong' : ''}" text-anchor="middle">${l.t}</text>`; });
     // área entre previsto e realizado até o corte (o desvio)
     const prevAteCorte = pts.filter(p => p.data <= r.corte).map(p => [X(p.data), Y(p.previsto)]).concat([[X(r.corte), Y(r.prevCorte)]]);
     const realXY = realPts.map(p => [X(p[0]), Y(p[1])]);
@@ -1094,7 +1102,7 @@
     el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Curva S física: realizado ${pct(r.real)} contra previsto ${pct(r.prevCorte)} em ${dBR(r.corte)}">${g}</svg><div class="tip" hidden></div>`;
     // hover: ponto mais próximo
     const svg = el.querySelector('svg'), tip = el.querySelector('.tip'), hv = svg.querySelector('.hover'), xh = svg.querySelector('.xh');
-    const alvo = pts.map(p => ({ ...p, realizado: p.data <= r.corte ? p.realizado : null })).filter((p, i) => i > 0);
+    const alvo = pts.map(p => ({ ...p, realizado: p.data <= r.corte ? acumAte(p.data) : null })).filter((p, i) => i > 0);
     alvo.push({ data: r.corte, base: r.baseCorte, previsto: r.prevCorte, realizado: r.real, corte: true });
     alvo.sort((a, b) => a.data < b.data ? -1 : 1);
     svg.querySelector('.hit').addEventListener('pointermove', ev => {
