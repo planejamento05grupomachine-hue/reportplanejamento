@@ -1998,8 +1998,10 @@
   function folhaBoletim(b, n, meses, R, folha) {
     const B = b.resumo || {}, v2 = v => v === null || v === undefined ? 'R$ -' : 'R$ ' + fmtNum(v, 2), pc = v => v === null || v === undefined ? '' : pct(v, 2);
     const prof = e => String(e).split('.').length, minP = Math.min(...b.itens.map(i => prof(i.eap)));
-    const itens = b.itens.filter(i => prof(i.eap) <= minP + 1);
-    const soma = k => b.itens.filter(i => prof(i.eap) === minP).reduce((s, i) => s + (i[k] || 0), 0);
+    // carga feita pelo leitor antigo (sem acumuladoAnteriorValor): o "acumuladoAnterior" gravado é o valor em R$
+    const antigo = b.itens.length && !b.itens.some(i => 'acumuladoAnteriorValor' in i);
+    const itens = b.itens.filter(i => prof(i.eap) <= minP + 1).map(i => antigo ? { ...i, acumuladoAnteriorValor: i.acumuladoAnterior, acumuladoAnterior: null } : i);
+    const soma = k => itens.filter(i => prof(i.eap) === minP).reduce((s, i) => s + (i[k] || 0), 0);
     // competência: o mês ligado ao boletim na série ou, sem esse vínculo na planilha, o último mês medido
     const mesBol = meses.find(m => m.boletim && String(m.boletim).replace(/\D/g, '') === String(n))
       || [...meses].reverse().find(m => (m.realizadoCT || m.medicaoRealizada || 0) > 0);
