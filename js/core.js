@@ -353,7 +353,9 @@
 
     // Período do report: do último fechamento de mês até o corte
     const iniPer = (() => { const d = dia(corte); return iso(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0, 12))); })();
-    const realIni = interp(pts.filter(p => p.data <= iniPer).concat([]), 'realizado', iniPer);
+    // realizado no fechamento do mês anterior: o último valor medido até ali (a Curva S diária do Prevision traz 0 nos dias
+    // sem medição; interpolar no dia do fechamento dava 0 e o "mês" virava o acumulado inteiro)
+    const realIni = pts.filter(p => p.data <= iniPer).reduce((mx, p) => Math.max(mx, p.realizado || 0), 0);
     const periodo = { inicio: iniPer, real: real - (realIni ?? 0), prev: prevCorte - interp(pts, 'previsto', iniPer) };
     periodo.aderencia = periodo.prev > 0 ? periodo.real / periodo.prev : null;
 
@@ -1250,7 +1252,7 @@
           <span class="tip-g">Acumulado</span>
           <span><i class="sw sw-base"></i>Base <em>${pct(interp(pts, 'base', ate))}</em></span>
           <span><i class="sw sw-prev"></i>Planejado <em>${pct(k === mesCorte ? r.prevCorte : interp(pts, 'previsto', ate))}</em></span>
-          <span><i class="sw sw-real"></i>Realizado <em>${fut ? '—' : pct(k === mesCorte ? r.real : interp(pts, 'realizado', ate))}</em></span>
+          <span><i class="sw sw-real"></i>Realizado <em>${fut ? '—' : pct(k === mesCorte ? r.real : acumAte(ate))}</em></span>
           <span class="tip-g">No mês</span>
           <span><i class="sw sw-bplan"></i>Planejado <em>${pct(d.previsto)}</em></span>
           <span><i class="sw sw-breal"></i>Realizado <em>${fut ? '—' : pct(realMes(d.mes ? d : { mes: k, realizado: null }))}</em></span>`;
