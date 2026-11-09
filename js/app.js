@@ -1721,17 +1721,15 @@
     const atencaoSec = X.atencao.length ? `<section class="rx-s rx-box${temCritico ? ' rx-alert' : ''}"><h2><i class="rx-ic">${IC.alert}</i>Pontos de atenção</h2>
         <ul class="rx-at" data-corta${X.atencaoMais ? ` data-cortados="${X.atencaoMais}"` : ''}>${X.atencao.map(a => `<li><span class="rx-dot ${/paralis|atras/i.test(a.tag) ? 'crit' : 'warn'}">${a.tag}</span><span class="rx-at-t"><b>${esc(a.titulo)}</b><small>${esc(corta(a.det, 90))}</small></span></li>`).join('')}</ul>
       </section>` : '';
-    const visao = `<div class="rx-id"><div><h1>${esc(o.nome)}</h1><div class="rx-hd-sub"><span>${esc(o.cliente)}</span><i></i><span>${esc(o.cidade)}</span><span class="rx-st ${r.sem.k}">${esc(r.sem.t)}</span></div></div>
-        <dl class="rx-hd-meta"><dt>Data de corte</dt><dd>${corte}</dd><dt>Prazo contratual</dt><dd>${P.contrFim ? `${dBR(P.contrIni)} – ${dBR(P.contrFim)}` : '—'}</dd></dl></div>
-      <div class="rx-cards">${cards.map(k => `<div class="rx-card ac-${k.ac}"><small>${k.k}</small><b class="rx-card-v ${k.cls || ''}">${k.v}</b>${k.x || ''}<span class="rx-card-s">${k.html ? k.s : esc(k.s)}</span></div>`).join('')}</div>
-      ${X.manchete ? `<div class="rx-lead"><i class="rx-lead-ic">${IC.trend}</i><p>${esc(X.manchete)}</p></div>` : ''}
-      <div class="p-duas">
-        <section class="rx-s rx-box fx"><h2><i class="rx-ic">${IC.search}</i>Curva S física e avanço mensal<em>% do total da obra</em></h2>
-          <div class="legend rx-leg"><span class="rx-leg-g">Acumulado</span><span><i class="sw sw-real"></i>Realizado</span><span><i class="sw sw-prev"></i>Planejado</span><span><i class="sw sw-base"></i>Base</span>
-            <span class="rx-leg-g">No mês</span><span><i class="sw sw-breal"></i>Realizado</span><span><i class="sw sw-bplan"></i>Planejado</span><span class="note">${Core.mesCurto(r.corte)} parcial até ${dCurto(r.corte)}</span></div>
+    // ----- Físico (3ª folha): a curva física num quadro só — acumulado em cima, avanço de cada mês na faixa de baixo, no
+    // mesmo eixo de meses — e as barras Base / Previsto / Realizado na data. Cartões e identificação já estão no dashboard.
+    const tri = [['Base', r.baseCorte, 'base'], ['Previsto', r.prevCorte, 'prev'], ['Realizado', r.real, 'real']];
+    const visao = `<section class="rx-s rx-box fx p-cresce"><h2><i class="rx-ic">${IC.search}</i>Curva física<em>% do total da obra · posição de ${corte}</em></h2>
+          <div class="legend rx-leg"><span class="rx-leg-g">Acumulado</span><span><i class="sw sw-base"></i>Base</span><span><i class="sw sw-prev"></i>Previsto</span><span><i class="sw sw-real"></i>Realizado</span>
+            <span class="rx-leg-g">No mês</span><span><i class="sw sw-bbase"></i>Base</span><span><i class="sw sw-bplan"></i>Previsto</span><span><i class="sw sw-breal"></i>Realizado</span><span class="note">${Core.mesCurto(r.corte)} parcial até ${dCurto(r.corte)}</span></div>
           <div class="chart" id="ch-combo-r" data-fill></div></section>
-        <div class="p-lado" data-ajusta>${marcosSec}${atencaoSec}</div>
-      </div>`;
+      <div class="rx-tri">${tri.map(([t, v, k]) => `<div class="rx-tri-i ${k}"><span>${t}</span><b>${pct(v, 2)}</b><i><em style="width:${lim01(v)}%"></em></i></div>`).join('')}</div>
+      ${X.manchete ? `<div class="rx-lead"><i class="rx-lead-ic">${IC.trend}</i><p>${esc(X.manchete)}</p></div>` : ''}`;
 
     // ----- Andamento -----
     const ativ = Core.atividades(r), c = r.campo;
@@ -1763,7 +1761,8 @@
           <div class="legend rx-leg"><span class="rx-leg-g">Efetivo por dia</span><span><i class="sw sw-terc"></i>Terceiros</span><span><i class="sw sw-prop"></i>Próprios</span>${c.diasImpraticaveis ? `<span><i class="sw sw-chuva"></i>Impraticável (${c.diasImpraticaveis} d)</span>` : ''}<span class="note">${c.serie.length} RDOs</span></div>
           <div class="chart" id="ch-efetivo-r" data-fill></div></section>`;
     }
-    const andamento = `<div class="p-duas${campoSec ? '' : ' so'}"><section class="rx-s fx p-ativ" data-bloco="atividades"><h2><i class="rx-ic">${IC.rlist}</i>Avanço por atividade${legFarol}</h2>${atividadesHTML(ativ, o, true)}</section>${campoSec}</div>`;
+    // ----- Campo, marcos e atenção (4ª folha): o avanço por atividade saiu (está na tabela da EAP do dashboard)
+    const andamento = `<div class="p-duas${campoSec ? '' : ' so'}">${campoSec}<div class="p-lado" data-ajusta>${marcosSec}${atencaoSec}</div></div>`;
 
     // ----- Valor agregado -----
     const rf = Core.calcFinanceiro(o, r.corte);
@@ -1772,41 +1771,34 @@
         <div class="legend rx-leg"><span><i class="sw sw-real"></i>Realizado (EV)</span><span><i class="sw sw-prev"></i>Planejado (PV)</span><span><i class="sw sw-base"></i>Base</span>${rf.cpi !== null ? `<span class="note">CPI ${fmtNum(rf.cpi, 2)}</span>` : ''}</div>
         <div class="chart" id="ch-fin-r" data-fill></div></section>` : ''}` : '';
 
-    // ----- Registro fotográfico -----
-    // Foto do serviço ao lado da planta da frente (mapa de avanço, área do serviço destacada), uma foto e uma planta por
-    // folha; foto sem frente no mapa (ou obra sem mapa) vai na grade de 12 por folha
+    // ----- Frentes: mapa de avanço + fotos do período (como o relatório mensal) -----
+    // Para cada frente com planta: a folha da planta (executado · em execução · a executar) e, logo depois, as fotos do
+    // período daquela frente, duas por folha, com legenda. Fotos sem frente no mapa (ou obra sem mapa) vêm no fim, também
+    // duas por folha. A escolha das fotos continua a do report (Core.resumoExecutivo: uma por serviço, até 12).
     const mapas = Core.mapasDaObra(o, r);
-    const pares = [], soltas = [];
-    // até 4 pares (4 folhas), um por área: a segunda foto da mesma área vai para a grade
-    const chavePar = v => v.mapa.id + '|' + v.zonas.join(',');
-    X.fotos.forEach(f => { const v = mapas.length && pares.length < 4 ? Core.fotoNoMapa(f, mapas) : null;
-      if (v && !pares.some(p => chavePar(p) === chavePar(v))) pares.push({ f, ...v }); else soltas.push(f); });
-    const figFoto = f => `<figure><img src="${urlImg(f.src)}" alt="${esc(legendaCurta(f) || `Foto do RDO nº ${f.rdo}, ${dBR(f.data)}`)}"><figcaption><small>${dCurto(f.data)} · RDO ${f.rdo}</small>${legendaCurta(f) ? `<span>${esc(legendaCurta(f))}</span>` : ''}</figcaption></figure>`;
-    const parHTML = p => { const dz = p.mapa.zonas.filter(z => p.zonas.includes(z.id));
-      return `<div class="rx-par"><section class="rx-s rx-box fx"><h2><i class="rx-ic">${IC.doc}</i>Serviço em execução<em>${dCurto(p.f.data)} · RDO ${p.f.rdo}</em></h2>
-          <div class="rx-par-f"><img src="${urlImg(p.f.src)}" alt="${esc(legendaCurta(p.f) || `Foto do RDO nº ${p.f.rdo}, ${dBR(p.f.data)}`)}"></div>${legendaCurta(p.f) ? `<p class="rx-par-l">${esc(legendaCurta(p.f))}</p>` : ''}</section>
-        <section class="rx-s rx-box fx"><h2><i class="rx-ic">${IC.search}</i>Mapa de avanço<em>${esc(p.mapa.titulo || '')}</em></h2>
-          ${dz.length ? `<p class="rx-par-l">${dz.map(z => `<b>${z.n} · ${esc(z.rotulo || 'Área')}</b>: ${Core.MAPA_ST[z.st].toLowerCase()}${z.feito === null ? '' : ' (' + pct(z.feito, 0) + ')'}`).join(' · ')}</p>` : ''}
-          <div class="rx-par-m">${plantaHTML(p.mapa, { maxH: 300, destaque: p.zonas })}</div>${legMapa(p.mapa)}${tabelaMapa(p.mapa, true)}</section></div>`; };
-    const periodoFotos = fs => fs.length ? `${fs.length} ${fs.length === 1 ? 'foto' : 'fotos'} de ${dCurto(fs[0].data)} a ${dCurto(fs[fs.length - 1].data)}` : '';
-    const folhasPar = pares.map(p => folha('Registro fotográfico', parHTML(p), 'fl-pares', 'foto do serviço e mapa de avanço da frente'));
-    const grupos = [];
-    for (let i = 0; i < soltas.length; i += 12) grupos.push(soltas.slice(i, i + 12));
-    const fotos = folhasPar.join('') + grupos.map(g => folha('Registro fotográfico', `<div class="rx-fotos">${g.map(figFoto).join('')}</div>`, 'fl-fotos', periodoFotos(soltas))).join('');
+    const porMapa = new Map(mapas.map(m => [m.id, []])), soltas = [];
+    X.fotos.forEach(f => { const v = mapas.length ? Core.fotoNoMapa(f, mapas) : null; if (v && porMapa.has(v.mapa.id)) porMapa.get(v.mapa.id).push(f); else soltas.push(f); });
+    const figFoto = f => `<figure class="rx-f2"><div class="rx-f2-img"><img src="${urlImg(f.src)}" alt="${esc(legendaCurta(f) || `Foto do RDO nº ${f.rdo}, ${dBR(f.data)}`)}"></div>
+        <figcaption><span>${esc(legendaCurta(f) || 'Registro do diário de obra')}</span><small>RDO nº ${f.rdo} · ${dBR(f.data)}</small></figcaption></figure>`;
+    const folhasFotos = (fs, sub) => { const out = []; for (let i = 0; i < fs.length; i += 2) out.push(folha('Fotos · registros — evidências do período', `<div class="rx-fotos2">${fs.slice(i, i + 2).map(figFoto).join('')}</div>`, 'fl-fotos2', sub)); return out.join(''); };
+    const frentes = [];
+    mapas.filter(m => m.pagina !== 'paisagem').forEach(m => frentes.push(folhasDoMapa([m], folha) + folhasFotos(porMapa.get(m.id), m.titulo || '')));
+    const duas = mapas.filter(m => m.pagina === 'paisagem');
+    for (let i = 0; i < duas.length; i += 2) { const par = duas.slice(i, i + 2); frentes.push(folhasDoMapa(par, folha) + folhasFotos(par.flatMap(m => porMapa.get(m.id)), par.map(m => m.titulo).filter(Boolean).join(' · '))); }
+    const fotos = frentes.join('') + folhasFotos(soltas, mapas.length ? 'outros serviços do período' : '');
 
     return `
       <div class="head-row no-print"><div><div class="kicker">Report</div><h1 class="h1">Obra ${esc(o.codigo)} · ${corte}</h1>
-        <p class="sub">Folhas A4 paisagem, com os mesmos quadros na mesma ordem em todas as obras${mapas.length ? ' e o mapa de avanço no fim' : ''}. O detalhe completo fica na aba Obra.</p></div>
+        <p class="sub">Folhas A4 paisagem, com os mesmos quadros na mesma ordem em todas as obras: capa, dashboard, curva física, campo, ${mapas.length ? 'cada frente com a planta e as fotos do período' : 'fotos do período'} e valor agregado. O detalhe completo fica na aba Obra.</p></div>
         <div class="bar-actions">${ehAdmin() ? `<label class="rp-mes" title="Só o mês muda na capa de um mês para o outro">Mês da capa<input class="inp" type="month" id="rp-mes" value="${mesRefIso}"></label>` : ''}<button class="btn" id="bt-pdf">Baixar PDF</button><a class="btn sec2" href="${mailto('', `Report de planejamento · Obra ${o.codigo} · ${corte}`, `Prezados,\n\nSegue o report de planejamento da obra ${o.codigo} · ${o.nome}, com posição de ${corte}.\n\nO painel completo está disponível em ${SITE()}#obra-${o.id}/report (acesso com e-mail e senha).\n\nAtenciosamente,\nPlanejamento · Machine`)}">Enviar por e-mail</a></div></div>
       ${resumoCelular(o, r, X)}
       <div class="folhas" id="paper" data-corte="${r.corte}">
         ${folhaCapa}
         ${folhaDash}
-        ${folha('Visão geral', visao, 'fl-visao')}
-        ${folha('Andamento das frentes', andamento, 'fl-andamento')}
-        ${valor ? folha('Valor agregado', valor, 'fl-valor') : ''}
+        ${folha('Físico (previsto x realizado)', visao, 'fl-visao fl-fisico')}
+        ${folha('Campo, marcos e pontos de atenção', andamento, 'fl-andamento')}
         ${fotos}
-        ${folhasDoMapa(mapas, folha)}
+        ${valor ? folha('Valor agregado', valor, 'fl-valor') : ''}
       </div>`;
   }
 

@@ -89,6 +89,10 @@
 .folha.exec .chart .cb-plan { fill: #FFFFFF; stroke: var(--rx-blue); stroke-width: 1.25; }
 .folha.exec .chart .cb-real { fill: var(--rx-real); opacity: .82; }
 .folha.exec .chart .cb-real.parcial { opacity: .35; }
+.folha.exec .chart .cb-base { fill: var(--rx-blue-2); }
+.folha.exec .chart .dot-real-m { fill: #fff; stroke: var(--rx-real); stroke-width: 1.6; }
+.folha.exec .chart .lbl-m { fill: var(--rx-muted); font-size: 9.5px; font-weight: 600; }
+.folha.exec .chart .lbl-m-real { fill: var(--rx-real); }
 .folha.exec .chart .lbl { fill: var(--rx-blue); font-size: var(--fs-12); font-weight: 600; }
 .folha.exec .chart .lbl-real { fill: var(--rx-real); font-size: var(--fs-13); }
 .folha.exec .chart .lbl, .folha.exec .chart .ax { paint-order: stroke; stroke: var(--rx-bg); stroke-width: 3px; stroke-linejoin: round; }
@@ -438,3 +442,22 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
   .folha.dash.aberta { height: 210mm; min-height: 0; }
   .folha.dash .ds-tg, .folha.dash .ds-tg-sp { display: none; }
 }
+
+/* ---------- Físico (3ª folha): curva física num quadro só e barras Base / Previsto / Realizado na data ---------- */
+.folha.exec .sw-bbase { display: inline-block; width: 9px; height: 10px; border-radius: 1.5px; background: var(--rx-blue-2); }
+.rx-tri { flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 22px; padding: 10px 18px 12px; background: #fff; border: 1px solid var(--rx-line); border-radius: 8px; }
+.rx-tri-i { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 4px 8px; }
+.rx-tri-i span { font-size: 14px; color: var(--rx-ink); }
+.rx-tri-i b { font-size: 16px; font-weight: 600; color: var(--rx-navy); }
+.rx-tri-i i { grid-column: 1 / -1; position: relative; height: 9px; border-radius: 5px; background: var(--rx-line-2); overflow: hidden; }
+.rx-tri-i i em { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; }
+.rx-tri-i.base i em { background: var(--rx-blue-2); } .rx-tri-i.prev i em { background: var(--rx-blue); } .rx-tri-i.real i em { background: var(--rx-real); }
+
+/* ---------- Fotos · registros — evidências do período: duas fotos por folha, legenda abaixo ---------- */
+.rx-fotos2 { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.rx-f2 { margin: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 10px; padding: 12px; background: #fff; border: 1px solid var(--rx-line); border-radius: 12px; box-shadow: 0 1px 3px rgba(16, 24, 40, .06); }
+.rx-f2-img { min-height: 0; display: grid; place-items: center; overflow: hidden; border-radius: 6px; background: var(--rx-bg); }
+.rx-f2-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rx-f2 figcaption { display: grid; gap: 2px; padding: 9px 12px; background: var(--rx-bg); border: 1px solid var(--rx-line); border-radius: 4px; text-align: center; }
+.rx-f2 figcaption span { font-size: 13.5px; line-height: 1.35; color: var(--rx-navy); }
+.rx-f2 figcaption small { font-size: 11px; color: var(--rx-muted); }

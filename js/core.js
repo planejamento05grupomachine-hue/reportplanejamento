@@ -1170,7 +1170,7 @@
     const W = Math.max(300, el.clientWidth || 760), estreito = W < 560;
     const H = Math.max(240, opts.altura || (estreito ? 300 : 340));
     const m = { t: 22, r: 16, b: 26, l: 44 }, gap = 22;
-    const hTop = Math.round((H - m.t - m.b - gap) * 0.64), hBot = H - m.t - m.b - gap - hTop;
+    const hTop = Math.round((H - m.t - m.b - gap) * 0.68), hBot = H - m.t - m.b - gap - hTop;
     const yT0 = m.t + hTop, yB1 = yT0 + gap, yB0 = yB1 + hBot; // base do painel de cima · topo e base do de baixo
     const pts = r.pts, mesCorte = r.corte.slice(0, 7);
     const ini = pts[0].data.slice(0, 7), fim = [pts.at(-1).data, r.prazo.fimCron].sort().at(-1).slice(0, 7);
@@ -1180,7 +1180,7 @@
     const X = d => { const i = Math.max(0, Math.min(n - 1, meses.indexOf(d.slice(0, 7)))); const dim = +fimDoMes(d.slice(0, 7)).slice(8, 10); return m.l + slot * (i + Math.min(1, +d.slice(8, 10) / dim)); };
     const Y = v => yT0 - v * hTop;
     const realMes = d => d.mes > mesCorte ? null : d.mes === mesCorte ? Math.max(0, r.periodo.real) : d.realizado;
-    const maxBar = Math.max(0.01, ...meses.map(k => porMes[k]).filter(Boolean).map(d => Math.max(d.previsto || 0, realMes(d) || 0)));
+    const maxBar = Math.max(0.01, ...meses.map(k => porMes[k]).filter(Boolean).map(d => Math.max(d.base || 0, d.previsto || 0, realMes(d) || 0)));
     const topoR = niceMax(maxBar * 1.1);
     const YR = v => yB0 - v / topoR * hBot;
     const fmtP = v => fmtNum(v * 100, Number.isInteger(Math.round(v * 1000) / 10) ? 0 : 1) + '%';
@@ -1197,16 +1197,25 @@
       g += `<text x="${m.l - 8}" y="${YR(v) + 4}" class="ax" text-anchor="end">${fmtP(v)}</text>`;
     });
     g += `<text x="${m.l}" y="${yB1 - 7}" class="ax ax-t">No mês</text>`;
-    const bw = Math.max(3, Math.min(12, slot * 0.3));
+    // três barras por mês, na ordem da legenda: base (clara) · planejado (contorno) · realizado (cheio, com o valor)
+    const bw = Math.max(3, Math.min(11, slot * 0.24));
     const bar = (x, v, cls) => { if (!v || v <= 0) return ''; const y = YR(v), h = yB0 - y; return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, h).toFixed(1)}" rx="1.5" class="${cls}"/>`; };
     meses.forEach((k, i) => {
       const d = porMes[k], cx = m.l + slot * i + slot / 2;
-      if (d) { g += bar(cx - bw - 1, d.previsto, 'cb-plan'); g += bar(cx + 1, realMes(d), 'cb-real' + (k === mesCorte ? ' parcial' : '')); }
+      if (!d) return;
+      const rv = realMes(d);
+      g += bar(cx - 1.5 * bw - 1.5, d.base, 'cb-base'); g += bar(cx - bw / 2, d.previsto, 'cb-plan'); g += bar(cx + bw / 2 + 1.5, rv, 'cb-real' + (k === mesCorte ? ' parcial' : ''));
+      if (rv > 0.0005 && slot >= 34) g += `<text x="${(cx + bw + 1.5).toFixed(1)}" y="${(YR(rv) - 4).toFixed(1)}" class="lbl-m" text-anchor="middle">${fmtNum(rv * 100, rv >= 0.1 ? 1 : 2)}</text>`;
     });
     rotulosMeses(meses, slot, mesCorte).forEach(l => { g += `<text x="${(m.l + slot * l.i + slot / 2).toFixed(1)}" y="${H - 8}" class="ax${l.forte ? ' ax-strong' : ''}" text-anchor="middle">${l.t}</text>`; });
-    // curvas acumuladas e a diferença até o corte
-    const realPts = pts.filter(p => p.data <= r.corte).map(p => [p.data, p.realizado]);
-    if (!realPts.length || realPts.at(-1)[0] !== r.corte) realPts.push([r.corte, r.real]);
+    // curvas acumuladas e a diferença até o corte. O realizado acumulado vem dos fechamentos de mês (último valor medido
+    // até o fim de cada mês) e do corte: a Curva S diária do Prevision traz 0 nos dias sem medição, e ligar esses pontos
+    // desenhava "dentes" até o zero.
+    const medido = pts.filter(p => p.data <= r.corte && (p.realizado || 0) > 0);
+    const acumAte = d => { const q = medido.filter(p => p.data <= d); return q.length ? q.at(-1).realizado : 0; };
+    const realPts = [[pts[0].data, 0]];
+    meses.filter(k => k < mesCorte).forEach(k => { const fm = fimDoMes(k); if (fm >= pts[0].data) realPts.push([fm, acumAte(fm)]); });
+    realPts.push([r.corte, r.real]);
     const realXY = realPts.map(p => [X(p[0]), Y(p[1])]);
     const prevAte = pts.filter(p => p.data <= r.corte).map(p => [X(p.data), Y(p.previsto)]).concat([[X(r.corte), Y(r.prevCorte)]]);
     g += `<path d="${linhaPath(prevAte)} ${realXY.slice().reverse().map(p => 'L' + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')}Z" class="gap-area${r.desvio >= 0 ? ' pos' : ''}"/>`;
@@ -1215,6 +1224,10 @@
     g += `<path d="${linhaPath(pts.map(p => [X(p.data), Y(p.base)]))}" class="ln ln-base"/>`;
     g += `<path d="${linhaPath(pts.map(p => [X(p.data), Y(p.previsto)]))}" class="ln ln-prev"/>`;
     g += `<path d="${linhaPath(realXY)}" class="ln ln-real"/>`;
+    // fechamentos de mês: ponto e valor acumulado (como no relatório mensal); o do corte tem rótulo próprio
+    realPts.slice(1, -1).forEach((p, i) => { const [x, y] = realXY[i + 1]; if (p[1] <= 0) return;
+      g += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" class="dot-real-m"/>`;
+      if (slot >= 34 && X(r.corte) - x > 26) g += `<text x="${x.toFixed(1)}" y="${(y - 7).toFixed(1)}" class="lbl-m lbl-m-real" text-anchor="middle">${fmtNum(p[1] * 100, 1)}%</text>`; });
     const f = realXY.at(-1), yp = Y(r.prevCorte);
     g += `<circle cx="${f[0]}" cy="${f[1]}" r="4.5" class="dot-real"/><circle cx="${xc}" cy="${yp}" r="3.5" class="dot-prev"/>`;
     // rótulos do corte: realizado à direita (ou à esquerda, sem espaço); planejado acima do ponto, ou abaixo quando o
