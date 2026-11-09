@@ -421,3 +421,20 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .folha.dash .ds-pe * { font-family: "Barlow", Arial, sans-serif; }
 .ds-pe .fl-n { margin-left: auto; margin-right: 6mm; }
 .ds-cli { max-height: 13mm; max-width: 34mm; display: block; }
+/* dashboard na tela: a EAP abre até o pacote executável (setas); a folha cresce enquanto houver linha aberta */
+.folha.dash.aberta { height: auto; min-height: 210mm; }
+.folha.dash.aberta .ds-corpo { min-height: auto; }
+.ds-nm { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.ds-tg { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: #5E6470; cursor: pointer; }
+.ds-tg:hover { background: #EEF1F6; color: var(--cp-navy); }
+.ds-tg svg { width: 14px; height: 14px; transition: transform .15s; }
+.ds-tg[aria-expanded="true"] svg { transform: rotate(90deg); }
+.ds-tg:focus-visible { outline: 2px solid var(--ds-azul); outline-offset: 1px; }
+.ds-tg-sp { flex: none; width: 20px; }
+.ds-tab tr.ds-sub td { background: #FAFBFC; font-size: 12px; padding-top: 4px; padding-bottom: 4px; color: #3D434A; }
+.ds-tab tr.ds-sub td.n i { opacity: .6; }
+@media print {
+  .folha.dash .ds-sub { display: none; }
+  .folha.dash.aberta { height: 210mm; min-height: 0; }
+  .folha.dash .ds-tg, .folha.dash .ds-tg-sp { display: none; }
+}

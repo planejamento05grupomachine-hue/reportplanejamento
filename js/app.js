@@ -1404,6 +1404,9 @@
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
     };
     const rotulo = btn.textContent; btn.disabled = true; btn.textContent = 'Gerando PDF…';
+    // dashboard aberto na tela (EAP expandida, folha mais alta): volta ao nível 2 antes de medir a folha; redesenha no fim
+    const dashAberta = $$('#paper .folha.dash.aberta');
+    dashAberta.forEach(f => { $$('.ds-sub', f).forEach(e => e.remove()); f.classList.remove('aberta'); });
     try {
       await carregaLibsPdf();
       try { await document.fonts.ready; } catch (e) {}
@@ -1421,6 +1424,10 @@
             doc.querySelectorAll('details:not([open]) > :not(summary)').forEach(e => e.remove());
             // avisos internos da tela ("+N na aba Obra") não vão para o cliente
             doc.querySelectorAll('.fl-int').forEach(e => e.remove());
+            // dashboard: no PDF fica a visão do nível 2 da EAP (linhas abertas na tela e setas saem)
+            doc.querySelectorAll('.folha.dash .ds-sub').forEach(e => e.remove());
+            doc.querySelectorAll('.folha.dash').forEach(f => f.classList.remove('aberta'));
+            doc.querySelectorAll('.folha.dash .ds-tg, .folha.dash .ds-tg-sp').forEach(e => e.remove());
           } });
         if (!pdf) pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
         else pdf.addPage('a4', 'landscape');
@@ -1432,7 +1439,7 @@
     } catch (e) {
       const c = e && e.code;
       if (c !== 'declined') toast(c === 'rate_limited' ? 'Já existe um download aguardando confirmação.' : 'Não consegui gerar o PDF. Tente de novo.');
-    } finally { btn.disabled = false; btn.textContent = rotulo; }
+    } finally { btn.disabled = false; btn.textContent = rotulo; if (dashAberta.length) render(); }
   }
 
   // ---------- Valor agregado: cartões e nota dos termos (report e aba Obra) ----------
@@ -1834,25 +1841,33 @@
       </div>`;
     // tabela: a EAP da própria obra — raiz e linhas de nível 2 do cronograma do Prevision, na ordem e com os nomes da EAP,
     // com Base, Previsto e Realizado de cada linha. Sem cronograma, o Progresso por tarefas (nível 2), também na ordem da EAP.
+    // Na tela, cada item abre até o pacote executável (a última linha da EAP), como o "Avanço por atividade"; no PDF e
+    // na impressão a folha volta ao nível 2 (as linhas abertas saem no onclone de baixarPdf e no CSS de impressão).
     const crono = (o.cronograma && o.cronograma.linhas) || [];
     const raizC = crono.find(l => l.nivel === 1);
     const ordemEap = (a, b) => String(a.eap).split('.').map(Number).reduce((s, v, i) => s || v - (+String(b.eap).split('.')[i] || 0), 0);
-    const linhas = crono.length
-      ? crono.filter(l => l.nivel === 2).sort(ordemEap).map(l => ({ nome: l.nome, base: l.base, prev: l.previsto, real: l.realizado }))
-      : (o.tarefas || []).filter(t => t.nivel === 2).sort(ordemEap).map(t => { const p = (t.previsto ?? t.base ?? 0) || null;
-        return { nome: t.tarefa, base: null, prev: null, real: p ? (t.realizado || 0) / p : null }; });
-    const densa = linhas.length > DASH_LINHAS;
+    const nos = (crono.length
+      ? crono.filter(l => l.nivel >= 2).map(l => ({ eap: l.eap, nivel: l.nivel, nome: l.nome, base: l.base, prev: l.previsto, real: l.realizado }))
+      : (o.tarefas || []).filter(t => t.nivel >= 2).map(t => { const p = (t.previsto ?? t.base ?? 0) || null;
+        return { eap: t.eap, nivel: t.nivel, nome: t.tarefa, base: null, prev: null, real: p ? (t.realizado || 0) / p : null }; })).sort(ordemEap);
+    const filhosDe = x => nos.filter(y => y.nivel === x.nivel + 1 && String(y.eap).startsWith(x.eap + '.'));
+    const linhas = [];
+    const poe = x => { const f = filhosDe(x), ab = f.length > 0 && !!S.abertos['d' + x.eap]; linhas.push({ ...x, temFilhos: f.length > 0, aberto: ab }); if (ab) f.forEach(poe); };
+    nos.filter(x => x.nivel === 2).forEach(poe);
+    const densa = nos.filter(x => x.nivel === 2).length > DASH_LINHAS, algumAberto = linhas.some(x => x.nivel > 2);
     const barra = v => v === null || v === undefined ? '<td class="n">—</td>' : `<td class="n"><i style="width:${Math.max(0, Math.min(100, v * 100)).toFixed(1)}%"></i><span>${n2(v)}</span></td>`;
     const delta = (a, b) => { if (a === null || b === null || a === undefined || b === undefined) return '<td class="d">—</td>';
       const d = (a - b) * 100, z = Math.abs(d) < 0.005, up = d >= 0;
       return `<td class="d ${z ? 'z' : up ? 'pos' : 'neg'}"><span class="ds-seta" aria-hidden="true">${up ? '↑' : '↓'}</span>${fmtNum(z ? 0 : d, 2)}</td>`; };
-    const lin = (x, cls = '') => `<tr class="${cls}"><td class="nm">${esc(x.nome)}</td>${barra(x.base)}${barra(x.prev)}${barra(x.real)}${delta(x.real, x.base)}${delta(x.real, x.prev)}</tr>`;
+    const nomeLinha = x => x.nivel === undefined ? esc(x.nome)
+      : `<span class="ds-nm" style="padding-left:${(x.nivel - 2) * 16}px">${x.temFilhos ? `<button class="ds-tg" data-abre="d${esc(x.eap)}" aria-expanded="${x.aberto}" aria-label="${x.aberto ? 'Recolher' : 'Abrir'} ${esc(x.nome)}">${IC.right}</button>` : '<i class="ds-tg-sp"></i>'}<span>${esc(x.nome)}</span></span>`;
+    const lin = (x, cls = '') => `<tr class="${cls}${x.nivel > 2 ? ` ds-sub n${Math.min(x.nivel, 6)}` : ''}"><td class="nm">${nomeLinha(x)}</td>${barra(x.base)}${barra(x.prev)}${barra(x.real)}${delta(x.real, x.base)}${delta(x.real, x.prev)}</tr>`;
     const raiz = raizC ? { nome: raizC.nome, base: raizC.base, prev: raizC.previsto, real: raizC.realizado }
       : { nome: `${o.codigo} - ${(capa && capa.titulo) || o.nome}`, base: r.baseCorte, prev: r.prevCorte, real: r.real };
     const tabela = `<section class="ds-tab${densa ? ' densa' : ''}"><h2>Previsto x Realizado<em>EAP da obra · % de cada item · posição de ${dBR(raizC && o.cronograma.dataRef ? o.cronograma.dataRef : r.corte)}</em></h2>
         <table><thead><tr><th>Nome</th><th>Base (%)</th><th>Previsto (%)</th><th>Realizado (%)</th><th>Δ Base (%)</th><th>Δ Previsto (%)</th></tr></thead>
           <tbody>${lin(raiz, 'obra')}${linhas.map(x => lin(x)).join('')}</tbody></table></section>`;
-    return `<article class="folha paisagem dash" aria-label="Dashboard, status geral">
+    return `<article class="folha paisagem dash${algumAberto ? ' aberta' : ''}" aria-label="Dashboard, status geral">
         <header class="ds-cab"><h1>DASHBOARD – STATUS GERAL</h1><div class="cp-machine"><img src="${LOGO}" alt="Machine"><span>Realizações com base sólida</span></div></header>
         <div class="ds-corpo">${cards}${prazo}${tabela}</div>
         <footer class="ds-pe"><span>Obra ${esc(o.codigo)} · ${esc((capa && capa.titulo) || o.nome)}</span><span class="fl-n"></span>${capa && capa.logo ? `<img class="ds-cli" src="${capa.logo}" alt="${esc(o.cliente || 'Cliente')}">` : '<i></i>'}</footer>
