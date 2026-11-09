@@ -128,7 +128,8 @@
   // Funde a carga na base (rascunho, ou a posição publicada quando não há rascunho). Fotos ficam com quem chama.
   function aplicarCarga(base, pacote, corte, fontes, hoje, { temRascunho } = {}) {
     const ras = clone(base);
-    ['curva', 'mensal', 'tarefas', 'rdos', 'cronograma', 'medicao'].forEach(k => { if (pacote[k]) ras[k] = pacote[k]; });
+    // indicesPrevision (IDC/IDP da Gestão de Custos do Prevision): tem data de referência própria, não mexe no corte
+    ['curva', 'mensal', 'tarefas', 'rdos', 'cronograma', 'medicao', 'indicesPrevision'].forEach(k => { if (pacote[k]) ras[k] = pacote[k]; });
     // financeiro tem 3 subtipos (curva/mensal/tarefas) em lotes separados: funde em vez de substituir,
     // senão enviar só a Curva S financeira apagaria o Progresso por tarefas financeiro do mês anterior.
     if (pacote.financeiro) ras.financeiro = { ...(ras.financeiro || {}), ...pacote.financeiro };

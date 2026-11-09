@@ -1812,7 +1812,8 @@
     const P = r.prazo, F = Core.FAIXAS, n2 = v => v === null || v === undefined || isNaN(v) ? '—' : fmtNum(v * 100, 2);
     const farol = v => v === null || v === undefined ? 'neutro' : v >= F.ok ? 'ok' : v >= F.atencao ? 'atencao' : 'critico';
     const rf = Core.calcFinanceiro(o, r.corte), comVA = Core.vaNoReport(o, rf);
-    const idp = r.farolTempo ? r.prazoGanho.idpT : r.idp, cpi = rf ? rf.cpi : null;
+    // IDC: só o da Gestão de Custos do Prevision (gravado pela sincronização em obra.indicesPrevision)
+    const IP = o.indicesPrevision, idp = r.farolTempo ? r.prazoGanho.idpT : r.idp, cpi = IP && IP.idc ? IP.idc : null;
     const varFim = P.contrFim && P.fimCron ? diff(P.contrFim, P.fimCron) : (r.crono && r.crono.slip !== undefined ? r.crono.slip : null);
     const card = (cls, rot, val, sub) => `<div class="ds-card ${cls}"><small>${rot}</small><b>${val}</b><span>${sub}</span></div>`;
     const cards = `<div class="ds-cards">
@@ -1820,7 +1821,7 @@
         ${card('ac-fis', 'Avanço financeiro (acum.)', comVA && rf.evFrac !== null ? `${n2(rf.evFrac)}%` : '—', comVA && rf.baseFrac !== null ? `Base: ${n2(rf.baseFrac)}%` : 'sem Curva S financeira no report')}
         <div class="ds-ind">
           <div class="ds-ind-g">${card(`ac-${farol(idp)}`, `IDP<em>(Índice de Prazo)</em>`, idp ? fmtNum(idp, 2) : '—', 'Meta: 1,00')}
-            ${card(`ac-${farol(cpi)}`, `IDC<em>(Índice de Custo)</em>`, cpi ? fmtNum(cpi, 2) : '—', cpi ? 'Meta: 1,00' : 'sem custo real (AC)')}</div>
+            ${card(`ac-${farol(cpi)}`, `IDC<em>(Índice de Custo)</em>`, cpi ? fmtNum(cpi, 2) : '—', cpi ? 'Meta: 1,00' : 'sem IDC no Prevision')}</div>
           <div class="ds-leg"><span><i class="ok"></i>≥ ${fmtNum(F.ok, 2)}</span><span><i class="atencao"></i>${fmtNum(F.atencao, 2)} ≤ índice &lt; ${fmtNum(F.ok, 2)}</span><span><i class="critico"></i>&lt; ${fmtNum(F.atencao, 2)}</span></div>
         </div>
         ${card(`ac-${varFim === null ? 'neutro' : varFim > 0 ? 'critico' : 'escuro'}`, 'Variação término', varFim === null ? '—' : `${varFim > 0 ? '+' : ''}${varFim} ${Math.abs(varFim) === 1 ? 'dia' : 'dias'}`, 'Meta: 0 dias')}

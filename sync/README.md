@@ -209,6 +209,17 @@ simulando (bom para as primeiras semanas).
 Observações do GitHub: horários agendados podem atrasar alguns minutos; em repositório público sem atividade por 60 dias
 o agendamento é suspenso (as cargas mantêm o repositório ativo).
 
+## IDC da Gestão de Custos do Prevision (09/11/2026)
+
+O cartão IDC do dashboard do report usa **só** o IDC do Prevision. Em cada execução, para cada obra com `apiProjectId`,
+o robô consulta pela API oficial (mesmo token `PREVISION_API_TOKEN`): `GET /cost-management/api/v1/projects` (o projeto
+de custos é o que tem `constructionProjectId` = `apiProjectId`), `GET …/project/{id}/versions` (versão de data de
+referência mais recente) e `POST …/version/{versao}/trend-table` (consulta; a API usa POST com filtro vazio). Grava
+`indicesPrevision = { idc, idp, versao, dataReferencia, ultimaMedicao }` da linha-resumo (`itemSummary`) no rascunho,
+só quando muda, sem alterar as datas de corte. A base do IDC (caixa ou competência, estoque, caução) é a configuração de
+IDC da empresa no Prevision. Não bloqueia a carga: obra sem Gestão de Custos, sem versão ou sem IDC fica com "—" no
+report, e o resumo público diz só a situação (`IDC Prevision: coletado`, `obra sem Gestão de Custos`…), nunca o valor.
+
 ## Fontes externas: Sienge e Diário de Obra (em implantação, 03/11/2026)
 
 Objetivo: na mesma rotina de sexta, colher também no **Sienge** (medição, custo realizado, compras e contratos) e no

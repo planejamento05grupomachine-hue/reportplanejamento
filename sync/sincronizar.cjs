@@ -112,6 +112,22 @@ function conjuntoDe(entrada, nat, XLSX) {
   return entrada.arquivos.length ? lerConjunto(XLSX, nat, entrada.arquivos) : { natureza: nat, dados: {}, nomes: {}, origem: [], problemas: [] };
 }
 
+// IDC da obra na Gestão de Custos do Prevision. Falha aqui não derruba a obra nem a execução: fica registrada no relatório.
+async function coletarIndices(obra, ctx) {
+  const { op, deps, estado } = ctx;
+  if (op.fonte === 'arquivos') return { situacao: 'nao-consultado' };
+  if (!obra.prevision || !obra.prevision.apiProjectId) return { situacao: 'sem-id-da-api' };
+  if (estado.falha.api) return { situacao: 'erro', codigo: estado.falha.api.codigo || null };
+  try {
+    const api = deps.api();
+    estado.projetosCusto = estado.projetosCusto || await api.projetosCusto();
+    const r = await prevApi.indicesDeCusto(api, obra.prevision.apiProjectId, estado.projetosCusto);
+    if (r.situacao !== 'ok') return { situacao: r.situacao };
+    const { situacao, ...dados } = r;
+    return { situacao, dados };
+  } catch (e) { return { situacao: 'erro', codigo: e.codigo || null }; }
+}
+
 // ---------- uma obra: coleta → validação → rascunho → gravação ----------
 async function processarObra(obra, ctx) {
   const { op, deps, gh, sessao, retrato, XLSX, hoje, agoraISO } = ctx;
@@ -146,6 +162,12 @@ async function processarObra(obra, ctx) {
     const pacote = nat === 'fisico' ? Carga.montarPacote(dados, v.corte, conj.nomes.cronograma) : dados;
     const fontes = Object.fromEntries(Object.keys(conj.dados).map(t => [ROTULO[nat][t], `${conj.nomes[t] || 'API oficial do Prevision'} (automático, ${hoje})`]));
     novo = Carga.aplicarCarga(novo || base, pacote, v.corte, fontes, hoje, { temRascunho: !!ras || !!novo });
+  }
+  // IDC/IDP da Gestão de Custos do Prevision (API oficial): não bloqueia a carga e só entra no rascunho quando muda
+  res.indices = await coletarIndices(obra, ctx);
+  if (res.indices.dados && JSON.stringify(base.indicesPrevision || null) !== JSON.stringify(res.indices.dados)) {
+    const b = novo || base;
+    novo = Carga.aplicarCarga(b, { indicesPrevision: res.indices.dados }, b.dataCorte, { 'IDC (Prevision)': `Gestão de Custos · API oficial do Prevision (automático, ${hoje})` }, hoje, { temRascunho: !!ras || !!novo });
   }
   const sts = Object.values(res.conjuntos).map(c => c.status);
   if (sts.some(s => s === 'bloqueado' || s === 'falhou')) res.mensagens.push('Parte da carga não entrou: a última carga válida desse conjunto foi preservada.');
@@ -188,7 +210,7 @@ function resumoPublico(r) {
   for (const o of r.obras) {
     if (o.erro) { linhas.push(`- Obra ${o.obra}: FALHA [${o.erro.codigo || 'ERRO'}] ${o.erro.msg} · rascunho não alterado`); continue; }
     const cj = Object.entries(o.conjuntos || {}).map(([k, c]) => `${k} (${c.fonte}): ${c.status}${c.status === 'bloqueado' ? ' [' + [...new Set(c.verificacoes.filter(v => v.nivel === 'bloqueio').map(v => v.id))].join(', ') + ']' : c.status === 'falhou' ? ` [${c.erro.codigo || 'ERRO'}]` : ''}`).join(' · ');
-    linhas.push(`- Obra ${o.obra}: coleta ${o.coleta} · rascunho ${o.rascunho}${o.rascunhoConferido === false ? ' (CONFERÊNCIA FALHOU)' : o.rascunhoConferido ? ' e conferido' : ''}${o.site ? ` · site ${o.site}` : ''} · posição publicada ${o.publicacao}${cj ? ` · ${cj}` : ''}`);
+    linhas.push(`- Obra ${o.obra}: coleta ${o.coleta} · rascunho ${o.rascunho}${o.rascunhoConferido === false ? ' (CONFERÊNCIA FALHOU)' : o.rascunhoConferido ? ' e conferido' : ''}${o.site ? ` · site ${o.site}` : ''} · posição publicada ${o.publicacao}${cj ? ` · ${cj}` : ''}${o.indices ? ` · IDC Prevision: ${{ ok: 'coletado', 'sem-projeto-de-custos': 'obra sem Gestão de Custos', 'sem-versao': 'sem versão de custos', 'sem-idc': 'sem IDC calculado', 'sem-id-da-api': 'sem id da API', 'nao-consultado': 'não consultado', erro: `falhou [${o.indices.codigo || 'ERRO'}]` }[o.indices.situacao] || o.indices.situacao}` : ''}`);
     for (const c of Object.values(o.conjuntos || {})) {
       for (const v of c.verificacoes.filter(x => x.nivel === 'bloqueio')) linhas.push(`    × ${v.publico}`);
       if (c.erro) linhas.push(`    × ${c.erro.msg}`);
@@ -276,7 +298,7 @@ if (require.main === module) {
     if (op.detalhar && process.env.GITHUB_ACTIONS) throw erro('--detalhar mostra números da obra: não use no GitHub Actions (o log é público).', 'USO');
     const { resumo, codigoSaida, relatorio } = await executar(op);
     console.log(resumo);
-    if (op.detalhar) for (const o of relatorio.obras) console.log(JSON.stringify({ obra: o.obra, seria: o.seria, mensagens: o.mensagens, conjuntos: Object.fromEntries(Object.entries(o.conjuntos || {}).map(([k, c]) => [k, { status: c.status, fonte: c.fonte, corte: c.corte, ultimoRealizado: c.ultimoRealizado, ultimaMedicaoPrevision: c.ultimaMedicaoPrevision, erro: c.erro, periodoTarefas: c.periodoTarefas, dashboardAtualizado: c.dashboardAtualizado, verificacoes: c.verificacoes.map(v => `${v.nivel} ${v.id}: ${v.detalhe}`), arquivos: c.arquivos.map(a => `${a.tipo} ${a.nome} ${(a.sha256 || '').slice(0, 12)} ${a.coletadoEm}`) }])) }, null, 1));
+    if (op.detalhar) for (const o of relatorio.obras) console.log(JSON.stringify({ obra: o.obra, seria: o.seria, mensagens: o.mensagens, indices: o.indices, conjuntos: Object.fromEntries(Object.entries(o.conjuntos || {}).map(([k, c]) => [k, { status: c.status, fonte: c.fonte, corte: c.corte, ultimoRealizado: c.ultimoRealizado, ultimaMedicaoPrevision: c.ultimaMedicaoPrevision, erro: c.erro, periodoTarefas: c.periodoTarefas, dashboardAtualizado: c.dashboardAtualizado, verificacoes: c.verificacoes.map(v => `${v.nivel} ${v.id}: ${v.detalhe}`), arquivos: c.arquivos.map(a => `${a.tipo} ${a.nome} ${(a.sha256 || '').slice(0, 12)} ${a.coletadoEm}`) }])) }, null, 1));
     if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, '```\n' + resumo + '\n```\n');
     process.exitCode = codigoSaida;
   })().catch(e => { console.error(`[${e.codigo || 'ERRO'}] ${e.message}`); process.exitCode = 2; });

@@ -24,12 +24,14 @@ class PrevisionAPI {
     if (!token) throw erro('Falta o token da API do Prevision (PREVISION_API_TOKEN).', 'SEM_TOKEN_PREVISION');
     Object.assign(this, { token, fetch, base, tentativas, timeoutMs, pausaMs });
   }
-  async get(caminho, params) {
+  // corpo: só para as consultas que a API faz por POST (tabela de tendência da Gestão de Custos) — não altera nada
+  async get(caminho, params, corpo) {
     const q = params ? '?' + new URLSearchParams(params).toString() : '';
+    const metodo = corpo === undefined ? {} : { method: 'POST', body: JSON.stringify(corpo) };
     let ultimo;
     for (let t = 0; t < this.tentativas; t++) {
       let r;
-      try { r = await this.fetch(this.base + caminho + q, { headers: { Authorization: 'Bearer ' + this.token, Accept: 'application/json' }, signal: AbortSignal.timeout(this.timeoutMs) }); }
+      try { r = await this.fetch(this.base + caminho + q, { ...metodo, headers: { Authorization: 'Bearer ' + this.token, Accept: 'application/json', ...(corpo === undefined ? {} : { 'Content-Type': 'application/json' }) }, signal: AbortSignal.timeout(this.timeoutMs) }); }
       catch (e) { ultimo = erro(`Falha de rede com a API do Prevision (${e.name}).`, 'REDE_PREVISION'); await espera(this.pausaMs * (t + 1)); continue; }
       if (r.ok) return r.json();
       if (r.status === 401 || r.status === 403) throw erro('A API do Prevision recusou o token (inválido, expirado ou sem acesso a este projeto).', 'TOKEN_PREVISION');
@@ -44,6 +46,25 @@ class PrevisionAPI {
   async medicoes(id) { return (await this.get(`/construction-schedule/api/v1/project/${id}/measurement_tasks`)).measurement_tasks || []; }
   progressoDiario(id, view_type, dashboard_type) { return this.get(`/construction-schedule/api/v1/project/${id}/dashboards/daily-progress`, { view_type, dashboard_type }); }
   progressoMensal(id, view_type, dashboard_type) { return this.get(`/construction-schedule/api/v1/project/${id}/dashboards/monthly-progress`, { view_type, dashboard_type }); }
+  // Gestão de Custos: projetos (ligados ao projeto do cronograma por constructionProjectId), versões e tabela de tendência
+  async projetosCusto() { return (await this.get('/cost-management/api/v1/projects')).projects || []; }
+  async versoesCusto(id) { return (await this.get(`/cost-management/api/v1/project/${id}/versions`)).versions || []; }
+  tabelaTendencia(id, versao) { return this.get(`/cost-management/api/v1/project/${id}/version/${versao}/trend-table`, null, {}); }
+}
+
+// IDC (e IDP) da obra na Gestão de Custos do Prevision: a linha-resumo (itemSummary) da tabela de tendência da versão
+// mais recente. A base do IDC (caixa ou competência, estoque e caução) é a configuração de IDC da empresa no Prevision.
+// Sem projeto de custos ligado à obra, sem versão ou sem IDC calculado: null (o painel mostra "—").
+async function indicesDeCusto(api, apiProjectId, projetos) {
+  const proj = (projetos || await api.projetosCusto()).find(p => String(p.constructionProjectId) === String(apiProjectId) && !p.isArchived);
+  if (!proj) return { situacao: 'sem-projeto-de-custos' };
+  const versoes = (await api.versoesCusto(proj.id)).filter(v => v.referenceDate).sort((a, b) => (a.referenceDate < b.referenceDate ? 1 : -1));
+  if (!versoes.length) return { situacao: 'sem-versao' };
+  const v = versoes[0], t = await api.tabelaTendencia(proj.id, v.id), s = (t && t.itemSummary) || {};
+  const ok = x => typeof x === 'number' && isFinite(x) && x > 0.05 && x < 20;
+  if (!ok(s.idc)) return { situacao: 'sem-idc', versao: v.name || null };
+  return { situacao: 'ok', idc: s.idc, idp: ok(s.idp) ? s.idp : null, versao: v.name || null,
+    dataReferencia: String(t.referenceDate || v.referenceDate).slice(0, 10), ultimaMedicao: t.lastMeasurementDate ? String(t.lastMeasurementDate).slice(0, 10) : null };
 }
 
 // Escala dos percentuais da API: não documentada (0–1 ou 0–100). Decide pela soma da base, que fecha a obra inteira.
@@ -111,4 +132,4 @@ function comparar(api, exp) {
   return { curva: dif(api.curva, exp.curva, 'data', ['base', 'previsto', 'realizado']), mensal: dif(api.mensal, exp.mensal, 'mes', ['base', 'previsto', 'realizado']) };
 }
 
-module.exports = { PrevisionAPI, escalaPercentual, curvaDeDiario, mensalDeMensal, coletarAPI, comparar };
+module.exports = { PrevisionAPI, escalaPercentual, curvaDeDiario, mensalDeMensal, coletarAPI, comparar, indicesDeCusto };
