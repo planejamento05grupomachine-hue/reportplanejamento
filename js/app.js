@@ -1850,7 +1850,9 @@
       const itens = ult.itens.filter(i => prof(i.eap) <= minP + 1).slice(0, 22);
       const pc = v => v === null || v === undefined ? '' : pct(v, 2);
       const total = ult.itens.filter(i => prof(i.eap) === minP).reduce((s, i) => s + (i.medicao || 0), 0);
-      const mesBol = meses.find(m => m.boletim && String(m.boletim).replace(/\D/g, '') === String(nBol(ult)));
+      // competência: o mês ligado ao boletim na série ou, sem esse vínculo na planilha, o último mês medido
+      const mesBol = meses.find(m => m.boletim && String(m.boletim).replace(/\D/g, '') === String(nBol(ult)))
+        || [...meses].reverse().find(m => (m.realizadoCT || m.medicaoRealizada || 0) > 0);
       const tab = `<table class="md-tab md-bol"><thead><tr><th>Referência</th><th>Descrição</th><th class="n">Acum. anterior</th><th class="n">Medida</th><th class="n">% Exe.</th><th class="n">Preço unitário</th><th class="n">Medição</th></tr></thead>
           <tbody>${itens.map(i => `<tr class="${prof(i.eap) === minP ? 'md-n1' : ''}"><td>${esc(i.eap)}</td><td>${esc(i.descricao)}</td><td class="n">${pc(i.acumuladoAnterior)}</td><td class="n">${pc(i.medida)}</td><td class="n">${pc(i.pctExec)}</td><td class="n">${$$v(i.precoUnitario)}</td><td class="n">${$$v(i.medicao)}</td></tr>`).join('')}</tbody>
           <tfoot><tr><td colspan="6">Total da medição</td><td class="n">${moeda(total)}</td></tr></tfoot></table>`;
