@@ -794,7 +794,7 @@
           const bmp = await createImageBitmap(f), k = Math.min(1, 1400 / Math.max(bmp.width, bmp.height));
           const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
           const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(bmp, 0, 0, cv.width, cv.height);
-          (m.fotos = m.fotos || []).push({ id: novoId(), src: cv.toDataURL('image/jpeg', 0.8), legenda: '' });
+          (m.fotos = m.fotos || []).push({ id: novoId(), src: cv.toDataURL('image/jpeg', 0.8), legenda: '', em: hojeLocal() });
         }
         ed.lendoFotos = null;
       } catch (e) { ed.lendoFotos = 'Não consegui ler a foto: ' + e.message; }
@@ -1769,11 +1769,19 @@
     const duas = mapas.filter(m => m.pagina === 'paisagem');
     for (let i = 0; i < duas.length; i += 2) { const par = duas.slice(i, i + 2); frentes.push(folhasDoMapa(par, folha) + folhasFotos(par.flatMap(m => porMapa.get(m.id)), par.map(m => m.titulo).filter(Boolean).join(' · '))); }
     const fotos = frentes.join('') + folhasFotos(soltas, mapas.length ? 'outros serviços do período' : '');
+    // rotina do mês (só administrador, fora do PDF): de quando são as fotos das frentes e como recomeçar no mês seguinte
+    const fotosFr = mapas.flatMap(m => (m.fotos || []).map(f => ({ ...f, frente: m.titulo, em: f.em || m.atualizadoEm || null })));
+    const datasF = fotosFr.map(f => f.em).filter(Boolean).sort();
+    const velhas = fotosFr.filter(f => !f.em || diff(f.em, hojeLocal()) > 40).length;
+    const notaFotos = !ehAdmin() ? '' : curadas
+      ? `<div class="note-box no-print${velhas ? ' err' : ''}">Fotos das frentes: <b>${fotosFr.length}</b> em <b>${mapas.filter(m => (m.fotos || []).length).length}</b> frentes${datasF.length ? `, carregadas de ${dBR(datasF[0])} a ${dBR(datasF.at(-1))}` : ''}.${velhas ? ` <b>${velhas} ${velhas === 1 ? 'foto tem' : 'fotos têm'} mais de 40 dias ou sem data</b>: confira se são do mês do report.` : ''} No mês seguinte, limpe e carregue as novas em Obra → Mapa de avanço. <button class="btn sec2" type="button" data-limpafotos style="margin-left:8px">Limpar fotos de todas as frentes</button></div>`
+      : mapas.length ? '<div class="note-box no-print">Nenhuma frente com fotos escolhidas: o report usa a seleção automática das fotos dos RDOs. Para o modelo do relatório mensal, carregue duas fotos por frente em Obra → Mapa de avanço.</div>' : '';
 
     return `
       <div class="head-row no-print"><div><div class="kicker">Report</div><h1 class="h1">Obra ${esc(o.codigo)} · ${corte}</h1>
         <p class="sub">Folhas A4 paisagem, com os mesmos quadros na mesma ordem em todas as obras: capa, dashboard, curva física, ${mapas.length ? 'cada frente com a planta e as fotos do período' : 'fotos do período'}, valor agregado e medições. O detalhe completo fica na aba Obra.</p></div>
         <div class="bar-actions">${ehAdmin() ? `<label class="rp-mes" title="Só o mês muda na capa de um mês para o outro">Mês da capa<input class="inp" type="month" id="rp-mes" value="${mesRefIso}"></label>` : ''}<button class="btn" id="bt-pdf">Baixar PDF</button><a class="btn sec2" href="${mailto('', `Report de planejamento · Obra ${o.codigo} · ${corte}`, `Prezados,\n\nSegue o report de planejamento da obra ${o.codigo} · ${o.nome}, com posição de ${corte}.\n\nO painel completo está disponível em ${SITE()}#obra-${o.id}/report (acesso com e-mail e senha).\n\nAtenciosamente,\nPlanejamento · Machine`)}">Enviar por e-mail</a></div></div>
+      ${notaFotos}
       ${resumoCelular(o, r, X)}
       <div class="folhas" id="paper" data-corte="${r.corte}">
         ${folhaCapa}
@@ -2003,13 +2011,17 @@
     if (!mapas.length) return '';
     const titulo = m => `<h2 class="mp-tt"><small>Frente de serviço</small>${esc(m.titulo || 'Sem título')}</h2>`;
     const larga = m => m.w / m.h >= 1.6;
-    const uma = mapas.filter(m => m.pagina !== 'paisagem').map(m => folha('Mapa de avanço físico', larga(m)
+    // planta já marcada (sem áreas desenhadas no painel), como no relatório mensal: a planta ocupa a folha e a legenda
+    // fica em linha embaixo
+    const legLinha = `<div class="mp-leg-h"><span><i class="mp-sw ok"></i>Executado</span><span><i class="mp-sw andamento"></i>Em execução</span><span><i class="mp-sw pendente"></i>A executar</span></div>`;
+    const limpa = m => folha('Físico · avanço da frente', `${titulo(m)}<div class="mp-limpa">${plantaHTML(m, { maxH: 520 })}</div>${legLinha}`, 'mp-folha mp-folha-limpa');
+    const uma = mapas.filter(m => m.pagina !== 'paisagem').map(m => !m.zonas.length ? limpa(m) : folha('Físico · avanço da frente', larga(m)
       ? `${titulo(m)}<div class="mp-um largo">${plantaHTML(m, { maxH: Math.max(260, 440 - 27 * m.zonas.length) })}<div class="mp-info">${quadroMapa(m)}${tabelaMapa(m, false)}</div></div>`
       : `<div class="mp-um">${plantaHTML(m, { maxH: 600 })}<div class="mp-info">${titulo(m)}${quadroMapa(m)}${tabelaMapa(m, true)}</div></div>`, 'mp-folha'));
     const duas = mapas.filter(m => m.pagina === 'paisagem'), pares = [];
     for (let i = 0; i < duas.length; i += 2) pares.push(duas.slice(i, i + 2));
     const dupla = pares.map(par => { const emp = par.length > 1 && par.every(larga);
-      return folha('Mapa de avanço físico', `<div class="mp-dupla${emp ? ' empilha' : ''}">${par.map(m => `<div class="mp-meia">${titulo(m)}${plantaHTML(m, { maxH: emp ? 228 : 540 })}${legMapa(m)}</div>`).join('')}</div>`, 'mp-folha'); });
+      return folha('Físico · avanço da frente', `<div class="mp-dupla${emp ? ' empilha' : ''}">${par.map(m => `<div class="mp-meia">${titulo(m)}${plantaHTML(m, { maxH: emp ? 228 : 540 })}${legMapa(m)}</div>`).join('')}</div>`, 'mp-folha'); });
     return uma.concat(dupla).join('');
   }
 
@@ -2324,6 +2336,12 @@
     const ap = $('#imp-aplicar'); if (ap) ap.onclick = aplicarImport;
     const li = $('#imp-limpar'); if (li) li.onclick = () => { S.imp = null; render(); };
     const pdf = $('#bt-pdf'); if (pdf) pdf.onclick = () => baixarPdf(pdf);
+    // início do mês: tira as fotos de todas as frentes (as plantas ficam) para carregar as do mês novo
+    const lf = $('[data-limpafotos]'); if (lf) lf.onclick = () => {
+      const base = DB.obras.find(x => x.id === S.obraId); if (!base) return;
+      confirma({ titulo: 'Limpar fotos das frentes', texto: 'As fotos escolhidas de todas as frentes saem do rascunho (as plantas continuam). Depois, carregue as fotos do mês novo em Obra → Mapa de avanço.', ok: 'Limpar fotos', perigo: true },
+        () => salvarMapas(base, (base.mapas || []).map(m => ({ ...m, fotos: [] }))));
+    };
     // mês/ano de referência da capa: grava na carga que o administrador está vendo (rascunho, se houver)
     const rpm = $('#rp-mes'); if (rpm) rpm.onchange = async () => {
       if (!/^\d{4}-\d{2}$/.test(rpm.value)) return;

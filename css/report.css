@@ -479,3 +479,10 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .md-tab tfoot td { font-weight: 700; color: var(--rx-navy); background: #E4E6EA; border-bottom: 0; }
 .md-bol td { font-size: 11.5px; padding: 4px 8px; }
 .md-bol tr.md-n1 td { font-weight: 700; background: #EEF1F6; }
+
+/* folha da planta já marcada (sem áreas desenhadas): planta ocupando a folha, legenda em linha embaixo */
+.mp-folha-limpa .fl-corpo { gap: 10px; }
+.mp-limpa { flex: 1 1 0; min-height: 0; display: grid; place-items: center; }
+.mp-limpa .mp-planta { max-height: 100%; }
+.mp-leg-h { flex: none; display: flex; justify-content: center; gap: 26px; font-size: 14px; color: var(--rx-ink); }
+.mp-leg-h span { display: inline-flex; align-items: center; }

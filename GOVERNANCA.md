@@ -170,3 +170,22 @@ precisa estar resolvido para uma frente avançar (projeto, contratação, materi
 - **Cronograma (Gantt)**: meses rotulados por trimestre ou semestre em obras longas, com o ano.
 - **Aba Obra**: atalhos fixos para as seções; resumo das restrições (equipe interna); a menos de 30 dias do fim do cronograma, o "ritmo necessário" dá lugar ao "para concluir" (o que falta e em quantos dias); corte com mais de 10 dias aparece em destaque; avanço por mês com a mesma notação do report (planejado em contorno).
 - **Portfólio**: avanço físico numa célula (número e barra com a marca do planejado), no lugar da rosca e das barras que repetiam os mesmos dois números; linha de restrições por obra (equipe interna); corte de cada obra no cabeçalho, com aviso quando desatualizado; para a equipe interna, "Restrições vencidas" no lugar de "Avanço médio" (média simples de obras de portes diferentes não é indicador).
+
+## Report ao cliente (aba Report, modelo de 11/2026)
+O report é o documento enviado ao cliente: enxuto, igual em todas as obras, em folhas A4 paisagem (tela, PDF e impressão).
+O detalhe interno (campo/RDO, marcos, pontos de atenção, tarefas, restrições, conferência) fica na aba Obra.
+
+| Folha | Conteúdo | De onde vem |
+|---|---|---|
+| Capa | "Relatório mensal de contrato", obra, logos Machine e cliente, mês/ano de referência, local, cliente, revisão | Cadastro da obra → *Capa do report*; o mês, em *Mês da capa* na tela do report (vale para a carga em que foi escolhido) |
+| Dashboard – status geral | Avanço físico e financeiro acumulados, IDP, IDC, variação do término, prazo contratual, Previsto × Realizado pela EAP (nível 2; na tela abre até o pacote executável) | Prevision (robô de sexta): Curva S, cronograma e IDC da Gestão de Custos |
+| Físico (previsto × realizado) | Curva física acumulada e avanço de cada mês no mesmo quadro; barras Base / Previsto / Realizado | Prevision (Curva S e progresso mensal) |
+| Físico · avanço da frente + Fotos · registros | Para cada frente: a planta marcada (executado · em execução · a executar) e, em seguida, as fotos do período, duas por folha, com legenda | Obra → Mapa de avanço: planta (já marcada ou com áreas desenhadas e vinculadas ao cronograma) e as fotos da frente |
+| Valor agregado | SPI, EV, PV e Curva S financeira | Prevision (perspectiva econômica); cadastro → *Valor agregado no report* |
+| Medições / faturamento — controle | Contrato, medido, saldo, última medição; histórico mês a mês; boletim da última medição | Controle de Medição (Alimentar); depois, o Sienge |
+
+**Rotina do mês** (o que é manual): 1) conferir o rascunho que o robô gravou na sexta; 2) enviar o Controle de Medição
+do mês em Alimentar; 3) em Obra → Mapa de avanço, *Limpar fotos de todas as frentes* (botão no topo do report) e
+carregar a planta atualizada e as duas fotos com legenda de cada frente do mês; 4) escolher o *Mês da capa*; 5) conferir
+as folhas e **Publicar para o cliente**; 6) *Baixar PDF* ou enviar o link. Sem fotos escolhidas nas frentes, o report usa
+a seleção automática das fotos dos RDOs. O topo do report (só administrador) avisa quando há foto com mais de 40 dias.
