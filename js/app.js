@@ -1464,6 +1464,141 @@
     } finally { btn.disabled = false; btn.textContent = rotulo; if (dashAberta.length) render(); }
   }
 
+  // ---------- PowerPoint do report (para editar quando preciso) ----------
+  // Um slide por folha, em A4 paisagem, montado a partir das folhas já desenhadas na tela (os mesmos números do PDF).
+  // Editável onde mais se mexe: capa, títulos, fotos e legendas das frentes, plantas, tabela da EAP, histórico e boletim
+  // de medição viram texto, imagens soltas e tabelas do PowerPoint; gráficos e cartões vão como imagem em alta resolução.
+  const PPTX_URL = 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
+  async function baixarPptx(btn) {
+    let dl = null;
+    if (window.self !== window.top) { try { dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) { dl = null; } }
+    const rotulo = btn.textContent; btn.disabled = true; btn.textContent = 'Gerando PowerPoint…';
+    const dashAberta = $$('#paper .folha.dash.aberta');
+    dashAberta.forEach(f => { $$('.ds-sub', f).forEach(e => e.remove()); f.classList.remove('aberta'); });
+    try {
+      await carregaLibsPdf(); if (!window.PptxGenJS) await carregaScript(PPTX_URL);
+      try { await document.fonts.ready; } catch (e) {}
+      const W = 11.69, H = 8.27, NAVY = '0A2463', TINTA = '1B1E24', CINZA = '6B7380', FONTE = 'Calibri', MONO = 'Consolas';
+      const pptx = new window.PptxGenJS(); pptx.defineLayout({ name: 'A4P', width: W, height: H }); pptx.layout = 'A4P';
+      const paraData = async src => { if (/^data:/.test(src)) return src; const b = await (await fetch(src)).blob(); return await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(b); }); };
+      const logo = await paraData(LOGO);
+      const foto = async (el, escala = 2) => (await window.html2canvas(el, { scale: escala, backgroundColor: '#FFFFFF', useCORS: true, logging: false,
+        onclone: d => { d.querySelectorAll('.folha').forEach(f => { f.style.zoom = '1'; f.style.boxShadow = 'none'; }); d.querySelectorAll('.fl-int, .folha.dash .ds-tg, .folha.dash .ds-tg-sp').forEach(e => e.remove()); } })).toDataURL('image/png');
+      const proporcao = el => { const r = el.getBoundingClientRect(); return r.width / Math.max(1, r.height); };
+      const txt = el => (el ? el.textContent : '').replace(/\s+/g, ' ').trim();
+      const caixa = (prop, x, y, w, h) => { let iw = w, ih = w / prop; if (ih > h) { ih = h; iw = h * prop; } return { x: x + (w - iw) / 2, y: y + (h - ih) / 2, w: iw, h: ih }; };
+      // cabeçalho e rodapé padrão (texto editável), como nas folhas
+      const moldura = (s, f, n, total) => {
+        s.background = { color: 'FFFFFF' };
+        s.addImage({ data: logo, x: 0.45, y: 0.32, w: 1.55, h: 0.29 });
+        const tit = txt(f.querySelector('.fl-cab-b b') || f.querySelector('.ds-cab h1')), sub = txt(f.querySelector('.fl-cab-b span')), pos = txt(f.querySelector('.fl-cab-c b'));
+        const rod = txt(f.querySelector('.fl-pe span') || f.querySelector('.ds-pe span'));
+        s.addText(tit, { x: 2.25, y: 0.22, w: 7.3, h: 0.34, fontFace: FONTE, fontSize: 17, bold: true, color: TINTA });
+        if (sub) s.addText(sub, { x: 2.25, y: 0.55, w: 7.3, h: 0.24, fontFace: FONTE, fontSize: 10, color: CINZA });
+        if (pos) s.addText([{ text: 'POSIÇÃO DE', options: { fontSize: 7.5, color: '9AA3AE', breakLine: true } }, { text: pos, options: { fontSize: 12, bold: true, color: TINTA } }], { x: 9.55, y: 0.22, w: 1.7, h: 0.55, fontFace: FONTE, align: 'right' });
+        s.addShape(pptx.ShapeType.line, { x: 0.45, y: 0.92, w: W - 0.9, h: 0, line: { color: '154CB0', width: 1.5 } });
+        if (rod) s.addText(rod, { x: 0.45, y: H - 0.42, w: 4, h: 0.25, fontFace: FONTE, fontSize: 8, color: '9AA3AE' });
+        s.addText(`Página ${n} de ${total}`, { x: W / 2 - 1, y: H - 0.42, w: 2, h: 0.25, fontFace: FONTE, fontSize: 8, bold: true, color: CINZA, align: 'center' });
+      };
+      const tabela = (s, linhas, opt) => s.addTable(linhas, { fontFace: FONTE, fontSize: 8, color: TINTA, border: { type: 'solid', pt: 0.5, color: 'C9CDD4' }, valign: 'middle', autoPage: false, ...opt });
+      const cab = (t, extra = {}) => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: '1D3A66' }, ...extra } });
+      const folhas = $$('#paper .folha');
+      for (let i = 0; i < folhas.length; i++) {
+        const f = folhas[i], s = pptx.addSlide(), n = i + 1;
+        btn.textContent = `Gerando PowerPoint… ${n}/${folhas.length}`;
+        if (f.classList.contains('capa')) {
+          s.background = { color: 'F4F5F8' };
+          s.addText(txt(f.querySelector('.cp-titulo h1')), { x: 0.6, y: 1.5, w: W - 1.2, h: 0.8, fontFace: MONO, fontSize: 32, bold: true, color: NAVY, align: 'center' });
+          s.addText(txt(f.querySelector('.cp-titulo p')), { x: 0.6, y: 2.3, w: W - 1.2, h: 0.45, fontFace: MONO, fontSize: 14, bold: true, color: NAVY, align: 'center' });
+          s.addImage({ data: logo, x: 1.55, y: 4.25, w: 2.3, h: 0.43 });
+          s.addText('Realizações com base sólida', { x: 1.55, y: 4.7, w: 2.3, h: 0.22, fontFace: FONTE, fontSize: 8, color: '8B9099', align: 'right' });
+          const cli = f.querySelector('.cp-cli'); if (cli) { const c = caixa(cli.naturalWidth / Math.max(1, cli.naturalHeight), 1.55, 5.15, 2.3, 0.95); s.addImage({ data: await paraData(cli.src), ...c }); }
+          s.addShape(pptx.ShapeType.line, { x: 4.35, y: 4.05, w: 0, h: 2.25, line: { color: '2F5BD8', width: 2.5 } });
+          s.addText($$('.cp-dados > div', f).map((d, k, a) => [{ text: txt(d.querySelector('dt')) + ' ', options: { bold: true } }, { text: txt(d.querySelector('dd')), options: { breakLine: k < a.length - 1 } }]).flat(),
+            { x: 4.6, y: 4.05, w: 6.5, h: 2.25, fontFace: MONO, fontSize: 12, color: NAVY, valign: 'middle', paraSpaceAfter: 6 });
+          continue;
+        }
+        moldura(s, f, n, folhas.length);
+        const corpo = { x: 0.45, y: 1.08, w: W - 0.9, h: H - 1.62 };
+        if (f.classList.contains('dash')) {
+          const cl = f.querySelector('.ds-cli'); if (cl) s.addImage({ data: await paraData(cl.src), ...caixa(cl.naturalWidth / Math.max(1, cl.naturalHeight), W - 1.75, H - 0.62, 1.3, 0.45) });
+          const topo = f.querySelector('.ds-cards'), pz = f.querySelector('.ds-prazo');
+          const it = await foto(topo), ip = await foto(pz);
+          s.addImage({ data: it, ...caixa(proporcao(topo), corpo.x, corpo.y, corpo.w, 1.55) });
+          s.addImage({ data: ip, ...caixa(proporcao(pz), corpo.x, corpo.y + 1.62, corpo.w, 0.85) });
+          const trs = $$('.ds-tab tr', f).filter(tr => !tr.classList.contains('ds-sub'));
+          const linhas = trs.map((tr, k) => $$('th, td', tr).map((c, j) => k === 0 ? cab(txt(c), { align: j ? 'center' : 'left' }) : { text: txt(c).replace(/^[↑↓]\s*/, m => m.trim() + ' '), options: { align: j ? 'center' : 'left', bold: tr.classList.contains('obra'), fill: { color: tr.classList.contains('obra') ? 'E4E6EA' : 'FFFFFF' } } }));
+          tabela(s, linhas, { x: corpo.x, y: corpo.y + 2.6, w: corpo.w, colW: [4.2, 1.15, 1.15, 1.15, 1.07, 1.07], fontSize: linhas.length > 16 ? 7 : 8, rowH: 0.24 });
+          continue;
+        }
+        if (f.classList.contains('mp-folha')) {
+          s.addText(txt(f.querySelector('.mp-tt')).replace(/^Frente de serviço\s*/i, ''), { ...corpo, h: 0.4, fontFace: FONTE, fontSize: 14, color: TINTA });
+          const pls = $$('.mp-planta', f);
+          for (let k = 0; k < pls.length; k++) { const alt = (corpo.h - 1.0) / pls.length; s.addImage({ data: await foto(pls[k]), ...caixa(proporcao(pls[k]), corpo.x, corpo.y + 0.5 + k * alt, corpo.w, alt - 0.08) }); }
+          s.addText([['Executado', '22C55E'], ['Em execução', 'FACC15'], ['A executar', 'EF4444']].map(([t, c], k) => [{ text: '■ ', options: { color: c } }, { text: t + (k < 2 ? '     ' : ''), options: { color: TINTA } }]).flat(),
+            { x: corpo.x, y: corpo.y + corpo.h - 0.35, w: corpo.w, h: 0.3, fontFace: FONTE, fontSize: 11, align: 'center' });
+          continue;
+        }
+        if (f.classList.contains('fl-fotos2')) {
+          const figs = $$('.rx-f2', f), cw = (corpo.w - 0.3) / 2;
+          for (let k = 0; k < figs.length; k++) {
+            const im = figs[k].querySelector('img'), x = corpo.x + k * (cw + 0.3);
+            s.addShape(pptx.ShapeType.roundRect, { x, y: corpo.y + 0.05, w: cw, h: corpo.h - 0.1, fill: { color: 'FFFFFF' }, line: { color: 'E4E7EC', width: 0.75 }, rectRadius: 0.08 });
+            s.addImage({ data: await paraData(im.src), ...caixa(im.naturalWidth / Math.max(1, im.naturalHeight), x + 0.15, corpo.y + 0.2, cw - 0.3, corpo.h - 1.25) });
+            const leg = txt(figs[k].querySelector('figcaption span')), sub = txt(figs[k].querySelector('figcaption small'));
+            if (leg || sub) s.addText([{ text: leg, options: { color: NAVY, fontSize: 12, breakLine: !!sub } }, ...(sub ? [{ text: sub, options: { color: CINZA, fontSize: 9 } }] : [])],
+              { x: x + 0.15, y: corpo.y + corpo.h - 0.95, w: cw - 0.3, h: 0.7, fontFace: FONTE, align: 'center', fill: { color: 'F7F9FB' }, line: { color: 'E4E7EC', width: 0.75 } });
+          }
+          continue;
+        }
+        if (f.classList.contains('fl-medicao')) {
+          const cards = $$('.md-card', f);
+          if (cards.length) s.addText(cards.map((c, k) => [{ text: txt(c.querySelector('small')) + '  ', options: { color: CINZA, fontSize: 9 } }, { text: txt(c.querySelector('b')), options: { bold: true, color: TINTA, fontSize: 12 } }, { text: (txt(c.querySelector('span')) ? '  ' + txt(c.querySelector('span')) : '') + (k < cards.length - 1 ? '      ' : ''), options: { color: CINZA, fontSize: 8 } }]).flat(),
+            { x: corpo.x, y: corpo.y, w: corpo.w, h: 0.4, fontFace: FONTE });
+          const hist = f.querySelector('.md-tab');
+          if (hist) { const rows = $$('tr', hist).map((tr, k) => { const sec = tr.parentElement.tagName; return $$('th, td', tr).map(c => sec === 'THEAD' ? cab(txt(c), { align: c.classList.contains('n') ? 'right' : 'left' })
+              : { text: txt(c), options: { align: c.classList.contains('n') ? 'right' : 'left', bold: sec === 'TFOOT', fill: { color: sec === 'TFOOT' ? 'E4E6EA' : k % 2 ? 'FFFFFF' : 'F7F9FB' } } }); });
+            tabela(s, rows, { x: corpo.x, y: corpo.y + 0.55, w: corpo.w, fontSize: 8, rowH: 0.27 }); }
+          const bm = f.querySelector('.bm');
+          if (bm) {
+            s.addText(txt(bm.querySelector('h2')), { x: corpo.x, y: corpo.y - 0.02, w: corpo.w, h: 0.3, fontFace: FONTE, fontSize: 12, bold: true, color: TINTA });
+            const pares = dl => $$('dt', dl).map(dt => [{ text: txt(dt), options: { bold: true, align: 'right', fill: { color: 'D9DCE1' } } }, { text: txt(dt.nextElementSibling) }]);
+            const [esq, dir] = $$('.bm-cab dl', bm).map(pares), nL = Math.max(esq.length, dir.length);
+            tabela(s, Array.from({ length: nL }, (_, k) => [...(esq[k] || [{ text: '' }, { text: '' }]), ...(dir[k] || [{ text: '' }, { text: '' }])]), { x: corpo.x, y: corpo.y + 0.32, w: corpo.w, colW: [1.6, 4.0, 1.5, corpo.w - 7.1], fontSize: 7.5, rowH: 0.19 });
+            const bt = bm.querySelector('.bm-tab');
+            const rows = [[{ text: '', options: { colspan: 4, fill: { color: 'C9CDD4' } } }, { text: 'Quantidades', options: { colspan: 3, bold: true, align: 'center', fill: { color: 'C9CDD4' } } }, { text: 'Valores', options: { colspan: 3, bold: true, align: 'center', fill: { color: 'C9CDD4' } } }],
+              ...$$('thead tr:last-child th', bt).map(c => c).reduce((a, c) => { a[0].push({ text: txt(c), options: { bold: true, fill: { color: 'D9DCE1' }, align: c.classList.contains('n') ? 'right' : 'left' } }); return a; }, [[]]),
+              ...$$('tbody tr, tfoot tr', bt).map(tr => $$('td', tr).map(c => ({ text: txt(c), options: { colspan: +(c.getAttribute('colspan') || 1), bold: tr.classList.contains('bm-n1') || tr.parentElement.tagName === 'TFOOT', align: c.classList.contains('n') ? 'right' : 'left', fill: { color: tr.classList.contains('bm-n1') || tr.parentElement.tagName === 'TFOOT' ? 'E4E6EA' : 'FFFFFF' } } })))];
+            const yT = corpo.y + 0.32 + nL * 0.19 + 0.12;
+            tabela(s, rows, { x: corpo.x, y: yT, w: corpo.w, colW: [0.62, 3.0, 0.38, 0.72, 0.85, 0.7, 0.65, 1.1, 1.1, corpo.w - 9.12], fontSize: 7, rowH: 0.2 });
+            const fe = bm.querySelector('.bm-fecho');
+            if (fe) {
+              const yF = yT + rows.length * 0.2 + 0.12;
+              tabela(s, [$$('.bm-tot span', fe).map(sp => ({ text: sp.firstChild.textContent.trim() + ':  ' + txt(sp.querySelector('b')), options: { bold: true, fill: { color: 'E4E6EA' } } }))], { x: corpo.x, y: yF, w: corpo.w, fontSize: 7.5, rowH: 0.22 });
+              const ret = $$('.bm-ret tr', fe).map((tr, k) => $$('th, td', tr).map((c, j) => ({ text: txt(c), options: { bold: !k, fill: { color: k ? 'FFFFFF' : 'D9DCE1' }, align: j ? 'right' : 'left' } })));
+              tabela(s, ret, { x: corpo.x, y: yF + 0.3, w: 5.8, colW: [4.3, 1.5], fontSize: 7.5, rowH: 0.2 });
+              const liq = $$('.bm-liq dt', fe).map(dt => { const l = dt.classList.contains('bm-l'); return [{ text: txt(dt), options: { bold: true, align: 'right', color: l ? 'FFFFFF' : TINTA, fill: { color: l ? '1D3A66' : 'E4E6EA' } } }, { text: txt(dt.nextElementSibling), options: { align: 'right', bold: l, color: l ? 'FFFFFF' : TINTA, fill: { color: l ? '1D3A66' : 'FFFFFF' } } }]; });
+              tabela(s, liq, { x: corpo.x + 6.0, y: yF + 0.3, w: corpo.w - 6.0, colW: [2.9, corpo.w - 8.9], fontSize: 7.5, rowH: 0.2 });
+              const ob = fe.querySelector('.bm-obs'); if (ob) s.addText([{ text: 'Desconto  ', options: { bold: true } }, { text: txt(ob).replace(/^Desconto\s*/, '') }], { x: corpo.x, y: yF + 0.42 + liq.length * 0.2, w: corpo.w, h: 0.42, fontFace: FONTE, fontSize: 7.5, color: TINTA, line: { color: 'B9BEC7', width: 0.75 } });
+            }
+          }
+          continue;
+        }
+        // físico, valor agregado e demais: o conteúdo da folha como imagem em alta resolução, sob o cabeçalho editável
+        const c = f.querySelector('.fl-corpo');
+        if (c) s.addImage({ data: await foto(c), ...caixa(proporcao(c), corpo.x, corpo.y, corpo.w, corpo.h) });
+      }
+      const o = DB.obras.find(x => x.id === S.obraId) || obrasDoUsuario()[0];
+      const nome = `Report-Obra-${o ? o.codigo : ''}-${$('#paper').dataset.corte || new Date().toISOString().slice(0, 10)}.pptx`;
+      const blob = await pptx.write({ outputType: 'blob' });
+      if (dl) await dl.save({ filename: nome, data: blob });
+      else { const u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); }
+    } catch (e) {
+      const c = e && e.code;
+      if (c !== 'declined') toast(c === 'rate_limited' ? 'Já existe um download aguardando confirmação.' : 'Não consegui gerar o PowerPoint. Tente de novo.');
+    } finally { btn.disabled = false; btn.textContent = rotulo; if (dashAberta.length) render(); }
+  }
+
   // ---------- Valor agregado: cartões e nota dos termos (report e aba Obra) ----------
   const GLOSSARIO_VA = `<p class="rx-glos"><b>SPI</b> = EV ÷ PV (1,00 = no ritmo do plano) · <b>EV</b> valor do que foi executado · <b>PV</b> valor do que estava previsto até o corte</p>`;
   function cartoesVA(rf, o) {
@@ -1483,11 +1618,9 @@
   // a Curva S financeira do Prevision nem sempre está na base do contrato (207: orçamento da obra × contrato Machine)
   const notaEscalaVA = rf => rf.escala === 'orcamento' ? `% do orçamento no Prevision (${Core.moedaCurta(rf.totalCurva)}), não do contrato` : '% do valor do contrato';
 
-  // Avanço por atividade (report e aba Obra): farol (realizado ÷ planejado da própria atividade, faixas da obra)
+  // Avanço por atividade (aba Obra): farol (realizado ÷ planejado da própria atividade, faixas da obra)
   // e barra de % com a marca do planejado na data. Coluna de peso só quando os pesos são válidos.
-  const legFarol = '<em class="rx-fa-lg"><span><i class="rx-fa ok"></i>No prazo</span><span><i class="rx-fa atencao"></i>Atenção</span><span><i class="rx-fa critico"></i>Crítico</span><span><i class="rx-fa neutro"></i>A iniciar</span></em>';
-  // partes = true (report): cada frente de 1º nível é uma parte que a paginação pode levar para a folha seguinte
-  function atividadesHTML(ativ, o, partes) {
+  function atividadesHTML(ativ, o) {
     const lim = v => Math.max(0, Math.min(100, (v || 0) * 100));
     const comPeso = ativ.every(a => a.peso !== null && a.peso !== undefined);
     const farol = a => {
@@ -1502,12 +1635,11 @@
         ${comPeso ? `<span class="rx-av-ps">${a.peso === null || a.peso === undefined ? '—' : pct(a.peso, 1)}</span>` : ''}
         <span class="rx-av-fa"><i class="rx-fa ${f.k}" title="${esc(f.t)}"></i></span>
         <span class="rx-av-br"><span class="rx-pb"><i style="width:${lim(a.feito)}%"></i><em style="left:${lim(a.plan)}%"></em></span><b>${fmtNum(lim(a.feito), 0)}%</b></span>`;
-      const p = partes && nv === 0 ? ' data-parte' : '';
       return fs.length
-        ? `<details class="rx-av-n" data-k="${id}"${p}${S.abertos[id] ? ' open' : ''}><summary class="rx-av-r n${nv}">${cel}</summary><div class="rx-av-k">${fs.map(c => linha(c, nv + 1)).join('')}</div></details>`
-        : `<div class="rx-av-r n${nv}"${p}>${cel}</div>`;
+        ? `<details class="rx-av-n" data-k="${id}"${S.abertos[id] ? ' open' : ''}><summary class="rx-av-r n${nv}">${cel}</summary><div class="rx-av-k">${fs.map(c => linha(c, nv + 1)).join('')}</div></details>`
+        : `<div class="rx-av-r n${nv}">${cel}</div>`;
     };
-    return `<div class="rx-av${comPeso ? '' : ' sem-peso'}"${partes ? ' data-partes-box' : ''}>
+    return `<div class="rx-av${comPeso ? '' : ' sem-peso'}">
       <div class="rx-av-r rx-av-h"><span>Atividade</span>${comPeso ? '<span class="rx-av-ps">Peso</span>' : ''}<span class="rx-av-fa">Status</span><span class="rx-av-br">Realizado <i class="rx-av-tk"></i> planejado na data</span></div>
       ${ativ.map(a => linha(a, 0)).join('')}</div>`;
   }
@@ -1654,33 +1786,27 @@
   }
   // ---------- report no celular: resumo legível antes das folhas ----------
   // No celular a folha A4 é reduzida até caber e o texto fica pequeno demais. O resumo traz o essencial em tamanho de
-  // leitura (só na tela estreita; fora da impressão e do PDF): situação, avanço, prazo, projeção, atenções e marcos.
-  function resumoCelular(o, r, X) {
-    const P = r.prazo, F = r.projecaoFaixa;
-    const proj = F ? [F.atrasoMantido, F.desempenhoMantido].sort().map(Core.mesCurto).filter((v, i, a) => a.indexOf(v) === i).join(' a ') : r.projecao ? '~' + Core.mesCurto(r.projecao) : '—';
-    const corPrazo = clsAtraso(r).replace('neg', 'crit').replace('pos', 'ok');
+  // leitura (só na tela estreita; fora da impressão e do PDF), com os mesmos números do dashboard.
+  function resumoCelular(o, r) {
+    const P = r.prazo, IP = o.indicesPrevision, idp = r.farolTempo ? r.prazoGanho.idpT : r.idp;
+    const varFim = P.contrFim && P.fimCron ? diff(P.contrFim, P.fimCron) : null;
     return `<section class="rx-mob no-print" aria-label="Resumo do report">
       <div class="rx-mob-top">${pill(r.sem.k, r.sem.t)}<span>Posição de <b>${dBR(r.corte)}</b></span></div>
       <div class="rx-mob-g">
-        <div><small>Realizado</small><b>${pct(r.real)}</b><span>planejado ${pct(r.prevCorte)}</span></div>
-        <div><small>Prazo</small><b class="${corPrazo}">${r.prazoGanho ? Core.textoAtraso(r.prazoGanho) : '—'}</b><span>${indicePrazo(r)}</span></div>
-        <div><small>Término do cronograma</small><b>${dBR(P.fimCron)}</b><span>${P.contrFim ? 'contrato ' + dBR(P.contrFim) : 'sem linha de base'}</span></div>
-        <div><small>Projeção</small><b>${proj}</b><span>${r.projecaoFonte === 'prazo' ? 'pelo prazo ganho' : r.projecaoFonte === 'ritmo' ? 'pelo ritmo de 3 meses' : 'histórico insuficiente'}</span></div>
+        <div><small>Avanço físico</small><b>${pct(r.real)}</b><span>base ${pct(r.baseCorte)}</span></div>
+        <div><small>IDP</small><b>${idp ? fmtNum(idp, 2) : '—'}</b><span>meta 1,00</span></div>
+        <div><small>IDC</small><b>${IP && IP.idc ? fmtNum(IP.idc, 2) : '—'}</b><span>${IP && IP.idc ? 'meta 1,00' : 'sem IDC no Prevision'}</span></div>
+        <div><small>Variação término</small><b class="${varFim > 0 ? 'crit' : ''}">${varFim === null ? '—' : `${varFim > 0 ? '+' : ''}${varFim} d`}</b><span>término contratual ${dBR(P.contrFim)}</span></div>
       </div>
-      ${X.manchete ? `<p class="rx-mob-lead">${esc(X.manchete)}</p>` : ''}
-      ${X.atencao.length ? `<h3>Pontos de atenção</h3><ul>${X.atencao.map(a => `<li><span class="rx-dot ${/paralis|atras/i.test(a.tag) ? 'crit' : 'warn'}">${esc(a.tag)}</span><b>${esc(a.titulo)}</b><small>${esc(a.det || '')}</small></li>`).join('')}</ul>` : ''}
-      ${X.marcos.lista.length ? `<h3>Próximos marcos</h3><ul>${X.marcos.lista.slice(0, 4).map(m => `<li><span class="rx-mob-d">${m.data ? dCurto(m.data) : 'a definir'}</span><b>${esc(m.nome)}</b>${m.situacao === 'vencido' ? '<small class="crit">vencido</small>' : m.slip ? `<small>${m.slip > 0 ? '+' : '−'}${Math.abs(m.slip)} d vs base</small>` : ''}</li>`).join('')}</ul>` : ''}
       <p class="rx-mob-nota">As folhas completas do report seguem abaixo; para ler no tamanho original, use Baixar PDF.</p>
     </section>`;
   }
 
-  // ---------- report: folhas A4 paisagem (rev. 25/10/2026) ----------
-  // Desenho fixo, o mesmo em todas as obras, com cabeçalho e rodapé iguais em todas as folhas:
-  //   Visão geral — identificação, 4 indicadores, leitura do período; Curva S física (esquerda), marcos e pontos de atenção (direita)
-  //   Andamento — avanço por atividade (esquerda) e campo no último RDO (direita)
-  //   Valor agregado — só quando entra no report (cadastro da obra → Valor agregado no report)
-  //   Registro fotográfico — até 12 fotos por folha (4 × 3) · Mapa de avanço — uma ou duas plantas por folha
-  // Os gráficos ocupam a altura que sobra no quadro; o que não cabe é ajustado depois, em montaFolhas().
+  // ---------- report ao cliente: folhas A4 paisagem (modelo de 11/2026, ver GOVERNANCA.md) ----------
+  // Desenho fixo, o mesmo em todas as obras: capa · dashboard (status geral e EAP) · físico (curva) · para cada frente,
+  // a planta e as fotos do período (2 por folha) · valor agregado (quando entra no report) · medições (histórico e boletim).
+  // Tudo vem das cargas automáticas e do cadastro; a única edição manual que muda o report é o mapa de avanço (plantas e
+  // fotos das frentes). Os gráficos ocupam a altura que sobra no quadro (montaFolhas).
   function viewReport() {
     const base = DB.obras.find(x => x.id === S.obraId) || obrasDoUsuario()[0];
     if (!base || !temDados(visaoDaObra(base))) return `<div class="card card-pad"><p class="sub" style="margin:0">Ainda não há dados para o report desta obra.</p></div>`;
@@ -1688,24 +1814,7 @@
     const r = calcObra(base);
     const X = Core.resumoExecutivo(o, r, base.destaques || []);
     const P = r.prazo;
-    const cp = Core.comparaPlano(r.desvio);
-    const slipFim = P.contrFim && P.fimCron ? diff(P.contrFim, P.fimCron) : null;
-    const dias = n => `${n > 0 ? '+' : '−'}${Math.abs(n)} d`;
     const lim01 = v => Math.max(0, Math.min(100, (v || 0) * 100));
-    // Cartões (padrão de cartão de indicador do Power BI): rótulo · valor · referência. Uma cor de série por cartão,
-    // a mesma do gráfico (realizado = navy, planejado = azul, base = azul claro); vermelho/verde só no desvio.
-    // cor do desvio segue o farol da obra (dentro da faixa "em dia" o desvio não é pintado de alerta)
-    const dsv = r.sem.k === 'critico' ? 'crit' : r.sem.k === 'atencao' ? 'warn' : cp.dir > 0 ? 'ok' : '';
-    const cards = [
-      { k: 'Realizado', ac: 'real', v: pct(r.real),
-        x: `<span class="rx-pb rx-pb-k" aria-hidden="true"><i style="width:${lim01(r.real)}%"></i><em style="left:${lim01(r.prevCorte)}%"></em></span>`,
-        s: `posição de ${dBR(r.corte)}` },
-      { k: 'Planejado', ac: 'plan', v: pct(r.prevCorte), s: r.baseCorte !== null && r.baseCorte !== undefined ? `base ${pct(r.baseCorte)}` : 'cronograma atual' },
-      { k: 'Comparado ao plano', ac: dsv || 'real', cls: dsv,
-        v: cp.dir === 0 ? 'Em linha' : pp(r.desvio), s: r.inicioObra ? 'início da obra · farol a partir de 2% previsto' : r.prazoGanho ? `${Core.textoAtraso(r.prazoGanho)} · ${indicePrazo(r)}` : r.idp ? `IDP ${fmtNum(r.idp, 2)}` : 'IDP indisponível' },
-      { k: P.contrFim ? 'Término previsto (base)' : 'Término previsto', ac: 'base', v: P.contrFim ? dBR(P.contrFim) : P.fimCron ? dBR(P.fimCron) : '—',
-        s: P.contrFim ? `cronograma atual ${dBR(P.fimCron)}${slipFim ? ` · <b class="${slipFim > 0 ? 'warn' : 'ok'}">${dias(slipFim)}</b>` : ''}` : 'cronograma atual (sem linha de base)', html: true },
-    ];
     const corte = dBR(r.corte);
     const cab = (titulo, sub) => `<header class="fl-cab"><div class="fl-cab-a"><img src="${LOGO}" alt="Machine"><i></i><span>Relatório de<br>acompanhamento</span></div>
         <div class="fl-cab-b"><b>${titulo}</b><span>Obra ${esc(o.codigo)} · ${esc(o.nome)}${sub ? ` · ${sub}` : ''}</span></div>
@@ -1780,9 +1889,9 @@
     return `
       <div class="head-row no-print"><div><div class="kicker">Report</div><h1 class="h1">Obra ${esc(o.codigo)} · ${corte}</h1>
         <p class="sub">Folhas A4 paisagem, com os mesmos quadros na mesma ordem em todas as obras: capa, dashboard, curva física, ${mapas.length ? 'cada frente com a planta e as fotos do período' : 'fotos do período'}, valor agregado e medições. O detalhe completo fica na aba Obra.</p></div>
-        <div class="bar-actions">${ehAdmin() ? `<label class="rp-mes" title="Só o mês muda na capa de um mês para o outro">Mês da capa<input class="inp" type="month" id="rp-mes" value="${mesRefIso}"></label>` : ''}<button class="btn" id="bt-pdf">Baixar PDF</button><a class="btn sec2" href="${mailto('', `Report de planejamento · Obra ${o.codigo} · ${corte}`, `Prezados,\n\nSegue o report de planejamento da obra ${o.codigo} · ${o.nome}, com posição de ${corte}.\n\nO painel completo está disponível em ${SITE()}#obra-${o.id}/report (acesso com e-mail e senha).\n\nAtenciosamente,\nPlanejamento · Machine`)}">Enviar por e-mail</a></div></div>
+        <div class="bar-actions">${ehAdmin() ? `<label class="rp-mes" title="Só o mês muda na capa de um mês para o outro">Mês da capa<input class="inp" type="month" id="rp-mes" value="${mesRefIso}"></label>` : ''}<button class="btn" id="bt-pdf">Baixar PDF</button><button class="btn sec2" id="bt-pptx" title="Para editar no PowerPoint quando preciso">Baixar PowerPoint</button><a class="btn sec2" href="${mailto('', `Report de planejamento · Obra ${o.codigo} · ${corte}`, `Prezados,\n\nSegue o report de planejamento da obra ${o.codigo} · ${o.nome}, com posição de ${corte}.\n\nO painel completo está disponível em ${SITE()}#obra-${o.id}/report (acesso com e-mail e senha).\n\nAtenciosamente,\nPlanejamento · Machine`)}">Enviar por e-mail</a></div></div>
       ${notaFotos}
-      ${resumoCelular(o, r, X)}
+      ${resumoCelular(o, r)}
       <div class="folhas" id="paper" data-corte="${r.corte}">
         ${folhaCapa}
         ${folhaDash}
@@ -1863,7 +1972,7 @@
   // Colunas sem nenhum valor na planilha da obra não aparecem (cada obra tem o seu formato).
   function folhasMedicao(o, folha) {
     const M = o.medicao; if (!M || !M.resumo) return '';
-    const R = M.resumo, meses = R.meses || [], $$v = v => v === null || v === undefined ? '' : moeda(v);
+    const R = M.resumo, meses = R.meses || [], $$v = v => v === null || v === undefined ? '' : 'R$ ' + fmtNum(v, 2);
     const COLS = [['previstoCT', 'Previsto (CT)'], ['realizadoCT', 'Realizado (CT)'], ['faturamentoDireto', 'Faturamento direto'], ['medicaoPrevista', 'Medição Machine prevista'], ['medicaoRealizada', 'Medição Machine realizada']]
       .filter(([k]) => meses.some(m => m[k] !== null && m[k] !== undefined));
     const temSt = meses.some(m => m.status);
@@ -1874,32 +1983,45 @@
       .map(([t, v, s]) => `<div class="md-card"><small>${t}</small><b>${v === null ? esc(s) : moeda(v)}</b>${v === null ? '' : `<span>${esc(s)}</span>`}</div>`).join('');
     const hist = meses.length ? `<table class="md-tab"><thead><tr><th>Mês</th>${COLS.map(([, t]) => `<th class="n">${t}</th>`).join('')}${temSt ? '<th>Status</th>' : ''}</tr></thead>
         <tbody>${meses.map(m => `<tr><td>${esc(m.mes)}</td>${COLS.map(([k]) => `<td class="n">${$$v(m[k])}</td>`).join('')}${temSt ? `<td>${esc(m.status || '')}</td>` : ''}</tr>`).join('')}</tbody>
-        <tfoot><tr><td>Total</td>${COLS.map(([k]) => `<td class="n">${moeda(soma(k))}</td>`).join('')}${temSt ? '<td></td>' : ''}</tr></tfoot></table>` : '<p class="sub">Sem série mensal no Controle de Medição.</p>';
+        <tfoot><tr><td>Total</td>${COLS.map(([k]) => `<td class="n">${$$v(soma(k))}</td>`).join('')}${temSt ? '<td></td>' : ''}</tr></tfoot></table>` : '<p class="sub">Sem série mensal no Controle de Medição.</p>';
     const out = [folha('Medições / faturamento — controle', `<div class="md-cards">${cards}</div><section class="rx-s rx-box md-box"><h2>Histórico de medição</h2>${hist}</section>`, 'fl-medicao', 'histórico de medição')];
     // boletim da última medição: o de maior número (o contrato principal antes dos aditivos)
     const nBol = b => +((String(b.aba).match(/\d+/) || [0])[0]);
     const bols = [...(M.boletins || [])].sort((a, b) => nBol(a) - nBol(b) || (/aditivo/i.test(a.aba) ? 1 : 0) - (/aditivo/i.test(b.aba) ? 1 : 0));
     const prin = bols.filter(b => !/aditivo/i.test(b.aba)), ult = (prin.length ? prin : bols).at(-1);
-    if (ult) {
-      const prof = e => String(e).split('.').length, minP = Math.min(...ult.itens.map(i => prof(i.eap)));
-      const itens = ult.itens.filter(i => prof(i.eap) <= minP + 1).slice(0, 22);
-      const pc = v => v === null || v === undefined ? '' : pct(v, 2);
-      const total = ult.itens.filter(i => prof(i.eap) === minP).reduce((s, i) => s + (i.medicao || 0), 0);
-      // competência: o mês ligado ao boletim na série ou, sem esse vínculo na planilha, o último mês medido
-      const mesBol = meses.find(m => m.boletim && String(m.boletim).replace(/\D/g, '') === String(nBol(ult)))
-        || [...meses].reverse().find(m => (m.realizadoCT || m.medicaoRealizada || 0) > 0);
-      const tab = `<table class="md-tab md-bol"><thead><tr><th>Referência</th><th>Descrição</th><th class="n">Acum. anterior</th><th class="n">Medida</th><th class="n">% Exe.</th><th class="n">Preço unitário</th><th class="n">Medição</th></tr></thead>
-          <tbody>${itens.map(i => `<tr class="${prof(i.eap) === minP ? 'md-n1' : ''}"><td>${esc(i.eap)}</td><td>${esc(i.descricao)}</td><td class="n">${pc(i.acumuladoAnterior)}</td><td class="n">${pc(i.medida)}</td><td class="n">${pc(i.pctExec)}</td><td class="n">${$$v(i.precoUnitario)}</td><td class="n">${$$v(i.medicao)}</td></tr>`).join('')}</tbody>
-          <tfoot><tr><td colspan="6">Total da medição</td><td class="n">${moeda(total)}</td></tr></tfoot></table>`;
-      out.push(folha('Medições / faturamento — controle', `<section class="rx-s rx-box md-box"><h2>Resumo de medição<em>Medição ${nBol(ult) || ''}${mesBol ? ` · competência ${esc(mesBol.mes)}` : ''}${R.contrato ? ` · contrato ${esc(R.contrato)}` : ''}</em></h2>${tab}</section>`, 'fl-medicao', 'resumo de medição'));
-    }
+    if (ult) out.push(folhaBoletim(ult, nBol(ult), meses, R, folha));
     return out.join('');
   }
 
+  // Boletim de medições no desenho do Sienge: cabeçalho do contrato, itens em Quantidades e Valores, sempre até o 2º
+  // nível da EAP (etapa e serviço), e o fechamento (total bruto, descontos, retenções, total líquido, observação).
+  function folhaBoletim(b, n, meses, R, folha) {
+    const B = b.resumo || {}, v2 = v => v === null || v === undefined ? 'R$ -' : 'R$ ' + fmtNum(v, 2), pc = v => v === null || v === undefined ? '' : pct(v, 2);
+    const prof = e => String(e).split('.').length, minP = Math.min(...b.itens.map(i => prof(i.eap)));
+    const itens = b.itens.filter(i => prof(i.eap) <= minP + 1);
+    const soma = k => b.itens.filter(i => prof(i.eap) === minP).reduce((s, i) => s + (i[k] || 0), 0);
+    // competência: o mês ligado ao boletim na série ou, sem esse vínculo na planilha, o último mês medido
+    const mesBol = meses.find(m => m.boletim && String(m.boletim).replace(/\D/g, '') === String(n))
+      || [...meses].reverse().find(m => (m.realizadoCT || m.medicaoRealizada || 0) > 0);
+    const par = (t, v) => `<dt>${t}</dt><dd>${v === null || v === undefined || v === '' ? '—' : esc(v)}</dd>`;
+    const cab = `<div class="bm-cab"><dl>${par('Contrato', B.contrato || R.contrato)}${par('Obra', B.obra || R.obra)}${par('Unidade construtiva', B.unidadeConstrutiva)}${par('Número da medição', B.numero || n)}${par('Data de vencimento', B.vencimento && dBR(B.vencimento))}</dl>
+        <dl>${par('Total do contrato', B.totalContrato !== null && B.totalContrato !== undefined ? fmtNum(B.totalContrato, 2) : R.totalContrato && fmtNum(R.totalContrato, 2))}${par('Total da obra', B.totalObra !== null && B.totalObra !== undefined ? fmtNum(B.totalObra, 2) : null)}${par('Cliente', B.cliente)}${par('Data da medição', B.dataMedicao && dBR(B.dataMedicao))}</dl></div>`;
+    const tab = `<table class="bm-tab"><thead><tr class="bm-g"><th colspan="4"></th><th colspan="3">Quantidades</th><th colspan="3">Valores</th></tr>
+        <tr><th>Referência</th><th>Descrição</th><th>Un.</th><th class="n">Contratada</th><th class="n">Acum. anterior</th><th class="n">Medida</th><th class="n">%Exe.</th><th class="n">Preço unitário</th><th class="n">Acum. anterior</th><th class="n">Medição</th></tr></thead>
+        <tbody>${itens.map(i => `<tr class="${prof(i.eap) === minP ? 'bm-n1' : ''}"><td>${esc(i.eap)}</td><td>${esc(i.descricao)}</td><td>${esc(i.unidade || '')}</td><td class="n">${i.contratada === null || i.contratada === undefined ? '' : fmtNum(i.contratada, 0)}</td>
+          <td class="n">${pc(i.acumuladoAnterior)}</td><td class="n">${pc(i.medida)}</td><td class="n">${pc(i.pctExec)}</td><td class="n">${v2(i.precoUnitario)}</td><td class="n">${v2(i.acumuladoAnteriorValor)}</td><td class="n">${v2(i.medicao)}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="8">Total</td><td class="n">${v2(soma('acumuladoAnteriorValor'))}</td><td class="n">${v2(soma('medicao'))}</td></tr></tfoot></table>`;
+    const tem = B.totalBruto !== null && B.totalBruto !== undefined;
+    const fecho = !tem ? '' : `<div class="bm-fecho">
+        <div class="bm-tot"><span>Total dos itens<b>${v2(B.totalItens)}</b></span><span>Total reajuste<b>${v2(B.totalReajuste)}</b></span><span>Total bruto<b>${v2(B.totalBruto)}</b></span></div>
+        <div class="bm-dois"><table class="bm-ret"><thead><tr><th>Retenções · imposto</th><th class="n">Retenção</th></tr></thead><tbody>${(B.retencoes && B.retencoes.length ? B.retencoes : [{ imposto: '—', valor: null }]).map(x => `<tr><td>${esc(x.imposto)}</td><td class="n">${v2(x.valor)}</td></tr>`).join('')}</tbody></table>
+          <dl class="bm-liq">${[['Subtotal', B.subtotal], ['Descontos', B.descontos], ['Caução', B.caucao], ['Sinal', B.sinal], ['Total de impostos retido', B.impostosRetidos]].map(([t, v]) => `<dt>${t}</dt><dd>${v2(v)}</dd>`).join('')}<dt class="bm-l">Total líquido</dt><dd class="bm-l">${v2(B.totalLiquido)}</dd></dl></div>
+        ${B.observacao ? `<p class="bm-obs"><b>Desconto</b>${esc(B.observacao).replace(/\r?\n/g, '<br>')}</p>` : ''}</div>`;
+    return folha('Medições / faturamento — controle', `<section class="rx-s rx-box md-box bm"><h2>Boletim de medições<em>Medição ${esc(B.numero || n)}${mesBol ? ` · competência ${esc(mesBol.mes)}` : ''}</em></h2>${cab}${tab}${fecho}</section>`, 'fl-medicao', 'boletim de medição');
+  }
+
   // ---------- montagem das folhas ----------
-  // Depois de desenhadas: (1) frentes do avanço por atividade que não cabem seguem numa folha de continuação, na largura
-  // inteira; (2) a coluna lateral da Visão geral perde os últimos itens até caber (o resto fica na aba Obra); (3) os
-  // gráficos são desenhados na altura que sobrou no quadro; (4) numera "Página x de y".
+  // Depois de desenhadas: os gráficos são desenhados na altura que sobrou no quadro e as folhas numeradas "Página x de y".
   let fontesProntas = false;
   // graf: { id do gráfico: altura => desenha }
   function montaFolhas(graf) {
@@ -1907,50 +2029,6 @@
     // medida só com as fontes finais; quando carregarem, redesenha o report uma vez
     if (!fontesProntas && document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(() => { fontesProntas = true; if (S.view === 'report') render(); });
     else fontesProntas = true;
-    let sec = $('[data-bloco="atividades"]', fl);
-    // folga no avanço por atividade (obra com poucas etapas, como a 208): abre, na ordem, as etapas que couberem inteiras
-    if (sec) {
-      const lim = sec.getBoundingClientRect().bottom - 2, box = sec.querySelector('[data-partes-box]');
-      const cabe = () => box.lastElementChild.getBoundingClientRect().bottom <= lim;
-      // (etapa que a pessoa fechou à mão fica fechada: S.abertos[k] === false)
-      if (cabe()) $$(':scope > details[data-parte]:not([open])', box).filter(d => S.abertos[d.dataset.k] === undefined).forEach(d => { d.open = true; if (cabe()) d.dataset.auto = '1'; else d.open = false; });
-    }
-    // espaço que sobra abaixo do avanço por atividade (todas as etapas couberam): entra a tendência do prazo em dias.
-    // Só quando cabe com folga; obra com muitas etapas segue como antes (as etapas têm prioridade sobre o gráfico).
-    if (sec && graf.__tend) {
-      const box = sec.querySelector('[data-partes-box]'), ult = box && box.lastElementChild;
-      const todas = [...sec.querySelectorAll('[data-partes-box] > [data-parte]')].every(p => p.getBoundingClientRect().bottom <= sec.getBoundingClientRect().bottom + 0.5);
-      const livre = ult ? sec.getBoundingClientRect().bottom - ult.getBoundingClientRect().bottom - 24 : 0;
-      if (todas && livre >= 190) {
-        box.insertAdjacentHTML('afterend', '<div class="rx-tend"><h3 class="rx-sub">Prazo · atraso em dias no fim de cada mês</h3><div class="legend rx-leg"><span><i class="sw sw-atr"></i>Atraso</span><span><i class="sw sw-adi"></i>Adiantada</span><span class="note">prazo ganho, contra o cronograma atual</span></div><div class="chart" id="ch-tend-r"></div></div>');
-        graf.__tend($('#ch-tend-r', fl), Math.min(240, Math.floor(livre - 56)));
-      }
-    }
-    for (let guarda = 0; sec && guarda < 12; guarda++) {
-      const lim = sec.getBoundingClientRect().bottom;
-      const partes = [...sec.querySelectorAll('[data-partes-box] > [data-parte]')];
-      let k = partes.findIndex(p => p.getBoundingClientRect().bottom > lim + 0.5);
-      if (k < 0) break;
-      k = Math.max(1, k); if (k >= partes.length) break;
-      const folha = sec.closest('.folha'), cont = sec.cloneNode(true);
-      [...cont.querySelectorAll('[data-partes-box] > [data-parte]')].slice(0, k).forEach(p => p.remove());
-      partes.slice(k).forEach(p => p.remove());
-      const h = cont.querySelector('h2'); if (h && !h.querySelector('.fl-cont')) h.insertAdjacentHTML('beforeend', '<em class="fl-cont">continuação</em>');
-      const nova = document.createElement('article'); nova.className = folha.className;
-      nova.innerHTML = folha.querySelector('.fl-cab').outerHTML + '<div class="fl-corpo"><div class="p-duas so"></div></div>' + folha.querySelector('.fl-pe').outerHTML;
-      nova.querySelector('.p-duas').append(cont);
-      folha.after(nova); sec = cont;
-    }
-    $$('[data-ajusta]', fl).forEach(col => {
-      for (let guarda = 0; guarda < 20 && col.scrollHeight > col.clientHeight + 1; guarda++) {
-        const u = $$('ul[data-corta]', col).filter(x => x.querySelectorAll(':scope > li:not(.fim)').length > 1).pop(); if (!u) break;
-        [...u.querySelectorAll(':scope > li:not(.fim)')].pop().remove();
-        u.dataset.cortados = (+u.dataset.cortados || 0) + 1;
-      }
-      // o aviso vai no título da própria lista (h3) ou, sem ele, no título do quadro; é só da tela (fl-int: fora do PDF e da impressão)
-      $$('ul[data-cortados]', col).forEach(u => { const t = u.previousElementSibling && u.previousElementSibling.matches('.rx-sub') ? u.previousElementSibling : u.closest('section').querySelector('h2');
-        t.insertAdjacentHTML('beforeend', `<em class="fl-int">+${u.dataset.cortados} na aba Obra</em>`); });
-    });
     $$('.chart[data-fill]', fl).forEach(el => { if (graf[el.id]) graf[el.id](Math.max(110, Math.floor(el.clientHeight) - 4)); });
     const todas = $$('.folha', fl);
     todas.forEach((f, k) => { const n = f.querySelector('.fl-n'); if (n) n.textContent = `Página ${k + 1} de ${todas.length}`; });
@@ -2096,11 +2174,9 @@
     const el5 = $('#ch-fin'); if (el5 && rFin && el5.closest('details').open) Core.chartCurvaS(el5, o, rFin);
     // report: os gráficos são desenhados na montagem das folhas, já na altura que sobrou no quadro
     if (S.view !== 'report') return;
-    const el4 = $('#ch-combo-r'), el6 = $('#ch-fin-r'), el7 = $('#ch-efetivo-r'), graf = {};
+    const el4 = $('#ch-combo-r'), el6 = $('#ch-fin-r'), graf = {};
     if (el4) graf['ch-combo-r'] = h => Core.chartCombo(el4, o, r, { altura: h });
     if (el6 && rFin) graf['ch-fin-r'] = h => Core.chartCurvaS(el6, o, rFin, { altura: h });
-    if (el7 && r.campo) graf['ch-efetivo-r'] = h => Core.chartEfetivo(el7, r.campo, { altura: h });
-    if (r.tendencia && r.tendencia.length >= 2) graf.__tend = (el, h) => Core.chartTendencia(el, r.tendencia, { altura: h });
     montaFolhas(graf); ajustaZoomFolhas();
   }
 
@@ -2312,14 +2388,8 @@
       toast(novo ? 'Obra cadastrada. Agora envie os arquivos do período.' : 'Cadastro atualizado.');
     };
     $$('details.sec').forEach(d => d.addEventListener('toggle', () => { S.abertos[d.dataset.sec] = d.open; if (d.open) desenha(); }));
-    // no report, abrir uma frente muda a altura da folha: redesenha para repaginar. Etapa aberta pelo próprio report
-    // (data-auto) e depois fechada à mão fica marcada como fechada (S.abertos[k] = false) e não reabre sozinha.
-    $$('details.rx-av-n').forEach(d => d.addEventListener('toggle', () => {
-      const k = d.dataset.k;
-      if (d.dataset.auto) { if (d.open) return; delete d.dataset.auto; S.abertos[k] = false; if (S.view === 'report') render(); return; }
-      if (!!S.abertos[k] === d.open) return;
-      S.abertos[k] = d.open; if (S.view === 'report') render();
-    }));
+    // avanço por atividade (aba Obra): lembra as frentes abertas entre redesenhos
+    $$('details.rx-av-n').forEach(d => d.addEventListener('toggle', () => { S.abertos[d.dataset.k] = d.open; }));
     bindMapa();
     $$('[data-abre]').forEach(b => b.onclick = () => { const id = b.dataset.abre; S.abertos[id] = !S.abertos[id]; render(); });
     $$('[data-filtro]').forEach(b => b.onclick = () => { S.filtroTarefas = b.dataset.filtro; S.verTodas = false; render(); });
@@ -2336,6 +2406,7 @@
     const ap = $('#imp-aplicar'); if (ap) ap.onclick = aplicarImport;
     const li = $('#imp-limpar'); if (li) li.onclick = () => { S.imp = null; render(); };
     const pdf = $('#bt-pdf'); if (pdf) pdf.onclick = () => baixarPdf(pdf);
+    const ppt = $('#bt-pptx'); if (ppt) ppt.onclick = () => baixarPptx(ppt);
     // início do mês: tira as fotos de todas as frentes (as plantas ficam) para carregar as do mês novo
     const lf = $('[data-limpafotos]'); if (lf) lf.onclick = () => {
       const base = DB.obras.find(x => x.id === S.obraId); if (!base) return;

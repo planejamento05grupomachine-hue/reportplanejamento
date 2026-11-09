@@ -142,24 +142,57 @@
   }
   // Boletim de medição por item de EAP ("M1", "M2"... ou variantes como "M4 ADITIVO").
   // O número de colunas varia por obra; a leitura é pelo rótulo do cabeçalho, nunca pela posição.
+  // O boletim do Sienge tem "Acum. anterior" duas vezes: em Quantidades (% ou quantidade) e em Valores (R$). A primeira
+  // vai em acumuladoAnterior; a segunda, em acumuladoAnteriorValor (antes só a segunda era lida, como se fosse %).
   function parseBoletim(linhas) {
     const ih = linhas.findIndex(l => l.some(c => norm(c).startsWith('referencia')) && l.some(c => norm(c).startsWith('%exe')));
     if (ih < 0) return [];
     const h = linhas[ih].map(norm);
     const ix = k => h.indexOf(k) >= 0 ? h.indexOf(k) : h.findIndex(x => x.startsWith(k));
     const ixUlt = k => { let r = -1; h.forEach((x, i) => { if (x.startsWith(k)) r = i; }); return r; };
+    const iAcumQ = ix('acum'), iAcumV = ixUlt('acum');
     const iRef = ix('referencia'), iDesc = ix('descri'), iUn = ix('un'), iContr = ix('contratada'),
-      iAcum = ixUlt('acum'), iMedida = ix('medida'), iPct = ix('%exe'), iPreco = ix('preco unitario'), iMed = ixUlt('medicao');
+      iMedida = ix('medida'), iPct = ix('%exe'), iPreco = ix('preco unitario'), iMed = ixUlt('medicao');
     const out = [];
     for (let i = ih + 1; i < linhas.length; i++) {
       const row = linhas[i], ref = row[iRef];
       if (!ref) continue;
       if (/^total/i.test(String(ref).trim())) break;
       out.push({ eap: String(ref).trim(), descricao: String(row[iDesc] || '').trim(), unidade: iUn >= 0 ? row[iUn] : null,
-        contratada: num(row[iContr]), acumuladoAnterior: num(row[iAcum]), medida: num(row[iMedida]), pctExec: num(row[iPct]),
-        precoUnitario: num(row[iPreco]), medicao: num(row[iMed]) });
+        contratada: num(row[iContr]), acumuladoAnterior: num(row[iAcumQ]), acumuladoAnteriorValor: iAcumV !== iAcumQ ? num(row[iAcumV]) : null,
+        medida: num(row[iMedida]), pctExec: num(row[iPct]), precoUnitario: num(row[iPreco]), medicao: num(row[iMed]) });
     }
     return out;
+  }
+  // Data do boletim: "02/10/2026" ou, na exportação com formato padrão do Excel, "10/2/26" (mês/dia/ano curto)
+  function dataBoletim(v) {
+    const m = String(v || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+    if (!m) return null;
+    return m[3].length === 4 ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : `20${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  }
+  // Cabeçalho e fechamento do boletim do Sienge: os rótulos ficam numa célula e o valor na próxima preenchida à direita
+  function resumoBoletim(linhas) {
+    const ih = linhas.findIndex(l => l.some(c => norm(c).startsWith('referencia')) && l.some(c => norm(c).startsWith('%exe')));
+    const rotulo = (re, ini, fim) => {
+      for (let i = ini; i < fim; i++) { const l = linhas[i] || []; for (let j = 0; j < l.length; j++) if (re.test(norm(l[j]))) { for (let k = j + 1; k < l.length; k++) if (l[k] !== null && String(l[k]).trim() !== '') return String(l[k]).trim(); } }
+      return null;
+    };
+    const cab = (re, conv = v => v) => { const v = rotulo(re, 0, ih < 0 ? 0 : ih); return v === null ? null : conv(v); };
+    const iTot = linhas.findIndex((l, i) => i > ih && /^total da medi/.test(norm(l[0])));
+    const fim = linhas.length, pe = re => { const v = iTot < 0 ? null : rotulo(re, iTot, fim); return v === null ? null : num(v); };
+    const retencoes = [];
+    const iImp = iTot < 0 ? -1 : linhas.findIndex((l, i) => i > iTot && norm(l[0]) === 'imposto');
+    if (iImp >= 0) for (let i = iImp + 1; i < fim; i++) { const l = linhas[i] || [], nome = l[0]; if (!nome || /^desconto$/.test(norm(nome))) break;
+      const v = l.slice(1).map(num).find(x => x !== null); retencoes.push({ imposto: String(nome).trim(), valor: v === undefined ? null : v }); }
+    const desc = iTot < 0 ? null : linhas.slice(iTot).find(l => /^desconto$/.test(norm(l[0])));
+    return {
+      contrato: cab(/^contrato$/), obra: cab(/^obra$/), unidadeConstrutiva: cab(/^unidade construtiva$/), numero: cab(/^numero da medic/),
+      vencimento: cab(/^data de vencimento$/, dataBoletim), totalContrato: cab(/^total do contrato$/, num), totalObra: cab(/^total da obra$/, num),
+      cliente: cab(/^cliente$/), dataMedicao: cab(/^data da medic/, dataBoletim),
+      totalItens: pe(/^total dos itens$/), totalReajuste: pe(/^total reajuste$/), totalBruto: pe(/^total bruto$/), subtotal: pe(/^subtotal$/),
+      descontos: pe(/^descontos$/), caucao: pe(/^caucao$/), sinal: pe(/^sinal$/), impostosRetidos: pe(/^total de impostos retido/), totalLiquido: pe(/^total liquido$/),
+      retencoes, observacao: desc ? desc.slice(1).filter(c => c !== null && String(c).trim()).join(' ').trim() || null : null,
+    };
   }
   function parseMedicaoContrato(XLSX, wb) {
     // abas de resumo, em ordem de confiança: a série mensal (207) ou a visão geral/controle mensal (198/208) e,
@@ -172,7 +205,7 @@
     ['contrato', 'obra', 'totalContrato', 'medidoAcumulado', 'saldo', 'ultimaMedicao'].forEach(k => { const x = lidos.find(l => l[k] !== null && l[k] !== undefined); resumo[k] = x ? x[k] : null; });
     resumo.meses = (lidos.find(l => l.meses.length) || { meses: [] }).meses;
     const boletins = wb.SheetNames.filter(n => !abas.includes(n) && /^m\s*\d/.test(norm(n)))
-      .map(nome => ({ aba: nome, itens: parseBoletim(linhasDaAba(XLSX, wb, nome)) }))
+      .map(nome => { const l = linhasDaAba(XLSX, wb, nome); return { aba: nome, itens: parseBoletim(l), resumo: resumoBoletim(l) }; })
       .filter(b => b.itens.length);
     return { resumo, boletins };
   }

@@ -182,10 +182,10 @@ O detalhe interno (campo/RDO, marcos, pontos de atenção, tarefas, restrições
 | Físico (previsto × realizado) | Curva física acumulada e avanço de cada mês no mesmo quadro; barras Base / Previsto / Realizado | Prevision (Curva S e progresso mensal) |
 | Físico · avanço da frente + Fotos · registros | Para cada frente: a planta marcada (executado · em execução · a executar) e, em seguida, as fotos do período, duas por folha, com legenda | Obra → Mapa de avanço: planta (já marcada ou com áreas desenhadas e vinculadas ao cronograma) e as fotos da frente |
 | Valor agregado | SPI, EV, PV e Curva S financeira | Prevision (perspectiva econômica); cadastro → *Valor agregado no report* |
-| Medições / faturamento — controle | Contrato, medido, saldo, última medição; histórico mês a mês; boletim da última medição | Controle de Medição (Alimentar); depois, o Sienge |
+| Medições / faturamento — controle | Contrato, medido, saldo, última medição; histórico mês a mês; boletim da última medição no desenho do Sienge (cabeçalho, Quantidades e Valores até o 2º nível da EAP, fechamento com descontos, retenções e total líquido) | Controle de Medição (Alimentar; as abas M1, M2… são os boletins exportados do Sienge); depois, direto do Sienge |
 
 **Rotina do mês** (o que é manual): 1) conferir o rascunho que o robô gravou na sexta; 2) enviar o Controle de Medição
 do mês em Alimentar; 3) em Obra → Mapa de avanço, *Limpar fotos de todas as frentes* (botão no topo do report) e
 carregar a planta atualizada e as duas fotos com legenda de cada frente do mês; 4) escolher o *Mês da capa*; 5) conferir
-as folhas e **Publicar para o cliente**; 6) *Baixar PDF* ou enviar o link. Sem fotos escolhidas nas frentes, o report usa
+as folhas e **Publicar para o cliente**; 6) *Baixar PDF* ou enviar o link. *Baixar PowerPoint* gera o mesmo report em slides editáveis (capa, títulos, fotos e legendas, plantas e tabelas em texto; gráficos e cartões como imagem), para ajustes pontuais fora do painel. Sem fotos escolhidas nas frentes, o report usa
 a seleção automática das fotos dos RDOs. O topo do report (só administrador) avisa quando há foto com mais de 40 dias.
