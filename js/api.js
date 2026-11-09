@@ -378,6 +378,9 @@
           contrato: d.contrato || '', local: d.local || '', responsavel: d.responsavel || '',
           reportVA: ['mostrar', 'ocultar'].includes(d.reportVA) ? d.reportVA : 'auto',
           indicePrazo: d.indicePrazo === 'percentual' ? 'percentual' : 'tempo',
+          // capa do report: nome da obra na capa, revisão e logo do cliente (PNG em data URL); sem d.capa, mantém a atual
+          capa: d.capa ? { titulo: String(d.capa.titulo || '').trim(), revisao: String(d.capa.revisao || '00').trim() || '00',
+            logo: /^data:image\/png;base64,/.test(d.capa.logo || '') ? d.capa.logo : '' } : ((OB[id] && OB[id].pub && OB[id].pub.capa) || null),
           prazoContratual: d.prazo_inicio && d.prazo_fim ? { inicio: d.prazo_inicio, fim: d.prazo_fim, dias: d.prazo_dias } : (d.prazo_inicio || d.prazo_fim ? { inicio: d.prazo_inicio, fim: d.prazo_fim, dias: null } : null),
         };
         const arq = {};
@@ -450,7 +453,7 @@
           if (!temDados(e.pub)) throw erro('Esta obra não tem posição publicada.');
           const fotos = await garantirFotos(id, 'pub');
           const ras = { ...clone(e.pub), fotosProprias: true, nFotos: fotos.length }; delete ras.publicadoEm;
-          const meta = {}; ['id', 'codigo', 'nome', 'cliente', 'contratante', 'cidade', 'contrato', 'local', 'responsavel', 'prazoContratual', 'criadoEm'].forEach(k => { if (k in e.pub) meta[k] = e.pub[k]; });
+          const meta = {}; ['id', 'codigo', 'nome', 'cliente', 'contratante', 'cidade', 'contrato', 'local', 'responsavel', 'prazoContratual', 'capa', 'criadoEm'].forEach(k => { if (k in e.pub) meta[k] = e.pub[k]; });
           const pub = { ...meta, nFotos: 0 };
           arq[P.ras(id)] = await arqRas(ras);
           arq[P.fotosRas(id)] = await arqFotos(chave(DIR.ki), fotos);
@@ -460,6 +463,18 @@
           e.ras = ras; e.fotos.ras = fotos; e.pub = pub; e.fotos.pub = [];
         }
         return paraApp(id);
+      });
+    },
+
+    // mês/ano de referência da capa do report ("2026-10"). Vale para a carga em que foi escolhido (guarda a data de
+    // corte): a carga seguinte volta ao mês do próprio corte até alguém escolher de novo, para a capa não ficar presa.
+    mesReferencia(id, mes) {
+      return gravar(async () => {
+        if (!/^\d{4}-\d{2}$/.test(mes)) throw erro('Mês de referência inválido.');
+        const e = OB[id]; const alvo = ehInterno() && e.ras ? 'ras' : 'pub';
+        e[alvo] = { ...e[alvo], mesReferencia: { mes, corte: e[alvo].dataCorte || null } };
+        const arq = { [alvo === 'ras' ? P.ras(id) : P.obra(id)]: alvo === 'ras' ? await arqRas(e.ras) : await arqObra(id, e.pub) };
+        await commit(arq, `Capa do report da obra ${e[alvo].codigo || id}: referência ${mes}`);
       });
     },
 

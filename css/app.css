@@ -687,3 +687,9 @@ details.sec { scroll-margin-top: calc(var(--mast-h) + 64px); }
 .folha.exec .chart .bar-atr { fill: var(--rx-crit, #D0505F); } .folha.exec .chart .bar-adi { fill: var(--rx-ok, #3E9B62); }
 .folha.exec .chart .zero { stroke: var(--rx-muted, #7A828C); }
 .pf-velho { background: #FBF1DC; color: #7A5200; border-radius: 4px; padding: 0 5px; letter-spacing: .04em; }
+
+/* capa do report: mês de referência (tela do report) e logo do cliente (cadastro da obra) */
+.rp-mes { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.rp-mes .inp { width: auto; min-height: 36px; padding: 4px 10px; }
+.cp-logo-ed { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.cp-logo-ed img { max-height: 56px; max-width: 200px; padding: 6px 10px; background: #F4F5F8; border: 1px solid var(--rule); border-radius: 6px; }

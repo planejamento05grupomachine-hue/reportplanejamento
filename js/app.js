@@ -1334,6 +1334,29 @@
       obras: $$(`input[name="${id}-obra"]:checked`).map(i => i.value) };
   }
 
+  // Logo do cliente para a capa: corta a margem vazia (transparente ou branca), cabe em 640×320 e sai em PNG
+  // (data URL, guardado no cadastro cifrado da obra; o html2canvas do PDF lê sem depender de outro endereço).
+  async function logoReduzida(arquivo) {
+    const url = URL.createObjectURL(arquivo);
+    try {
+      const img = await new Promise((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => falha(new Error('formato não suportado')); i.src = url; });
+      const w0 = img.naturalWidth || 640, h0 = img.naturalHeight || 320;
+      const c0 = document.createElement('canvas'); c0.width = w0; c0.height = h0;
+      const g0 = c0.getContext('2d'); g0.drawImage(img, 0, 0, w0, h0);
+      const px = g0.getImageData(0, 0, w0, h0).data;
+      let x0 = w0, y0 = h0, x1 = -1, y1 = -1;
+      for (let y = 0; y < h0; y++) for (let x = 0; x < w0; x++) {
+        const k = (y * w0 + x) * 4, vazio = px[k + 3] < 16 || (px[k] > 242 && px[k + 1] > 242 && px[k + 2] > 242);
+        if (!vazio) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      }
+      if (x1 < 0) throw new Error('a imagem está vazia');
+      const cw = x1 - x0 + 1, ch = y1 - y0 + 1, esc2 = Math.min(1, 640 / cw, 320 / ch);
+      const c = document.createElement('canvas'); c.width = Math.round(cw * esc2); c.height = Math.round(ch * esc2);
+      const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(c0, x0, y0, cw, ch, 0, 0, c.width, c.height);
+      return c.toDataURL('image/png');
+    } finally { URL.revokeObjectURL(url); }
+  }
+
   // ---------- cadastro de obra ----------
   const OPCOES_VA = { auto: 'Automático', mostrar: 'Mostrar sempre', ocultar: 'Não mostrar' };
   const OPCOES_IP = { tempo: 'Prazo ganho, IDP(t) (recomendado)', percentual: 'IDP em % (realizado ÷ previsto)' };
@@ -1348,6 +1371,14 @@
         <div class="two">${f('o-cidade', 'Cidade/UF', o && o.cidade)}${f('o-contrato', 'Contrato', o && o.contrato)}</div>
         ${f('o-local', 'Endereço', o && o.local)}
         <div class="two">${f('o-resp', 'Responsável em campo', o && o.responsavel)}<div class="two">${f('o-ini', 'Início contratual', pz.inicio, 'date')}${f('o-fim', 'Fim contratual', pz.fim, 'date')}</div></div>
+        <div class="step-t">Capa do report</div>
+        <div class="two">${f('o-capa-titulo', 'Nome da obra na capa', o && o.capa && o.capa.titulo, 'text', `placeholder="${esc((o && o.nome) || 'ex.: Fibrasa - Fábrica de Embalagens - Civit I')}"`)}${f('o-capa-rev', 'Revisão', (o && o.capa && o.capa.revisao) || '00', 'text', 'maxlength="4" inputmode="numeric"')}</div>
+        <div class="field"><label>Logo do cliente</label>
+          <div class="cp-logo-ed">${o && o.capa && o.capa.logo ? `<img src="${o.capa.logo}" alt="Logo do cliente">` : '<span class="sub">sem logo</span>'}
+            <button class="btn sec2" type="button" id="o-logo-bt">Escolher imagem</button><button class="btn sec2" type="button" id="o-logo-rm" ${o && o.capa && o.capa.logo ? '' : 'hidden'}>Remover</button>
+            <input type="file" id="o-logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden></div>
+          <small class="hint">PNG com fundo transparente fica melhor. Sem logo, a capa mostra só a da Machine. A capa é a mesma em todas as obras; de um mês para o outro só muda o mês de referência, escolhido na tela do report.</small></div>
+        <div class="step-t">Report</div>
         <div class="field"><label for="o-va">Valor agregado no report</label><select class="inp" id="o-va">${Object.entries(OPCOES_VA).map(([k, t]) => `<option value="${k}" ${((o && o.reportVA) || 'auto') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
           <small class="hint">Automático: o quadro só entra no report quando há SPI e a Curva S financeira está na base do contrato. Na aba Obra, administradores e diretoria continuam vendo os números.</small></div>
         <div class="field"><label for="o-ip">Índice que acende o farol de prazo</label><select class="inp" id="o-ip">${Object.entries(OPCOES_IP).map(([k, t]) => `<option value="${k}" ${((o && o.indicePrazo) || 'tempo') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
@@ -1653,6 +1684,23 @@
     const pe = `<footer class="fl-pe"><span>Machine · Planejamento e Controle</span><span>${esc([o.cliente, o.cidade].filter(Boolean).join(' · '))}</span><span class="fl-n"></span></footer>`;
     const folha = (titulo, corpo, cls = '', sub = '') => `<article class="folha paisagem exec ${cls}">${cab(titulo, sub)}<div class="fl-corpo">${corpo}</div>${pe}</article>`;
 
+    // ----- Capa (padrão único para todas as obras) -----
+    // Fixo por obra (cadastro): nome no report, cliente, local, revisão e a logo do cliente (quando houver).
+    // Muda todo mês: só o mês/ano de referência (escolhido na tela do report; sem escolha, o mês da data de corte).
+    const capa = o.capa || {}, nomeCapa = capa.titulo || o.nome;
+    const mr = o.mesReferencia, mesRefIso = mr && /^\d{4}-\d{2}$/.test(mr.mes || '') && mr.corte === o.dataCorte ? mr.mes : r.corte.slice(0, 7);
+    const mesRef = Core.mesLongo(mesRefIso).replace(/^./, c => c.toUpperCase());
+    const linhaCapa = (k, v) => v ? `<div><dt>${k}:</dt><dd>${esc(v)}</dd></div>` : '';
+    const folhaCapa = `<article class="folha paisagem capa" aria-label="Capa do relatório">
+        <div class="cp-titulo"><h1>RELATÓRIO MENSAL DE CONTRATO</h1><p>Obra ${esc(o.codigo)} - ${esc(nomeCapa)}</p></div>
+        <div class="cp-bloco">
+          <div class="cp-logos"><div class="cp-machine"><img src="${LOGO}" alt="Machine"><span>Realizações com base sólida</span></div>
+            ${capa.logo ? `<img class="cp-cli" src="${capa.logo}" alt="${esc(o.cliente || 'Cliente')}">` : ''}</div>
+          <i class="cp-reg" aria-hidden="true"></i>
+          <dl class="cp-dados">${linhaCapa('Mês/Ano de referência', mesRef)}${linhaCapa('Obra', `${o.codigo} - ${nomeCapa}`)}${linhaCapa('Local', o.cidade)}${linhaCapa('Cliente', o.cliente)}${linhaCapa('Revisão', capa.revisao || '00')}</dl>
+        </div>
+      </article>`;
+
     // ----- Visão geral -----
     const fimMs = `<li class="fim"><span class="rx-ms-d">${P.fimCron ? dCurto(P.fimCron) : '—'}</span><span class="rx-ms-n">Término da obra</span><span class="rx-ms-v ${slipFim > 0 ? 'neg' : ''}">${slipFim ? dias(slipFim) : 'na base'}</span></li>`;
     const marcosSec = `<section class="rx-s rx-box"><h2><i class="rx-ic">${IC.rflag}</i>Próximos marcos</h2>
@@ -1739,9 +1787,10 @@
     return `
       <div class="head-row no-print"><div><div class="kicker">Report</div><h1 class="h1">Obra ${esc(o.codigo)} · ${corte}</h1>
         <p class="sub">Folhas A4 paisagem, com os mesmos quadros na mesma ordem em todas as obras${mapas.length ? ' e o mapa de avanço no fim' : ''}. O detalhe completo fica na aba Obra.</p></div>
-        <div class="bar-actions"><button class="btn" id="bt-pdf">Baixar PDF</button><a class="btn sec2" href="${mailto('', `Report de planejamento · Obra ${o.codigo} · ${corte}`, `Prezados,\n\nSegue o report de planejamento da obra ${o.codigo} · ${o.nome}, com posição de ${corte}.\n\nO painel completo está disponível em ${SITE()}#obra-${o.id}/report (acesso com e-mail e senha).\n\nAtenciosamente,\nPlanejamento · Machine`)}">Enviar por e-mail</a></div></div>
+        <div class="bar-actions">${ehAdmin() ? `<label class="rp-mes" title="Só o mês muda na capa de um mês para o outro">Mês da capa<input class="inp" type="month" id="rp-mes" value="${mesRefIso}"></label>` : ''}<button class="btn" id="bt-pdf">Baixar PDF</button><a class="btn sec2" href="${mailto('', `Report de planejamento · Obra ${o.codigo} · ${corte}`, `Prezados,\n\nSegue o report de planejamento da obra ${o.codigo} · ${o.nome}, com posição de ${corte}.\n\nO painel completo está disponível em ${SITE()}#obra-${o.id}/report (acesso com e-mail e senha).\n\nAtenciosamente,\nPlanejamento · Machine`)}">Enviar por e-mail</a></div></div>
       ${resumoCelular(o, r, X)}
       <div class="folhas" id="paper" data-corte="${r.corte}">
+        ${folhaCapa}
         ${folha('Visão geral', visao, 'fl-visao')}
         ${folha('Andamento das frentes', andamento, 'fl-andamento')}
         ${valor ? folha('Valor agregado', valor, 'fl-valor') : ''}
@@ -2130,6 +2179,19 @@
     });
 
     // ----- cadastro de obra -----
+    // logo do cliente: reduzida no navegador (PNG até 640×320, mantém a transparência) e guardada no cadastro cifrado
+    const lgb = $('#o-logo-bt'), lgi = $('#o-logo'), lgr = $('#o-logo-rm');
+    const idForm = () => { const f = $('#f-obra'); return f && f.dataset.novo === '1' ? null : S.obraId; };
+    if (lgb) S.logoCli = null; // formulário recém-aberto: começa pela logo gravada
+    // (a prévia é trocada no lugar, sem redesenhar a tela, para não perder o que já foi digitado no formulário)
+    const prevLogo = src => { const box = $('.cp-logo-ed'); if (!box) return; const el = box.firstElementChild;
+      el.outerHTML = src ? `<img src="${src}" alt="Logo do cliente">` : '<span class="sub">sem logo</span>'; const rm = $('#o-logo-rm'); if (rm) rm.hidden = !src; };
+    if (lgb && lgi) { lgb.onclick = () => lgi.click(); lgi.onchange = async () => {
+      const f = lgi.files[0]; if (!f) return;
+      if (f.size > 5e6) { toast('Imagem muito grande (máximo 5 MB).'); return; }
+      try { S.logoCli = { id: idForm(), src: await logoReduzida(f) }; prevLogo(S.logoCli.src); } catch (e) { toast('Não consegui ler a imagem: ' + e.message); }
+    }; }
+    if (lgr) lgr.onclick = () => { S.logoCli = { id: idForm(), src: '' }; prevLogo(''); };
     const fo = $('#f-obra'); if (fo) fo.onsubmit = async e => {
       e.preventDefault();
       const novo = fo.dataset.novo === '1';
@@ -2139,8 +2201,12 @@
       if (ini && fim && fim < ini) { toast('O fim contratual é anterior ao início.'); return; }
       const dados = { novo, id: novo ? v('o-codigo') : S.obraId, codigo: v('o-codigo'), nome: v('o-nome'), cliente: v('o-cliente'), contratante: v('o-contratante'), cidade: v('o-cidade'),
         contrato: v('o-contrato'), local: v('o-local'), responsavel: v('o-resp'), reportVA: v('o-va'), indicePrazo: v('o-ip'), prazo_inicio: ini, prazo_fim: fim, prazo_dias: ini && fim ? Core.diff(ini, fim) + 1 : null };
+      const atual = !novo && (DB.obras.find(x => x.id === S.obraId) || {}).capa || {};
+      const lg = S.logoCli && S.logoCli.id === (novo ? null : S.obraId) ? S.logoCli.src : atual.logo || '';
+      dados.capa = { titulo: v('o-capa-titulo'), revisao: v('o-capa-rev') || '00', logo: lg };
       const o = await gravando(novo ? 'Cadastrando a obra…' : 'Salvando o cadastro…', () => API.salvarObra(dados));
       if (!o) return;
+      S.logoCli = null;
       S.obraId = o.id; S.view = novo ? 'alimentar' : 'obra'; await recarregar();
       toast(novo ? 'Obra cadastrada. Agora envie os arquivos do período.' : 'Cadastro atualizado.');
     };
@@ -2169,6 +2235,12 @@
     const ap = $('#imp-aplicar'); if (ap) ap.onclick = aplicarImport;
     const li = $('#imp-limpar'); if (li) li.onclick = () => { S.imp = null; render(); };
     const pdf = $('#bt-pdf'); if (pdf) pdf.onclick = () => baixarPdf(pdf);
+    // mês/ano de referência da capa: grava na carga que o administrador está vendo (rascunho, se houver)
+    const rpm = $('#rp-mes'); if (rpm) rpm.onchange = async () => {
+      if (!/^\d{4}-\d{2}$/.test(rpm.value)) return;
+      const ok = await gravando('Salvando o mês da capa…', () => API.mesReferencia(S.obraId, rpm.value).then(() => true));
+      if (ok) { await recarregar(); toast('Mês de referência da capa atualizado.'); }
+    };
     $$('[data-fotordo]').forEach(b => b.onclick = () => { const v = b.dataset.fotordo; S.fotoRdo = v === 'todos' ? 'todos' : +v; S.fotosTodas = false; render(); });
     $$('[data-fotostodas]').forEach(b => b.onclick = () => { S.fotosTodas = !S.fotosTodas; render(); });
     $$('[data-lb]').forEach(b => b.onclick = () => { S.lb = +b.dataset.lb; render(); });
