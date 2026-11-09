@@ -361,3 +361,63 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
   .folha, .folha * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 .rx-st.neutro { color: var(--rx-muted, #7A828C); } .rx-st.neutro::before { background: var(--rx-faint, #B8C0CA); }
+
+/* ---------- Dashboard · status geral (2ª folha): mesmo desenho em todas as obras; a tabela segue a EAP de cada obra ---------- */
+.folha.dash { --cp-navy: #0A2463; --ds-azul: #2F5BD8; --ds-barra: #6F93D6; --ds-cab: #1D3A66; --ds-linha: #E3E6EC;
+  --ds-ok: #2E9E57; --ds-warn: #E0B400; --ds-crit: #D7262E;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: #F5F6F8; color: var(--cp-navy);
+  font-family: "Space Mono", "Courier New", monospace; padding: 9mm 13mm 5mm; }
+.folha.dash * { font-family: inherit; }
+.ds-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; padding-bottom: 5mm; }
+.ds-cab h1 { margin: 2mm 0 0; font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: .02em; color: var(--cp-navy); }
+.ds-cab .cp-machine img { width: 50mm; }
+.folha.dash .cp-machine span { font-family: "Barlow", "Segoe UI", Arial, sans-serif; font-size: 9px; font-weight: 500; letter-spacing: .04em; color: #8B9099; }
+.ds-corpo { min-height: 0; display: flex; flex-direction: column; gap: 4.5mm; }
+.ds-cards { display: grid; grid-template-columns: 1.15fr 1.15fr 2fr .95fr; gap: 4mm; align-items: stretch; }
+.ds-card { position: relative; display: grid; align-content: center; gap: 2px; padding: 9px 12px 10px 20px; background: #fff; border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .06); min-width: 0; }
+.ds-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 7px; border-radius: 10px 0 0 10px; background: var(--ds-azul); }
+.ds-card.ac-escuro::before, .ds-card.ac-neutro::before { background: #2B2F36; }
+.ds-card.ac-ok::before { background: var(--ds-ok); } .ds-card.ac-atencao::before { background: var(--ds-warn); } .ds-card.ac-critico::before { background: var(--ds-crit); }
+.ds-card small { font-size: 11.5px; line-height: 1.3; color: #2B2F36; }
+.ds-card small em { display: block; font-style: normal; }
+.ds-card b { margin-top: 4px; font-size: 28px; line-height: 1.1; font-weight: 700; color: #1B1E24; white-space: nowrap; }
+.ds-card span { font-size: 13px; color: #5E6470; }
+.ds-ind { display: grid; gap: 6px; padding: 6px; background: #ECEEF2; border-radius: 12px; }
+.ds-ind-g { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.folha.dash .ds-leg { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 14px; font-family: "Barlow", Arial, sans-serif; font-size: 11px; color: #3D434A; }
+.folha.dash .ds-leg * { font-family: "Barlow", Arial, sans-serif; }
+.ds-leg i { display: inline-block; width: 8px; height: 8px; margin-right: 4px; vertical-align: 0; }
+.ds-leg i.ok { background: var(--ds-ok); } .ds-leg i.atencao { background: var(--ds-warn); } .ds-leg i.critico { background: var(--ds-crit); }
+.ds-prazo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8mm; align-items: center; padding: 8px 18px 10px; background: #fff; border-radius: 8px; }
+.ds-pz-d { display: flex; justify-content: space-between; font-size: 13px; color: #1B1E24; }
+.ds-pz-d span { display: grid; } .ds-pz-d .dir { text-align: right; }
+.ds-pz-d b { font-weight: 700; }
+.ds-pz-bar { position: relative; height: 13px; margin: 20px 0 2px; background: #E6EAF1; border-radius: 3px; }
+.ds-pz-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ds-azul); border-radius: 3px; }
+.folha.dash .ds-pz-bar em { position: absolute; bottom: 15px; transform: translateX(-50%); font-family: "Barlow", Arial, sans-serif; font-style: normal; font-weight: 600; font-size: 12px; color: #3D434A; }
+.ds-pz-r { margin: 0; padding-left: 7mm; border-left: 1px solid var(--ds-linha); display: grid; grid-template-columns: auto; font-size: 12.5px; text-transform: uppercase; color: #5E6470; }
+.ds-pz-r dd { margin: 0 0 4px; font-weight: 700; text-transform: none; color: #1B1E24; }
+.ds-tab { min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.ds-tab h2 { margin: 0; font-size: 17px; font-weight: 700; color: #1B1E24; }
+.folha.dash .ds-tab h2 em { margin-left: 12px; font-family: "Barlow", Arial, sans-serif; font-style: normal; font-weight: 500; font-size: 11px; color: #8B9099; }
+.ds-tab table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; }
+.folha.dash .ds-tab table, .folha.dash .ds-tab table * { font-family: "Barlow", "Segoe UI", Arial, sans-serif; }
+.ds-tab th { background: var(--ds-cab); color: #fff; font-size: 13px; font-weight: 600; padding: 5px 6px; text-align: center; }
+.ds-tab th:first-child { text-align: left; width: 39%; }
+.ds-tab td { position: relative; padding: 6px 8px; font-size: 13px; line-height: 1.25; color: #1B1E24; border-bottom: 1px solid var(--ds-linha); }
+.ds-tab td.nm { overflow-wrap: anywhere; }
+.ds-tab td.n { text-align: center; padding: 4px; }
+.ds-tab td.n i { position: absolute; left: 4px; top: 4px; bottom: 4px; max-width: calc(100% - 8px); background: var(--ds-barra); opacity: .85; }
+.ds-tab td.n span { position: relative; font-weight: 600; }
+.ds-tab td.d { text-align: center; font-weight: 600; white-space: nowrap; }
+.ds-tab td.d.pos { color: #D88B00; } .ds-tab td.d.neg { color: var(--ds-crit); } .ds-tab td.d.z { color: #5E6470; }
+.ds-seta { display: inline-block; width: 14px; margin-right: 6px; font-weight: 800; }
+.ds-tab td.d.pos .ds-seta, .ds-tab td.d.z .ds-seta { color: #2E8B6A; } .ds-tab td.d.neg .ds-seta { color: var(--ds-crit); }
+.ds-tab tr.obra td { background: #E4E6EA; font-weight: 700; }
+.ds-tab.densa td { padding-top: 2px; padding-bottom: 2px; font-size: 11px; }
+.ds-tab.densa td.n i { top: 2px; bottom: 2px; }
+.folha.dash .ds-pe { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding-top: 3mm; font-family: "Barlow", Arial, sans-serif; font-size: 10px; color: #9AA3AE; }
+.folha.dash .ds-pe * { font-family: "Barlow", Arial, sans-serif; }
+.ds-pe .fl-n { margin-left: auto; margin-right: 6mm; }
+.ds-cli { max-height: 13mm; max-width: 34mm; display: block; }

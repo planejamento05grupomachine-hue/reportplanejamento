@@ -1701,6 +1701,9 @@
         </div>
       </article>`;
 
+    // ----- Dashboard · status geral (2ª folha, mesmo desenho em todas as obras) -----
+    const folhaDash = dashboardStatus(o, r, capa);
+
     // ----- Visão geral -----
     const fimMs = `<li class="fim"><span class="rx-ms-d">${P.fimCron ? dCurto(P.fimCron) : '—'}</span><span class="rx-ms-n">Término da obra</span><span class="rx-ms-v ${slipFim > 0 ? 'neg' : ''}">${slipFim ? dias(slipFim) : 'na base'}</span></li>`;
     const marcosSec = `<section class="rx-s rx-box"><h2><i class="rx-ic">${IC.rflag}</i>Próximos marcos</h2>
@@ -1791,12 +1794,68 @@
       ${resumoCelular(o, r, X)}
       <div class="folhas" id="paper" data-corte="${r.corte}">
         ${folhaCapa}
+        ${folhaDash}
         ${folha('Visão geral', visao, 'fl-visao')}
         ${folha('Andamento das frentes', andamento, 'fl-andamento')}
         ${valor ? folha('Valor agregado', valor, 'fl-valor') : ''}
         ${fotos}
         ${folhasDoMapa(mapas, folha)}
       </div>`;
+  }
+
+  // ---------- Dashboard · status geral (2ª folha do report) ----------
+  // Cartões (avanço físico e financeiro acumulados, IDP, IDC, variação do término), linha do prazo contratual e a tabela
+  // Previsto × Realizado por frente da EAP (Base, Previsto e Realizado da própria linha no cronograma do Prevision).
+  // Faixas dos índices = farol do painel (Core.FAIXAS). Sem o dado, o cartão mostra "—" e diz o que falta.
+  const DASH_LINHAS = 15;
+  function dashboardStatus(o, r, capa) {
+    const P = r.prazo, F = Core.FAIXAS, n2 = v => v === null || v === undefined || isNaN(v) ? '—' : fmtNum(v * 100, 2);
+    const farol = v => v === null || v === undefined ? 'neutro' : v >= F.ok ? 'ok' : v >= F.atencao ? 'atencao' : 'critico';
+    const rf = Core.calcFinanceiro(o, r.corte), comVA = Core.vaNoReport(o, rf);
+    const idp = r.farolTempo ? r.prazoGanho.idpT : r.idp, cpi = rf ? rf.cpi : null;
+    const varFim = P.contrFim && P.fimCron ? diff(P.contrFim, P.fimCron) : (r.crono && r.crono.slip !== undefined ? r.crono.slip : null);
+    const card = (cls, rot, val, sub) => `<div class="ds-card ${cls}"><small>${rot}</small><b>${val}</b><span>${sub}</span></div>`;
+    const cards = `<div class="ds-cards">
+        ${card('ac-fis', 'Avanço físico (acum.)', `${n2(r.real)}%`, `Base: ${n2(r.baseCorte)}%`)}
+        ${card('ac-fis', 'Avanço financeiro (acum.)', comVA && rf.evFrac !== null ? `${n2(rf.evFrac)}%` : '—', comVA && rf.baseFrac !== null ? `Base: ${n2(rf.baseFrac)}%` : 'sem Curva S financeira no report')}
+        <div class="ds-ind">
+          <div class="ds-ind-g">${card(`ac-${farol(idp)}`, `IDP<em>(Índice de Prazo)</em>`, idp ? fmtNum(idp, 2) : '—', 'Meta: 1,00')}
+            ${card(`ac-${farol(cpi)}`, `IDC<em>(Índice de Custo)</em>`, cpi ? fmtNum(cpi, 2) : '—', cpi ? 'Meta: 1,00' : 'sem custo real (AC)')}</div>
+          <div class="ds-leg"><span><i class="ok"></i>≥ ${fmtNum(F.ok, 2)}</span><span><i class="atencao"></i>${fmtNum(F.atencao, 2)} ≤ índice &lt; ${fmtNum(F.ok, 2)}</span><span><i class="critico"></i>&lt; ${fmtNum(F.atencao, 2)}</span></div>
+        </div>
+        ${card(`ac-${varFim === null ? 'neutro' : varFim > 0 ? 'critico' : 'escuro'}`, 'Variação término', varFim === null ? '—' : `${varFim > 0 ? '+' : ''}${varFim} ${Math.abs(varFim) === 1 ? 'dia' : 'dias'}`, 'Meta: 0 dias')}
+      </div>`;
+    const decor = P.total ? Math.max(0, Math.min(1, P.decorrido / P.total)) : null;
+    const prazo = `<div class="ds-prazo">
+        <div class="ds-pz-l"><div class="ds-pz-d"><span>Início contratual<b>${dBR(P.contrIni)}</b></span><span class="dir">Término contratual<b>${dBR(P.contrFim)}</b></span></div>
+          ${decor === null ? '' : `<div class="ds-pz-bar"><i style="width:${(decor * 100).toFixed(1)}%"></i><em style="left:${(decor * 100).toFixed(1)}%">${fmtNum(decor * 100, 0)}%</em></div>`}</div>
+        <dl class="ds-pz-r"><dt>Prazo total</dt><dd>${P.total ? `${P.total} dias` : '—'}</dd><dt>A vencer</dt><dd>${P.aVencer !== null && P.aVencer !== undefined ? `${Math.max(0, P.aVencer)} dias` : '—'}</dd></dl>
+      </div>`;
+    // tabela: a EAP da própria obra — raiz e linhas de nível 2 do cronograma do Prevision, na ordem e com os nomes da EAP,
+    // com Base, Previsto e Realizado de cada linha. Sem cronograma, o Progresso por tarefas (nível 2), também na ordem da EAP.
+    const crono = (o.cronograma && o.cronograma.linhas) || [];
+    const raizC = crono.find(l => l.nivel === 1);
+    const ordemEap = (a, b) => String(a.eap).split('.').map(Number).reduce((s, v, i) => s || v - (+String(b.eap).split('.')[i] || 0), 0);
+    const linhas = crono.length
+      ? crono.filter(l => l.nivel === 2).sort(ordemEap).map(l => ({ nome: l.nome, base: l.base, prev: l.previsto, real: l.realizado }))
+      : (o.tarefas || []).filter(t => t.nivel === 2).sort(ordemEap).map(t => { const p = (t.previsto ?? t.base ?? 0) || null;
+        return { nome: t.tarefa, base: null, prev: null, real: p ? (t.realizado || 0) / p : null }; });
+    const densa = linhas.length > DASH_LINHAS;
+    const barra = v => v === null || v === undefined ? '<td class="n">—</td>' : `<td class="n"><i style="width:${Math.max(0, Math.min(100, v * 100)).toFixed(1)}%"></i><span>${n2(v)}</span></td>`;
+    const delta = (a, b) => { if (a === null || b === null || a === undefined || b === undefined) return '<td class="d">—</td>';
+      const d = (a - b) * 100, z = Math.abs(d) < 0.005, up = d >= 0;
+      return `<td class="d ${z ? 'z' : up ? 'pos' : 'neg'}"><span class="ds-seta" aria-hidden="true">${up ? '↑' : '↓'}</span>${fmtNum(z ? 0 : d, 2)}</td>`; };
+    const lin = (x, cls = '') => `<tr class="${cls}"><td class="nm">${esc(x.nome)}</td>${barra(x.base)}${barra(x.prev)}${barra(x.real)}${delta(x.real, x.base)}${delta(x.real, x.prev)}</tr>`;
+    const raiz = raizC ? { nome: raizC.nome, base: raizC.base, prev: raizC.previsto, real: raizC.realizado }
+      : { nome: `${o.codigo} - ${(capa && capa.titulo) || o.nome}`, base: r.baseCorte, prev: r.prevCorte, real: r.real };
+    const tabela = `<section class="ds-tab${densa ? ' densa' : ''}"><h2>Previsto x Realizado<em>EAP da obra · % de cada item · posição de ${dBR(raizC && o.cronograma.dataRef ? o.cronograma.dataRef : r.corte)}</em></h2>
+        <table><thead><tr><th>Nome</th><th>Base (%)</th><th>Previsto (%)</th><th>Realizado (%)</th><th>Δ Base (%)</th><th>Δ Previsto (%)</th></tr></thead>
+          <tbody>${lin(raiz, 'obra')}${linhas.map(x => lin(x)).join('')}</tbody></table></section>`;
+    return `<article class="folha paisagem dash" aria-label="Dashboard, status geral">
+        <header class="ds-cab"><h1>DASHBOARD – STATUS GERAL</h1><div class="cp-machine"><img src="${LOGO}" alt="Machine"><span>Realizações com base sólida</span></div></header>
+        <div class="ds-corpo">${cards}${prazo}${tabela}</div>
+        <footer class="ds-pe"><span>Obra ${esc(o.codigo)} · ${esc((capa && capa.titulo) || o.nome)}</span><span class="fl-n"></span>${capa && capa.logo ? `<img class="ds-cli" src="${capa.logo}" alt="${esc(o.cliente || 'Cliente')}">` : '<i></i>'}</footer>
+      </article>`;
   }
 
   // ---------- montagem das folhas ----------
