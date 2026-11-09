@@ -431,6 +431,7 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .bm-tot span + span { border-left: 1px solid #B9BEC7; }
 .bm-tot b { font-weight: 600; }
 .bm-dois { display: grid; grid-template-columns: 1.3fr 1fr; gap: 0; border: 1px solid #B9BEC7; }
+.bm-ret { align-self: start; }
 .bm-ret td, .bm-ret th { border-left: 0; border-top: 0; }
 .bm-liq { margin: 0; display: grid; grid-template-columns: 1fr max-content; border-left: 1px solid #B9BEC7; font-size: 11px; }
 .bm-liq dt, .bm-liq dd { margin: 0; padding: 2px 8px; border-bottom: 1px solid #DDE1E7; }
