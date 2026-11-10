@@ -1478,8 +1478,11 @@
     try {
       await carregaLibsPdf(); if (!window.PptxGenJS) await carregaScript(PPTX_URL);
       try { await document.fonts.ready; } catch (e) {}
-      const W = 11.69, H = 8.27, NAVY = '0A2463', TINTA = '1B1E24', CINZA = '6B7380', FONTE = 'Calibri', MONO = 'Consolas';
+      // mesmas fontes do report na tela: Barlow no corpo, Space Mono na capa (as duas estão em assets/fonts; quem edita
+      // o PowerPoint precisa delas instaladas, senão o PowerPoint troca por uma fonte padrão)
+      const W = 11.69, H = 8.27, NAVY = '0A2463', TINTA = '1B1E24', CINZA = '6B7380', FONTE = 'Barlow', MONO = 'Space Mono';
       const pptx = new window.PptxGenJS(); pptx.defineLayout({ name: 'A4P', width: W, height: H }); pptx.layout = 'A4P';
+      pptx.theme = { headFontFace: FONTE, bodyFontFace: FONTE };
       const paraData = async src => { if (/^data:/.test(src)) return src; const b = await (await fetch(src)).blob(); return await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(b); }); };
       const logo = await paraData(LOGO);
       const foto = async (el, escala = 2) => (await window.html2canvas(el, { scale: escala, backgroundColor: '#FFFFFF', useCORS: true, logging: false,
