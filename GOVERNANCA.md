@@ -187,5 +187,31 @@ O detalhe interno (campo/RDO, marcos, pontos de atenção, tarefas, restrições
 **Rotina do mês** (o que é manual): 1) conferir o rascunho que o robô gravou na sexta; 2) enviar o Controle de Medição
 do mês em Alimentar; 3) em Obra → Mapa de avanço, *Limpar fotos de todas as frentes* (botão no topo do report) e
 carregar a planta atualizada e as duas fotos com legenda de cada frente do mês; 4) escolher o *Mês da capa*; 5) conferir
-as folhas e **Publicar para o cliente**; 6) *Baixar PDF* ou enviar o link. *Baixar PowerPoint* gera o mesmo report em slides editáveis (capa, títulos, fotos e legendas, plantas e tabelas em texto; gráficos e cartões como imagem), para ajustes pontuais fora do painel. Sem fotos escolhidas nas frentes, o report usa
+as folhas e **Publicar para o cliente**; 6) *Baixar PDF* ou enviar o link. *Baixar PowerPoint* gera o mesmo report em slides editáveis (cada folha vira um slide com textos, tabelas, gráficos e formas nativos do PowerPoint; imagem só para fotos, plantas e logos), para ajustes pontuais fora do painel. Sem fotos escolhidas nas frentes, o report usa
 a seleção automática das fotos dos RDOs. O topo do report (só administrador) avisa quando há foto com mais de 40 dias.
+
+## Regras de coerência (revisão de 10/11/2026)
+
+- **Avanço da obra = perspectiva física (duração) do Prevision**, a mesma do Cronograma e do Progresso por tarefas. É a régua
+  de todos os cartões, do farol, do Portfólio e do report. O dashboard do Prevision abre na visão ponderada por custo, que dá
+  outro número; no painel o custo aparece só como **valor agregado** (EV, PV, SPI), com esse nome.
+- **Farol pelo índice como ele aparece**: o índice é arredondado a 2 casas antes de comparar com as faixas (0,845 aparece
+  "0,85" e fica em atenção, não em vermelho). Vale para tela, PDF e PowerPoint.
+- **Dois números de prazo, cada um com o seu nome**: *Atraso hoje* (prazo ganho, em dias, na data de corte) e *Variação do
+  término* (término do cronograma × término contratual). Com o farol verde, alguns dias atrás do plano aparecem como
+  "N dias, na tolerância", nunca "Em dia" ao lado de "N dias de atraso".
+- **Prazo contratual** continua sendo a linha de base do Prevision (nível 1 do cronograma), como desde 10/2026. As datas de
+  vigência do contrato no Sienge (CT) são administrativas e podem diferir. Contrato
+  vencido aparece como "Vencido há N dias".
+- **Última medição física**: o corte é a data da exportação; quando a última medição lançada no Prevision é anterior,
+  o dashboard mostra a data da medição.
+- **EAP do dashboard**: marcos (liberações, entregas), aditivos condicionados e taxa de administração ficam num bloco à parte,
+  sem setas de desvio. A tabela compacta sozinha até caber na folha. A raiz leva o nome da obra do cadastro.
+- **Medições**: a coluna "Medição Machine realizada" é o medido menos faturamento direto e descontos, **antes dos impostos**
+  (nota de rodapé na folha); o total líquido do boletim já desconta os impostos. Mês só com entrada de mobilização aparece
+  como "Entrada de mobilização (adiantamento)". Boletim de medição em análise leva o selo "valores sujeitos aos impostos da
+  liberação". "Total da obra" só aparece quando difere do total do contrato.
+- **Mês da capa automático**: corte até o dia 15 = report do mês anterior (06/11 → outubro); depois do dia 15, o mês do
+  corte. A escolha manual em *Mês da capa* continua valendo para a carga em que foi feita.
+- **Login**: leitura com nova tentativa em falha passageira do GitHub Pages (5xx); o arquivo de restrições é opcional e não
+  impede a entrada.

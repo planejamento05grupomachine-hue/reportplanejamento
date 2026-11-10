@@ -318,6 +318,15 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .ds-pz-bar em { position: absolute; bottom: 12px; transform: translateX(-50%); font-style: normal; font-weight: 600; font-size: 11.5px; color: var(--rx-ink); }
 .ds-pz-r { margin: 0; padding-left: 7mm; border-left: 1px solid var(--rx-line); display: grid; font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--rx-faint); }
 .ds-pz-r dd { margin: 1px 0 6px; font-size: 14px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--rx-navy); }
+.ds-pz-r dd.neg { color: var(--ds-crit); }
+/* prazo total · a vencer · última medição lado a lado (rótulo em cima, valor embaixo): o quadro fica com duas linhas */
+.ds-pz-r { grid-template-rows: auto auto; grid-auto-flow: column; column-gap: 7mm; align-content: center; }
+.ds-pz-r dd { margin-bottom: 0; }
+/* EAP longa (montaFolhas): cartões e quadro de prazo mais baixos para a tabela caber */
+.folha.dash.compacta .ds-card { padding: 8px 14px 7px; }
+.folha.dash.compacta .ds-card b { font-size: 24px; }
+.folha.dash.compacta .ds-prazo { padding: 6px 18px 8px; }
+.folha.dash.compacta .ds-pz-bar { margin-top: 14px; }
 .ds-tab { min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .folha.dash .ds-tab h2 { margin: 0; display: flex; align-items: baseline; gap: 12px; font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; font-size: 15px; font-weight: 700; color: var(--rx-navy); }
 .folha.dash .ds-tab h2 em { font-family: "Barlow", Arial, sans-serif; font-style: normal; font-weight: 500; font-size: 11px; color: var(--rx-faint); }
@@ -330,12 +339,19 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .ds-tab td.n i { position: absolute; left: 12px; bottom: 4px; height: 3px; max-width: calc(100% - 24px); background: var(--ds-azul); opacity: .55; border-radius: 2px; }
 .ds-tab td.n span { position: relative; font-weight: 500; }
 .ds-tab td.d { text-align: center; font-weight: 600; white-space: nowrap; }
-.ds-tab td.d.pos { color: #B87400; } .ds-tab td.d.neg { color: var(--ds-crit); } .ds-tab td.d.z { color: #5E6470; }
+.ds-tab td.d.pos { color: #2E8B6A; } .ds-tab td.d.neg { color: var(--ds-crit); } .ds-tab td.d.z { color: #5E6470; }
 .ds-seta { display: inline-block; width: 14px; margin-right: 4px; font-weight: 800; }
 .ds-tab td.d.pos .ds-seta, .ds-tab td.d.z .ds-seta { color: #2E8B6A; } .ds-tab td.d.neg .ds-seta { color: var(--ds-crit); }
 .ds-tab tr.obra td { background: #EEF1F5; font-weight: 700; }
+/* marcos e aditivos condicionados: bloco à parte, em tom neutro, sem setas de desvio */
+.ds-tab tr.ds-sep td { padding: 9px 8px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--rx-muted); background: transparent; }
+.ds-tab tr.ds-marco td { color: #5E6470; font-size: 12px; }
+.ds-tab tr.ds-marco td.n i { opacity: .3; }
 .ds-tab.densa td { padding-top: 3px; padding-bottom: 6px; font-size: 11px; }
 .ds-tab.densa td.n i { bottom: 2px; }
+.ds-tab.densa2 td { padding-top: 2px; padding-bottom: 4px; font-size: 10px; line-height: 1.15; }
+.ds-tab.densa2 th { padding: 4px 8px; font-size: 10.5px; }
+.ds-tab.densa2 tr.ds-sep td { padding-top: 5px; }
 /* dashboard na tela: a EAP abre até o pacote executável (setas); a folha cresce enquanto houver linha aberta */
 .folha.dash.aberta { height: auto; min-height: 210mm; }
 .folha.dash.aberta .ds-corpo { min-height: auto; }
@@ -366,11 +382,11 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 
 /* ---------- Fotos · registros — evidências do período: duas fotos por folha, legenda abaixo ---------- */
 .rx-fotos2 { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.rx-f2 { margin: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 10px; padding: 12px; background: #fff; border: 1px solid var(--rx-line); border-radius: 12px; box-shadow: 0 1px 3px rgba(16, 24, 40, .06); }
-.rx-f2-img { min-height: 0; display: grid; place-items: center; overflow: hidden; border-radius: 6px; background: var(--rx-bg); }
-.rx-f2-img { background: #fff; }
-.rx-f2-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
-.rx-f2 figcaption { display: grid; gap: 2px; padding: 9px 12px; background: var(--rx-bg); border: 1px solid var(--rx-line); border-radius: 4px; text-align: center; }
+/* a foto ocupa toda a largura da coluna, sem moldura nem caixa cinza; foto e legenda ficam juntas, centradas na altura */
+.rx-f2 { margin: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, auto) auto; align-content: center; gap: 8px; }
+.rx-f2-img { min-height: 0; display: flex; justify-content: center; overflow: hidden; border-radius: 4px; }
+.rx-f2-img img { width: 100%; height: auto; max-height: 100%; object-fit: contain; display: block; border-radius: 4px; }
+.rx-f2 figcaption { display: grid; gap: 2px; padding: 6px 2px 0; border-top: 2px solid var(--rx-blue, #154CB0); text-align: left; }
 .rx-f2 figcaption span { font-size: 13.5px; line-height: 1.35; color: var(--rx-navy); }
 .rx-f2 figcaption small { font-size: 11px; color: var(--rx-muted); }
 
@@ -388,6 +404,8 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .md-tab td { padding: 5px 8px; border-bottom: 1px solid var(--rx-line); color: var(--rx-ink); }
 .md-tab tbody tr:nth-child(even) td { background: var(--rx-bg); }
 .md-tab tfoot td { font-weight: 700; color: var(--rx-navy); background: #E4E6EA; border-bottom: 0; }
+.md-nota { margin: 8px 0 0; font-size: 10.5px; line-height: 1.4; color: var(--rx-muted); }
+.bm-selo { margin-left: auto; padding: 3px 10px; font-family: "Barlow", Arial, sans-serif; font-size: 10.5px; font-weight: 600; color: #8A5A00; background: #FFF4DC; border: 1px solid #F0D79A; border-radius: 999px; }
 .md-bol td { font-size: 11.5px; padding: 4px 8px; }
 .md-bol tr.md-n1 td { font-weight: 700; background: #EEF1F6; }
 

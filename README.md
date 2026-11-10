@@ -70,7 +70,7 @@ trocadas e os dados recifrados. Depois, **Publicação → Compactar histórico*
 
 Cada gravação vira um commit neste repositório; o site atualiza em cerca de um minuto.
 
-**Sincronização automática com o Prevision** (`sync/`): toda quarta-feira às 07:15 a rotina do GitHub Actions pode coletar
+**Sincronização automática com o Prevision** (`sync/`): toda sexta-feira às 14:00 a rotina do GitHub Actions pode coletar
 os dados físicos e de valor agregado das obras configuradas e gravar como **rascunho** (a publicação continua manual). Ela
 usa os mesmos parsers e as mesmas regras da tela Alimentar. Estado, segredos e operação: `sync/README.md`.
 
