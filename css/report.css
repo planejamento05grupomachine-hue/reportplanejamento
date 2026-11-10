@@ -82,7 +82,7 @@
 .folha.exec .chart .lbl-m-real { fill: var(--rx-real); }
 .folha.exec .chart .lbl { fill: var(--rx-blue); font-size: var(--fs-12); font-weight: 600; }
 .folha.exec .chart .lbl-real { fill: var(--rx-real); font-size: var(--fs-13); }
-.folha.exec .chart .lbl, .folha.exec .chart .ax { paint-order: stroke; stroke: var(--rx-bg); stroke-width: 3px; stroke-linejoin: round; }
+/* rótulos direto sobre o gráfico, sem contorno claro atrás das letras */
 .chart .tip[hidden] { display: none; }
 .chart .tip .tip-g { margin-top: 4px; font-size: 11px; color: var(--muted); font-weight: 600; }
 
@@ -160,20 +160,16 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 
 /* ---------- Capa: padrão único para todas as obras ----------
    Título, nome da obra, logos (Machine e, quando houver, a do cliente), fio azul e os dados da capa. Só a logo do
-   cliente varia entre obras; de um mês para o outro, só o mês de referência. Space Mono, como as capas modelo. */
-@font-face { font-family: "Space Mono"; font-weight: 400; font-style: normal; font-display: swap; src: url("../assets/fonts/SpaceMono-Regular.ttf") format("truetype"); }
-@font-face { font-family: "Space Mono"; font-weight: 700; font-style: normal; font-display: swap; src: url("../assets/fonts/SpaceMono-Bold.ttf") format("truetype"); }
-.folha.capa { --cp-navy: #0A2463; --cp-azul: #2F5BD8; --cp-fundo: #F4F5F8;
+   cliente varia entre obras; de um mês para o outro, só o mês de referência. Tipografia da marca (Barlow): títulos em
+   Barlow Semi Condensed, texto em Barlow — as duas são fontes de nuvem do Office, então o PowerPoint abre igual.
+   Sem halo, sombra ou faixa clara atrás das letras: texto direto sobre o fundo. */
+.folha.capa { --cp-navy: #0A2463; --cp-azul: #154CB0; --cp-fundo: #F4F5F8;
   display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 22mm; padding: 0 18mm 6mm;
-  background: var(--cp-fundo); color: var(--cp-navy); font-family: "Space Mono", "Courier New", monospace; }
+  background: var(--cp-fundo); color: var(--cp-navy); font-family: "Barlow", "Segoe UI", Arial, sans-serif; }
 .folha.capa * { font-family: inherit; }
-/* halo do título: imagem pronta (sombra desfocada, 25% de opacidade). Sombra grande e degradê elíptico saem manchados
-   no PDF (html2canvas), por isso a imagem em vez de CSS */
-.cp-titulo { width: 100%; max-width: 262mm; box-sizing: border-box; padding: 16mm 18mm 17mm; text-align: center;
-  background: url("../assets/capa-halo.png") center / 100% 100% no-repeat; }
-.cp-titulo h1 { margin: 0; font-size: 42px; line-height: 1.12; font-weight: 700; letter-spacing: .01em; text-align: center; color: var(--cp-navy);
-  text-shadow: 2px 3px 4px rgba(10, 36, 99, .28); }
-.cp-titulo p { margin: 5mm 0 0; font-size: 17px; line-height: 1.35; font-weight: 700; text-align: center; color: var(--cp-navy); text-wrap: balance; }
+.cp-titulo { width: 100%; max-width: 262mm; box-sizing: border-box; padding: 16mm 18mm 17mm; text-align: center; }
+.folha.capa .cp-titulo h1 { margin: 0; font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; font-size: 46px; line-height: 1.1; font-weight: 700; letter-spacing: .03em; text-align: center; color: var(--cp-navy); }
+.folha.capa .cp-titulo p { margin: 5mm 0 0; font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; font-size: 20px; line-height: 1.35; font-weight: 600; letter-spacing: .02em; text-align: center; color: var(--cp-azul); text-wrap: balance; }
 .cp-bloco { display: flex; align-items: stretch; gap: 9mm; max-width: 252mm; }
 .cp-logos { flex: none; width: 66mm; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9mm; }
 .cp-machine { display: grid; justify-items: end; gap: 2px; }
@@ -182,9 +178,9 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .cp-cli { display: block; max-width: 54mm; max-height: 24mm; width: auto; height: auto; object-fit: contain; }
 .cp-reg { flex: none; width: 3px; border-radius: 2px; background: var(--cp-azul); }
 .cp-dados { margin: 0; width: 158mm; display: grid; align-content: center; gap: 5px; min-width: 0; }
-.cp-dados > div { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; column-gap: 10px; padding: 3px 10px 3px 6px; background: rgba(255, 255, 255, .55); border-radius: 2px; }
-.cp-dados dt { font-size: 16px; line-height: 1.45; font-weight: 700; color: var(--cp-navy); white-space: nowrap; }
-.cp-dados dd { margin: 0; font-size: 14.5px; line-height: 1.45; font-weight: 400; color: var(--cp-navy); min-width: 0; }
+.cp-dados > div { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; column-gap: 10px; padding: 3px 10px 3px 6px; }
+.cp-dados dt { font-size: 15px; line-height: 1.45; font-weight: 600; color: var(--cp-navy); white-space: nowrap; }
+.cp-dados dd { margin: 0; font-size: 15px; line-height: 1.45; font-weight: 400; color: #3D434A; min-width: 0; }
 .rx-s > h2 em.fl-cont { margin-left: 0; color: var(--rx-faint); font-size: var(--fs-11); }
 /* tamanhos do report impresso (mais compactos que na tela da aba Obra) */
 .folha.exec .rx-box { padding: 12px 18px 14px; }
@@ -224,8 +220,8 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .mp-planta img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; display: block; pointer-events: none; max-width: none; }
 /* áreas = polígonos num SVG sobre a planta; cores no próprio SVG (atributos), para sair iguais no PDF */
 .mp-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.mp-num { position: absolute; transform: translate(-50%, -50%); min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: #FFFFFF; color: #154CB0;
-  font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; font-style: normal; box-shadow: 0 0 0 1px rgba(16, 24, 40, .25); pointer-events: none; }
+.mp-num { position: absolute; transform: translate(-50%, -50%); min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: #154CB0; color: #FFFFFF;
+  font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; font-style: normal; pointer-events: none; }
 /* editor: alças de vértice (arrastar · duplo clique remove), meio de lado (arrastar cria vértice) e giro */
 .mp-edit .mp-svg polygon { cursor: pointer; }
 .mp-edit .mp-svg polygon.sel { cursor: move; }
@@ -293,10 +289,11 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .folha.dash { --cp-navy: #0A2463; --ds-azul: #2F5BD8; --ds-barra: #6F93D6; --ds-cab: #1D3A66; --ds-linha: #E3E6EC;
   --ds-ok: #2E9E57; --ds-warn: #E0B400; --ds-crit: #D7262E;
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: #F5F6F8; color: var(--cp-navy);
-  font-family: "Space Mono", "Courier New", monospace; padding: 9mm 13mm 5mm; }
+  font-family: "Barlow", "Segoe UI", Arial, sans-serif; padding: 9mm 13mm 5mm; }
 .folha.dash * { font-family: inherit; }
 .ds-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; padding-bottom: 5mm; }
-.ds-cab h1 { margin: 2mm 0 0; font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: .02em; color: var(--cp-navy); }
+.folha.dash .ds-cab h1 { margin: 2mm 0 0; font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; font-size: 32px; line-height: 1.1; font-weight: 700; letter-spacing: .03em; color: var(--cp-navy); }
+.folha.dash .ds-card b, .folha.dash .ds-tab h2 { font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; }
 .ds-cab .cp-machine img { width: 50mm; }
 .folha.dash .cp-machine span { font-family: "Barlow", "Segoe UI", Arial, sans-serif; font-size: 9px; font-weight: 500; letter-spacing: .04em; color: #8B9099; }
 .ds-corpo { min-height: 0; display: flex; flex-direction: column; gap: 4.5mm; }
@@ -440,3 +437,23 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .bm-liq .bm-l { background: #1D3A66; color: #fff; font-weight: 700; border-bottom: 0; }
 .bm-obs { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 10px; padding: 4px 8px; font-size: 10.5px; line-height: 1.4; border: 1px solid #B9BEC7; background: #fff; color: #1B1E24; }
 .bm-obs b { background: #D9DCE1; padding: 0 8px; align-self: stretch; display: flex; align-items: center; }
+
+/* ---------- Tipografia executiva (rev. 10/11/2026) ----------
+   Títulos de folha, de quadro e de frente, e os números de destaque em Barlow Semi Condensed; o resto em Barlow.
+   Mesmas fontes no PowerPoint (fontes de nuvem do Office). */
+.folha.exec .fl-cab-b b, .folha.exec .rx-s > h2, .folha.exec .mp-tt, .folha.exec .rx-card-v, .folha.exec .md-card b,
+.folha.exec .rx-tri-i b { font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; font-weight: 700; letter-spacing: .01em; }
+.folha.exec .fl-cab-b b { font-size: 19px; }
+/* boletim com muitos itens: montaFolhas aplica .densa e, se ainda não couber, .densa2 (nada some, só aperta) */
+.bm.densa { gap: 5px; }
+.bm.densa .bm-cab dt, .bm.densa .bm-cab dd { padding: 1px 8px; font-size: 10px; line-height: 1.35; }
+.bm.densa .bm-tab, .bm.densa .bm-ret { font-size: 10px; }
+.bm.densa .bm-tab th, .bm.densa .bm-tab td, .bm.densa .bm-ret th, .bm.densa .bm-ret td { padding: 1.5px 6px; line-height: 1.3; }
+.bm.densa .bm-tot span { padding: 2px 8px; font-size: 10.5px; }
+.bm.densa .bm-liq { font-size: 10.5px; }
+.bm.densa .bm-liq dt, .bm.densa .bm-liq dd { padding: 1px 8px; }
+.bm.densa .bm-obs { font-size: 10px; line-height: 1.3; padding: 3px 8px; }
+.bm.densa2 .bm-tab, .bm.densa2 .bm-ret, .bm.densa2 .bm-cab dt, .bm.densa2 .bm-cab dd { font-size: 9.5px; }
+.bm.densa2 .bm-tab th, .bm.densa2 .bm-tab td, .bm.densa2 .bm-ret th, .bm.densa2 .bm-ret td { padding: 1px 5px; line-height: 1.2; }
+.bm.densa2 .bm-cab dt, .bm.densa2 .bm-cab dd, .bm.densa2 .bm-liq dt, .bm.densa2 .bm-liq dd { padding: 0 8px; line-height: 1.25; }
+.bm.densa2 .bm-liq, .bm.densa2 .bm-tot span { font-size: 10px; }

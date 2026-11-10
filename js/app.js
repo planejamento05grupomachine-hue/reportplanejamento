@@ -1464,136 +1464,22 @@
     } finally { btn.disabled = false; btn.textContent = rotulo; if (dashAberta.length) render(); }
   }
 
-  // ---------- PowerPoint do report (para editar quando preciso) ----------
-  // Um slide por folha, em A4 paisagem, montado a partir das folhas já desenhadas na tela (os mesmos números do PDF).
-  // Editável onde mais se mexe: capa, títulos, fotos e legendas das frentes, plantas, tabela da EAP, histórico e boletim
-  // de medição viram texto, imagens soltas e tabelas do PowerPoint; gráficos e cartões vão como imagem em alta resolução.
-  const PPTX_URL = 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
+  // ---------- PowerPoint do report (editável) ----------
+  // Um slide por folha, em A4 paisagem, montado com objetos nativos do PowerPoint a partir das folhas desenhadas na tela
+  // (js/pptx.js): textos, quadros e tabelas editáveis, curvas e barras como gráficos do PowerPoint, áreas do mapa como
+  // formas sobre a planta. Imagem só para foto, planta e logo.
   async function baixarPptx(btn) {
     let dl = null;
     if (window.self !== window.top) { try { dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) { dl = null; } }
     const rotulo = btn.textContent; btn.disabled = true; btn.textContent = 'Gerando PowerPoint…';
+    // dashboard no nível 2 da EAP, como no PDF
     const dashAberta = $$('#paper .folha.dash.aberta');
     dashAberta.forEach(f => { $$('.ds-sub', f).forEach(e => e.remove()); f.classList.remove('aberta'); });
     try {
-      await carregaLibsPdf(); if (!window.PptxGenJS) await carregaScript(PPTX_URL);
-      try { await document.fonts.ready; } catch (e) {}
-      // mesmas fontes do report na tela: Barlow no corpo, Space Mono na capa (as duas estão em assets/fonts; quem edita
-      // o PowerPoint precisa delas instaladas, senão o PowerPoint troca por uma fonte padrão)
-      const W = 11.69, H = 8.27, NAVY = '0A2463', TINTA = '1B1E24', CINZA = '6B7380', FONTE = 'Barlow', MONO = 'Space Mono';
-      const pptx = new window.PptxGenJS(); pptx.defineLayout({ name: 'A4P', width: W, height: H }); pptx.layout = 'A4P';
-      pptx.theme = { headFontFace: FONTE, bodyFontFace: FONTE };
-      const paraData = async src => { if (/^data:/.test(src)) return src; const b = await (await fetch(src)).blob(); return await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(b); }); };
-      const logo = await paraData(LOGO);
-      const foto = async (el, escala = 2) => (await window.html2canvas(el, { scale: escala, backgroundColor: '#FFFFFF', useCORS: true, logging: false,
-        onclone: d => { d.querySelectorAll('.folha').forEach(f => { f.style.zoom = '1'; f.style.boxShadow = 'none'; }); d.querySelectorAll('.fl-int, .folha.dash .ds-tg, .folha.dash .ds-tg-sp').forEach(e => e.remove()); } })).toDataURL('image/png');
-      const proporcao = el => { const r = el.getBoundingClientRect(); return r.width / Math.max(1, r.height); };
-      const txt = el => (el ? el.textContent : '').replace(/\s+/g, ' ').trim();
-      const caixa = (prop, x, y, w, h) => { let iw = w, ih = w / prop; if (ih > h) { ih = h; iw = h * prop; } return { x: x + (w - iw) / 2, y: y + (h - ih) / 2, w: iw, h: ih }; };
-      // cabeçalho e rodapé padrão (texto editável), como nas folhas
-      const moldura = (s, f, n, total) => {
-        s.background = { color: 'FFFFFF' };
-        s.addImage({ data: logo, x: 0.45, y: 0.32, w: 1.55, h: 0.29 });
-        const tit = txt(f.querySelector('.fl-cab-b b') || f.querySelector('.ds-cab h1')), sub = txt(f.querySelector('.fl-cab-b span')), pos = txt(f.querySelector('.fl-cab-c b'));
-        const rod = txt(f.querySelector('.fl-pe span') || f.querySelector('.ds-pe span'));
-        s.addText(tit, { x: 2.25, y: 0.22, w: 7.3, h: 0.34, fontFace: FONTE, fontSize: 17, bold: true, color: TINTA });
-        if (sub) s.addText(sub, { x: 2.25, y: 0.55, w: 7.3, h: 0.24, fontFace: FONTE, fontSize: 10, color: CINZA });
-        if (pos) s.addText([{ text: 'POSIÇÃO DE', options: { fontSize: 7.5, color: '9AA3AE', breakLine: true } }, { text: pos, options: { fontSize: 12, bold: true, color: TINTA } }], { x: 9.55, y: 0.22, w: 1.7, h: 0.55, fontFace: FONTE, align: 'right' });
-        s.addShape(pptx.ShapeType.line, { x: 0.45, y: 0.92, w: W - 0.9, h: 0, line: { color: '154CB0', width: 1.5 } });
-        if (rod) s.addText(rod, { x: 0.45, y: H - 0.42, w: 4, h: 0.25, fontFace: FONTE, fontSize: 8, color: '9AA3AE' });
-        s.addText(`Página ${n} de ${total}`, { x: W / 2 - 1, y: H - 0.42, w: 2, h: 0.25, fontFace: FONTE, fontSize: 8, bold: true, color: CINZA, align: 'center' });
-      };
-      const tabela = (s, linhas, opt) => s.addTable(linhas, { fontFace: FONTE, fontSize: 8, color: TINTA, border: { type: 'solid', pt: 0.5, color: 'C9CDD4' }, valign: 'middle', autoPage: false, ...opt });
-      const cab = (t, extra = {}) => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: '1D3A66' }, ...extra } });
-      const folhas = $$('#paper .folha');
-      for (let i = 0; i < folhas.length; i++) {
-        const f = folhas[i], s = pptx.addSlide(), n = i + 1;
-        btn.textContent = `Gerando PowerPoint… ${n}/${folhas.length}`;
-        if (f.classList.contains('capa')) {
-          s.background = { color: 'F4F5F8' };
-          s.addText(txt(f.querySelector('.cp-titulo h1')), { x: 0.6, y: 1.5, w: W - 1.2, h: 0.8, fontFace: MONO, fontSize: 32, bold: true, color: NAVY, align: 'center' });
-          s.addText(txt(f.querySelector('.cp-titulo p')), { x: 0.6, y: 2.3, w: W - 1.2, h: 0.45, fontFace: MONO, fontSize: 14, bold: true, color: NAVY, align: 'center' });
-          s.addImage({ data: logo, x: 1.55, y: 4.25, w: 2.3, h: 0.43 });
-          s.addText('Realizações com base sólida', { x: 1.55, y: 4.7, w: 2.3, h: 0.22, fontFace: FONTE, fontSize: 8, color: '8B9099', align: 'right' });
-          const cli = f.querySelector('.cp-cli'); if (cli) { const c = caixa(cli.naturalWidth / Math.max(1, cli.naturalHeight), 1.55, 5.15, 2.3, 0.95); s.addImage({ data: await paraData(cli.src), ...c }); }
-          s.addShape(pptx.ShapeType.line, { x: 4.35, y: 4.05, w: 0, h: 2.25, line: { color: '2F5BD8', width: 2.5 } });
-          s.addText($$('.cp-dados > div', f).map((d, k, a) => [{ text: txt(d.querySelector('dt')) + ' ', options: { bold: true } }, { text: txt(d.querySelector('dd')), options: { breakLine: k < a.length - 1 } }]).flat(),
-            { x: 4.6, y: 4.05, w: 6.5, h: 2.25, fontFace: MONO, fontSize: 12, color: NAVY, valign: 'middle', paraSpaceAfter: 6 });
-          continue;
-        }
-        moldura(s, f, n, folhas.length);
-        const corpo = { x: 0.45, y: 1.08, w: W - 0.9, h: H - 1.62 };
-        if (f.classList.contains('dash')) {
-          const cl = f.querySelector('.ds-cli'); if (cl) s.addImage({ data: await paraData(cl.src), ...caixa(cl.naturalWidth / Math.max(1, cl.naturalHeight), W - 1.75, H - 0.62, 1.3, 0.45) });
-          const topo = f.querySelector('.ds-cards'), pz = f.querySelector('.ds-prazo');
-          const it = await foto(topo), ip = await foto(pz);
-          s.addImage({ data: it, ...caixa(proporcao(topo), corpo.x, corpo.y, corpo.w, 1.55) });
-          s.addImage({ data: ip, ...caixa(proporcao(pz), corpo.x, corpo.y + 1.62, corpo.w, 0.85) });
-          const trs = $$('.ds-tab tr', f).filter(tr => !tr.classList.contains('ds-sub'));
-          const linhas = trs.map((tr, k) => $$('th, td', tr).map((c, j) => k === 0 ? cab(txt(c), { align: j ? 'center' : 'left' }) : { text: txt(c).replace(/^[↑↓]\s*/, m => m.trim() + ' '), options: { align: j ? 'center' : 'left', bold: tr.classList.contains('obra'), fill: { color: tr.classList.contains('obra') ? 'E4E6EA' : 'FFFFFF' } } }));
-          tabela(s, linhas, { x: corpo.x, y: corpo.y + 2.6, w: corpo.w, colW: [4.2, 1.15, 1.15, 1.15, 1.07, 1.07], fontSize: linhas.length > 16 ? 7 : 8, rowH: 0.24 });
-          continue;
-        }
-        if (f.classList.contains('mp-folha')) {
-          s.addText(txt(f.querySelector('.mp-tt')).replace(/^Frente de serviço\s*/i, ''), { ...corpo, h: 0.4, fontFace: FONTE, fontSize: 14, color: TINTA });
-          const pls = $$('.mp-planta', f);
-          for (let k = 0; k < pls.length; k++) { const alt = (corpo.h - 1.0) / pls.length; s.addImage({ data: await foto(pls[k]), ...caixa(proporcao(pls[k]), corpo.x, corpo.y + 0.5 + k * alt, corpo.w, alt - 0.08) }); }
-          s.addText([['Executado', '22C55E'], ['Em execução', 'FACC15'], ['A executar', 'EF4444']].map(([t, c], k) => [{ text: '■ ', options: { color: c } }, { text: t + (k < 2 ? '     ' : ''), options: { color: TINTA } }]).flat(),
-            { x: corpo.x, y: corpo.y + corpo.h - 0.35, w: corpo.w, h: 0.3, fontFace: FONTE, fontSize: 11, align: 'center' });
-          continue;
-        }
-        if (f.classList.contains('fl-fotos2')) {
-          const figs = $$('.rx-f2', f), cw = (corpo.w - 0.3) / 2;
-          for (let k = 0; k < figs.length; k++) {
-            const im = figs[k].querySelector('img'), x = corpo.x + k * (cw + 0.3);
-            s.addShape(pptx.ShapeType.roundRect, { x, y: corpo.y + 0.05, w: cw, h: corpo.h - 0.1, fill: { color: 'FFFFFF' }, line: { color: 'E4E7EC', width: 0.75 }, rectRadius: 0.08 });
-            s.addImage({ data: await paraData(im.src), ...caixa(im.naturalWidth / Math.max(1, im.naturalHeight), x + 0.15, corpo.y + 0.2, cw - 0.3, corpo.h - 1.25) });
-            const leg = txt(figs[k].querySelector('figcaption span')), sub = txt(figs[k].querySelector('figcaption small'));
-            if (leg || sub) s.addText([{ text: leg, options: { color: NAVY, fontSize: 12, breakLine: !!sub } }, ...(sub ? [{ text: sub, options: { color: CINZA, fontSize: 9 } }] : [])],
-              { x: x + 0.15, y: corpo.y + corpo.h - 0.95, w: cw - 0.3, h: 0.7, fontFace: FONTE, align: 'center', fill: { color: 'F7F9FB' }, line: { color: 'E4E7EC', width: 0.75 } });
-          }
-          continue;
-        }
-        if (f.classList.contains('fl-medicao')) {
-          const cards = $$('.md-card', f);
-          if (cards.length) s.addText(cards.map((c, k) => [{ text: txt(c.querySelector('small')) + '  ', options: { color: CINZA, fontSize: 9 } }, { text: txt(c.querySelector('b')), options: { bold: true, color: TINTA, fontSize: 12 } }, { text: (txt(c.querySelector('span')) ? '  ' + txt(c.querySelector('span')) : '') + (k < cards.length - 1 ? '      ' : ''), options: { color: CINZA, fontSize: 8 } }]).flat(),
-            { x: corpo.x, y: corpo.y, w: corpo.w, h: 0.4, fontFace: FONTE });
-          const hist = f.querySelector('.md-tab');
-          if (hist) { const rows = $$('tr', hist).map((tr, k) => { const sec = tr.parentElement.tagName; return $$('th, td', tr).map(c => sec === 'THEAD' ? cab(txt(c), { align: c.classList.contains('n') ? 'right' : 'left' })
-              : { text: txt(c), options: { align: c.classList.contains('n') ? 'right' : 'left', bold: sec === 'TFOOT', fill: { color: sec === 'TFOOT' ? 'E4E6EA' : k % 2 ? 'FFFFFF' : 'F7F9FB' } } }); });
-            tabela(s, rows, { x: corpo.x, y: corpo.y + 0.55, w: corpo.w, fontSize: 8, rowH: 0.27 }); }
-          const bm = f.querySelector('.bm');
-          if (bm) {
-            s.addText(txt(bm.querySelector('h2')), { x: corpo.x, y: corpo.y - 0.02, w: corpo.w, h: 0.3, fontFace: FONTE, fontSize: 12, bold: true, color: TINTA });
-            const pares = dl => $$('dt', dl).map(dt => [{ text: txt(dt), options: { bold: true, align: 'right', fill: { color: 'D9DCE1' } } }, { text: txt(dt.nextElementSibling) }]);
-            const [esq, dir] = $$('.bm-cab dl', bm).map(pares), nL = Math.max(esq.length, dir.length);
-            tabela(s, Array.from({ length: nL }, (_, k) => [...(esq[k] || [{ text: '' }, { text: '' }]), ...(dir[k] || [{ text: '' }, { text: '' }])]), { x: corpo.x, y: corpo.y + 0.32, w: corpo.w, colW: [1.6, 4.0, 1.5, corpo.w - 7.1], fontSize: 7.5, rowH: 0.19 });
-            const bt = bm.querySelector('.bm-tab');
-            const rows = [[{ text: '', options: { colspan: 4, fill: { color: 'C9CDD4' } } }, { text: 'Quantidades', options: { colspan: 3, bold: true, align: 'center', fill: { color: 'C9CDD4' } } }, { text: 'Valores', options: { colspan: 3, bold: true, align: 'center', fill: { color: 'C9CDD4' } } }],
-              ...$$('thead tr:last-child th', bt).map(c => c).reduce((a, c) => { a[0].push({ text: txt(c), options: { bold: true, fill: { color: 'D9DCE1' }, align: c.classList.contains('n') ? 'right' : 'left' } }); return a; }, [[]]),
-              ...$$('tbody tr, tfoot tr', bt).map(tr => $$('td', tr).map(c => ({ text: txt(c), options: { colspan: +(c.getAttribute('colspan') || 1), bold: tr.classList.contains('bm-n1') || tr.parentElement.tagName === 'TFOOT', align: c.classList.contains('n') ? 'right' : 'left', fill: { color: tr.classList.contains('bm-n1') || tr.parentElement.tagName === 'TFOOT' ? 'E4E6EA' : 'FFFFFF' } } })))];
-            const yT = corpo.y + 0.32 + nL * 0.19 + 0.12;
-            tabela(s, rows, { x: corpo.x, y: yT, w: corpo.w, colW: [0.62, 3.0, 0.38, 0.72, 0.85, 0.7, 0.65, 1.1, 1.1, corpo.w - 9.12], fontSize: 7, rowH: 0.2 });
-            const fe = bm.querySelector('.bm-fecho');
-            if (fe) {
-              const yF = yT + rows.length * 0.2 + 0.12;
-              tabela(s, [$$('.bm-tot span', fe).map(sp => ({ text: sp.firstChild.textContent.trim() + ':  ' + txt(sp.querySelector('b')), options: { bold: true, fill: { color: 'E4E6EA' } } }))], { x: corpo.x, y: yF, w: corpo.w, fontSize: 7.5, rowH: 0.22 });
-              const ret = $$('.bm-ret tr', fe).map((tr, k) => $$('th, td', tr).map((c, j) => ({ text: txt(c), options: { bold: !k, fill: { color: k ? 'FFFFFF' : 'D9DCE1' }, align: j ? 'right' : 'left' } })));
-              tabela(s, ret, { x: corpo.x, y: yF + 0.3, w: 5.8, colW: [4.3, 1.5], fontSize: 7.5, rowH: 0.2 });
-              const liq = $$('.bm-liq dt', fe).map(dt => { const l = dt.classList.contains('bm-l'); return [{ text: txt(dt), options: { bold: true, align: 'right', color: l ? 'FFFFFF' : TINTA, fill: { color: l ? '1D3A66' : 'E4E6EA' } } }, { text: txt(dt.nextElementSibling), options: { align: 'right', bold: l, color: l ? 'FFFFFF' : TINTA, fill: { color: l ? '1D3A66' : 'FFFFFF' } } }]; });
-              tabela(s, liq, { x: corpo.x + 6.0, y: yF + 0.3, w: corpo.w - 6.0, colW: [2.9, corpo.w - 8.9], fontSize: 7.5, rowH: 0.2 });
-              const ob = fe.querySelector('.bm-obs'); if (ob) s.addText([{ text: 'Desconto  ', options: { bold: true } }, { text: txt(ob).replace(/^Desconto\s*/, '') }], { x: corpo.x, y: yF + 0.42 + liq.length * 0.2, w: corpo.w, h: 0.42, fontFace: FONTE, fontSize: 7.5, color: TINTA, line: { color: 'B9BEC7', width: 0.75 } });
-            }
-          }
-          continue;
-        }
-        // físico, valor agregado e demais: o conteúdo da folha como imagem em alta resolução, sob o cabeçalho editável
-        const c = f.querySelector('.fl-corpo');
-        if (c) s.addImage({ data: await foto(c), ...caixa(proporcao(c), corpo.x, corpo.y, corpo.w, corpo.h) });
-      }
-      const o = DB.obras.find(x => x.id === S.obraId) || obrasDoUsuario()[0];
-      const nome = `Report-Obra-${o ? o.codigo : ''}-${$('#paper').dataset.corte || new Date().toISOString().slice(0, 10)}.pptx`;
-      const blob = await pptx.write({ outputType: 'blob' });
+      const base = DB.obras.find(x => x.id === S.obraId) || obrasDoUsuario()[0];
+      const o = visaoDaObra(base), r = calcObra(base), rf = Core.calcFinanceiro(o, r.corte);
+      const blob = await ReportPptx.gerar({ paper: $('#paper'), o, r, rf, progresso: (n, t) => { btn.textContent = `Gerando PowerPoint… ${n}/${t}`; } });
+      const nome = `Report-Obra-${o.codigo}-${$('#paper').dataset.corte || new Date().toISOString().slice(0, 10)}.pptx`;
       if (dl) await dl.save({ filename: nome, data: blob });
       else { const u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); }
     } catch (e) {
@@ -2035,6 +1921,9 @@
     if (!fontesProntas && document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(() => { fontesProntas = true; if (S.view === 'report') render(); });
     else fontesProntas = true;
     $$('.chart[data-fill]', fl).forEach(el => { if (graf[el.id]) graf[el.id](Math.max(110, Math.floor(el.clientHeight) - 4)); });
+    // boletim com muitos itens (198: 14 etapas): compacta em até dois passos para o fechamento (total líquido) caber na folha
+    // (o quadro .bm corta o que passa: a medida é a do próprio quadro)
+    $$('.folha .bm', fl).forEach(bm => { for (const k of ['densa', 'densa2']) { if (bm.scrollHeight <= bm.clientHeight + 1) break; bm.classList.add(k); } });
     const todas = $$('.folha', fl);
     todas.forEach((f, k) => { const n = f.querySelector('.fl-n'); if (n) n.textContent = `Página ${k + 1} de ${todas.length}`; });
     fl.dataset.paginado = '1';
