@@ -792,7 +792,61 @@
     return out;
   }
 
-  const api = { num, dataISO, mesISO, lerLinhas, wbDe, linhasDaAba, ehMedicao, parseMedicaoContrato, tipoPlanilha, parseCurva, parseMensal, parseTarefas, parseCronograma, pdfItens, pdfFotos, linhasDe, parseRDOs, parseRestricoes, statusRestricao, ehRestricoesPdf, parseRestricoesPdf };
+  // ---------- Custo real (planilha de orçamento cliente da Machine, ex. "207 HEBROM REVISAO DE ORCAMENTO REVnn (Cliente)") ----------
+  // Abas "FÍS X FIN" (cronograma físico-financeiro: previsto e realizado mês a mês, em R$) e "LANÇ.FIN" (lançamentos
+  // financeiros: contas pagas em nome do cliente pela data da baixa + taxa de administração). O realizado é o custo
+  // real da obra (avanço financeiro real), não o valor agregado do Prevision. Lê os valores gravados nas células
+  // (o Excel guarda o resultado das fórmulas), localizando as linhas pelo rótulo da coluna C.
+  const abaPor = (wb, re) => wb.SheetNames.find(n => re.test(norm(n)));
+  function ehCustoReal(wb) {
+    return !!(abaPor(wb, /^fis\s*x\s*fin/) && abaPor(wb, /^lanc\.?\s*fin/));
+  }
+  const serialISO = v => typeof v === 'number' && v > 30000 && v < 80000 ? new Date(Math.round((v - 25569) * 86400000)).toISOString().slice(0, 10) : null;
+  function parseCustoReal(XLSX, wb) {
+    const ws = wb.Sheets[abaPor(wb, /^fis\s*x\s*fin/)];
+    const rg = XLSX.utils.decode_range(ws['!ref']);
+    const v = (r, c) => { const x = ws[XLSX.utils.encode_cell({ r, c })]; return x ? x.v : null; };
+    const nv = (r, c) => { const x = v(r, c); return typeof x === 'number' ? x : num(x); };
+    const C = 2, B = 1, E = 4;
+    const linhaDe = re => { for (let r = rg.s.r; r <= rg.e.r; r++) if (re.test(norm(v(r, C)))) return r; return -1; };
+    // linha dos meses: a primeira com 3 ou mais datas da coluna H em diante
+    let rMes = -1, cols = [];
+    for (let r = rg.s.r; r <= Math.min(rg.e.r, rg.s.r + 15) && rMes < 0; r++) {
+      const cs = []; for (let c = 7; c <= rg.e.c; c++) if (serialISO(v(r, c))) cs.push(c);
+      if (cs.length >= 3) { rMes = r; cols = cs; }
+    }
+    if (rMes < 0) throw new Error('não achei a linha dos meses na aba FÍS X FIN');
+    const L = {
+      prevMes: linhaDe(/^custo mensal previsto \(lb2\)/), prevAc: linhaDe(/^custo acumulado previsto \(lb2\)/),
+      realMes: linhaDe(/^custo mensal realizado \(lb2\)/), realAc: linhaDe(/^custo acumulado realizado \(lb2\)/),
+      totLb2: linhaDe(/^total lb2/), totLb1: linhaDe(/^total lb1/),
+    };
+    if ([L.prevMes, L.prevAc, L.realMes, L.totLb2].some(x => x < 0)) throw new Error('não achei as linhas de custo previsto/realizado (LB2) na aba FÍS X FIN');
+    // coluna "Realizado (R$)" das etapas
+    let cReal = -1; for (let c = 0; c <= rg.e.c && cReal < 0; c++) if (/^realizado \(r\$\)/.test(norm(v(rMes, c)))) cReal = c;
+    // última baixa: a maior data da coluna "Data da baixa" da LANÇ.FIN
+    const wl = wb.Sheets[abaPor(wb, /^lanc\.?\s*fin/)], rl = XLSX.utils.decode_range(wl['!ref']);
+    const vl = (r, c) => { const x = wl[XLSX.utils.encode_cell({ r, c })]; return x ? x.v : null; };
+    let cBaixa = -1, rCab = -1;
+    for (let r = rl.s.r; r <= Math.min(rl.e.r, 5) && cBaixa < 0; r++) for (let c = 0; c <= rl.e.c; c++) if (/^data da baixa/.test(norm(vl(r, c)))) { cBaixa = c; rCab = r; break; }
+    let ultimaBaixa = null, nLanc = 0;
+    if (cBaixa >= 0) for (let r = rCab + 1; r <= rl.e.r; r++) { const d = serialISO(vl(r, cBaixa)); if (d) { nLanc++; if (!ultimaBaixa || d > ultimaBaixa) ultimaBaixa = d; } }
+    const meses = cols.map(c => ({ mes: serialISO(v(rMes, c)).slice(0, 7), previsto: nv(L.prevMes, c) || 0, realizado: nv(L.realMes, c) || 0,
+      previstoAcum: nv(L.prevAc, c), realizadoAcum: L.realAc >= 0 ? nv(L.realAc, c) : null }));
+    // acumulados: recalcula onde a célula estiver vazia; realizado só até o mês da última baixa
+    let pa = 0, ra = 0; const mesBaixa = ultimaBaixa ? ultimaBaixa.slice(0, 7) : null;
+    meses.forEach(m => { pa += m.previsto; ra += m.realizado; m.previstoAcum = pa; m.realizadoAcum = !mesBaixa || m.mes <= mesBaixa ? ra : null; if (m.realizadoAcum === null) m.realizado = null; });
+    const etapas = [];
+    for (let r = rMes + 1; r <= rg.e.r; r++) {
+      const b = v(r, B), nome = v(r, C);
+      if (typeof b !== 'number' || !nome || typeof nome !== 'string') continue;
+      etapas.push({ ordem: b, nome: nome.replace(/\s+/g, ' ').trim(), projecao: nv(r, E) || 0, realizado: cReal >= 0 ? nv(r, cReal) || 0 : null });
+    }
+    return { ultimaBaixa, lancamentos: nLanc, total: nv(L.totLb2, E), totalLb1: L.totLb1 >= 0 ? nv(L.totLb1, E) : null,
+      realizadoTotal: ra, meses, etapas: etapas.sort((a, b) => a.ordem - b.ordem) };
+  }
+
+  const api = { num, dataISO, mesISO, lerLinhas, wbDe, linhasDaAba, ehMedicao, ehCustoReal, parseCustoReal, parseMedicaoContrato, tipoPlanilha, parseCurva, parseMensal, parseTarefas, parseCronograma, pdfItens, pdfFotos, linhasDe, parseRDOs, parseRestricoes, statusRestricao, ehRestricoesPdf, parseRestricoesPdf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Parsers = api;
 })(typeof window !== 'undefined' ? window : globalThis);

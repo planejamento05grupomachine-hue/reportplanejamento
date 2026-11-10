@@ -516,6 +516,27 @@
     if (obra.reportVA === 'mostrar') return true;
     return rf.spi !== null && (rf.escala === 'contrato' || !rf.bac);
   }
+  // Custo real (avanço financeiro real): planilha de orçamento cliente da Machine (aba FÍS X FIN), carregada em
+  // Alimentar → Dados financeiros. Previsto e realizado em R$ por mês (LB2 = projeção/contratação consolidada); o
+  // realizado são as contas pagas em nome do cliente pela data da baixa mais a taxa de administração. Quando a obra
+  // tem essa planilha, ela é a fonte dos dados financeiros do report (no lugar da Curva S financeira do Prevision).
+  // Sai no formato que chartCurvaS e o PowerPoint já desenham (pts em fração do total, corte, real, prevCorte).
+  function calcCustoReal(obra) {
+    const c = obra && obra.custoReal;
+    if (!c || !(c.meses || []).length || !(c.total > 0)) return null;
+    const T = c.total, ms = c.meses;
+    const comReal = ms.filter(m => m.realizadoAcum !== null && m.realizadoAcum !== undefined);
+    const corte = c.ultimaBaixa || (comReal.length ? fimDoMes(comReal.at(-1).mes) : ms[0].mes + '-01');
+    const pts = [{ data: ms[0].mes + '-01', base: 0, previsto: 0, realizado: 0 }]
+      .concat(ms.map(m => ({ data: fimDoMes(m.mes), base: m.previstoAcum / T, previsto: m.previstoAcum / T, realizado: (m.realizadoAcum || 0) / T })));
+    const realizado = c.realizadoTotal, previsto = interp(pts, 'previsto', corte) * T;
+    const mesCorte = corte.slice(0, 7), ultimoMes = ms.at(-1).mes;
+    return { fonte: 'planilha', total: T, totalLb1: c.totalLb1, realizado, previsto, saldo: T - realizado, desvio$: realizado - previsto,
+      pct: realizado / T, pctPrev: previsto / T, corte, parcial: corte < fimDoMes(mesCorte), lancamentos: c.lancamentos,
+      meses: ms, etapas: c.etapas || [], posFim: mesCorte > ultimoMes,
+      // compatível com chartCurvaS / PowerPoint (mesmo objeto da Curva S financeira)
+      pts, real: realizado / T, prevCorte: previsto / T, baseCorte: previsto / T, desvio: (realizado - previsto) / T, evFrac: realizado / T };
+  }
   // R$ compacto para cartões: "R$ 12,84 mi" · "R$ 103,0 mil"
   const moedaCurta = v => v === null || v === undefined || isNaN(v) ? '—' : Math.abs(v) >= 1e6 ? 'R$ ' + fmtNum(v / 1e6, 2) + ' mi' : Math.abs(v) >= 1e3 ? 'R$ ' + fmtNum(v / 1e3, 1) + ' mil' : 'R$ ' + fmtNum(v, 0);
 
@@ -659,6 +680,12 @@
         it('Linha de base sempre crescente', fin.every((p, i) => !i || (p.base || 0) >= (fin[i - 1].base || 0) - 0.01)),
         it('Valor agregado registrado no mês do corte', rf.ev > 0),
       ] : null,
+      custoReal: obra.custoReal ? (() => { const c = obra.custoReal, soma = (c.etapas || []).reduce((s, e) => s + (e.realizado || 0), 0);
+        return [
+          it('Realizado por etapa soma o total da curva', Math.abs(soma - (c.realizadoTotal || 0)) < 1),
+          it('Previsto fecha na projeção total (LB2)', c.meses && c.meses.length ? igual(c.meses.at(-1).previstoAcum, c.total, 1) : null),
+          it('Última baixa a até 10 dias do corte físico', c.ultimaBaixa && obra.dataCorte ? c.ultimaBaixa >= addDias(obra.dataCorte, -10) : null),
+        ]; })() : null,
       medicao: res ? [
         it('Valor total do contrato', res.totalContrato > 0),
         it('Medido acumulado e saldo', res.medidoAcumulado !== null && res.saldo !== null),
@@ -1164,6 +1191,29 @@
     });
   }
 
+  // Custo real por mês (planilha de orçamento cliente): previsto × realizado em R$, mês do corte parcial.
+  // cr = calcCustoReal(obra). Mesmo desenho das barras do avanço mensal; rótulo do realizado em cima de cada barra.
+  function chartCustoMensal(el, cr, opts = {}) {
+    const W = Math.max(300, el.clientWidth || 640), H = opts.altura || 240;
+    const m = { t: 20, r: 8, b: 30, l: 52 };
+    const dados = cr.meses, mesCorte = cr.corte.slice(0, 7);
+    const max = niceMax(Math.max(...dados.map(d => Math.max(d.previsto || 0, d.realizado || 0))));
+    const n = dados.length, slot = (W - m.l - m.r) / n, bw = Math.max(4, Math.min(22, slot / 2 - 4));
+    const Y = v => H - m.b - v / max * (H - m.t - m.b);
+    const mi = v => fmtNum(v / 1e6, v >= 1e7 ? 0 : 1);
+    let g = '';
+    [0, max / 2, max].forEach(v => { g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" class="grid"/><text x="${m.l - 8}" y="${Y(v) + 4}" class="ax" text-anchor="end">${v ? 'R$ ' + fmtNum(v / 1e6, Math.round(v / 1e5) % 1 || Math.round(v / 1e4) % 10 ? 2 : 1) + ' mi' : '0'}</text>`; });
+    dados.forEach((d, i) => {
+      const cx = m.l + slot * i + slot / 2, futuro = d.realizado === null || d.realizado === undefined, parcial = d.mes === mesCorte && cr.parcial;
+      const bar = (x, v, cls) => { if (!v) return ''; const y = Y(v), h = H - m.b - y; const rr = Math.min(4, h); return `<path d="M${x} ${H - m.b} V${y + rr} Q${x} ${y} ${x + rr} ${y} H${x + bw - rr} Q${x + bw} ${y} ${x + bw} ${y + rr} V${H - m.b} Z" class="${cls}"/>`; };
+      g += bar(cx - bw - 1, d.previsto, 'bar-prev');
+      if (!futuro) { g += bar(cx + 1, d.realizado, 'bar-real' + (parcial ? ' parcial' : ''));
+        if (d.realizado) g += `<text x="${cx + 1 + bw / 2}" y="${Y(d.realizado) - 5}" class="lbl-s" text-anchor="middle">${mi(d.realizado)}</text>`; }
+      g += `<text x="${cx}" y="${H - 10}" class="ax${d.mes === mesCorte ? ' ax-strong' : ''}" text-anchor="middle">${MES[+d.mes.slice(5, 7) - 1]}${parcial ? '*' : ''}</text>`;
+    });
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Custo por mês, previsto e realizado, em milhões de reais">${g}</svg>`;
+  }
+
   // Rótulos de mês sem sobrepor: um a cada "passo" meses (o bastante para ~38 px entre rótulos), sempre o mês do corte;
   // o ano aparece no primeiro mês e em janeiro.
   function rotulosMeses(meses, slot, mesCorte) {
@@ -1350,7 +1400,7 @@
   }
 
   root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, diaSemana, diff, addDias, semaforo, FAIXAS,
-    calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, dataDoPrevisto, prazoGanho, tendenciaPrazo, textoAtraso, fraseProjecao, chartTendencia, narrativa, resumoExecutivo, ST_RESTR, TIPOS_RESTR, META_IRR, JANELA_RESTR, farolRestricao, indicadoresRestricoes, ordenarRestricoes, restricaoImpede, dataRestricao, pessoasDe, prazoOriginal, chartCurvaS, chartMensal, chartCombo, chartEfetivo,
-    LIM_FOTOS: LIM.fotos, calcFinanceiro, moeda, moedaCurta, vaNoReport, empresasFrente, qualidadeRdo, qualidadeDocs, LIMIAR_DIAS: { fisico: LIMIAR_DIAS_FISICO, financeiro: LIMIAR_DIAS_FINANCEIRO }, MAPA_ST, atividadesParaMapa, ptsZona, geoZona, mapasDaObra, fotoNoMapa };
+    calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, dataDoPrevisto, prazoGanho, tendenciaPrazo, textoAtraso, fraseProjecao, chartTendencia, narrativa, resumoExecutivo, ST_RESTR, TIPOS_RESTR, META_IRR, JANELA_RESTR, farolRestricao, indicadoresRestricoes, ordenarRestricoes, restricaoImpede, dataRestricao, pessoasDe, prazoOriginal, chartCurvaS, chartMensal, chartCustoMensal, chartCombo, chartEfetivo,
+    LIM_FOTOS: LIM.fotos, calcFinanceiro, calcCustoReal, moeda, moedaCurta, vaNoReport, empresasFrente, qualidadeRdo, qualidadeDocs, LIMIAR_DIAS: { fisico: LIMIAR_DIAS_FISICO, financeiro: LIMIAR_DIAS_FINANCEIRO }, MAPA_ST, atividadesParaMapa, ptsZona, geoZona, mapasDaObra, fotoNoMapa };
 })(typeof window !== 'undefined' ? window : globalThis);
 
