@@ -144,6 +144,7 @@
     caixa(el) {
       const cs = getComputedStyle(el), rc = el.getBoundingClientRect(), b = this.box(rc);
       const bg = cor(cs.backgroundColor);
+      if (bg && +cs.opacity < 1) bg.a *= +cs.opacity;   // barra translúcida (opacity no elemento) vira transparência no preenchimento
       const bw = ['Top', 'Right', 'Bottom', 'Left'].map(s => parseFloat(cs[`border${s}Width`]) || 0);
       const bc = ['Top', 'Right', 'Bottom', 'Left'].map(s => cs[`border${s}Style`] !== 'none' ? cor(cs[`border${s}Color`]) : null);
       const raio = Math.min(parseFloat(cs.borderTopLeftRadius) || 0, rc.width / 2, rc.height / 2);
@@ -196,7 +197,8 @@
         if (!n.textContent.trim()) {
           // amostra de cor: quadrado (barra) ou traço (linha)
           // amostra branca com contorno (planejado, "vazado"): quadrado vazado na cor do contorno
-          const bg = corDe(cs), q = n.getBoundingClientRect(), cont = cs.boxShadow !== 'none' ? cor(cs.boxShadow) : null;
+          const bg = corDe(cs), q = n.getBoundingClientRect();
+          const cont = (cs.boxShadow !== 'none' ? cor(cs.boxShadow) : null) || (cs.borderTopStyle !== 'none' && parseFloat(cs.borderTopWidth) ? cor(cs.borderTopColor) : null);
           const vaz = bg && bg.r > 245 && bg.g > 245 && bg.b > 245 && cont;
           if (bg && q.width > 1) out.push({ text: q.height <= 4 ? '━ ' : vaz ? '□ ' : '■ ', options: { ...this.estilo(el), color: hex(vaz ? cont : bg), bold: false } });
           continue;

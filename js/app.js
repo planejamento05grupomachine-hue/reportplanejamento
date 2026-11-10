@@ -1442,6 +1442,8 @@
           onclone: doc => {
             // na tela a folha pode estar reduzida (zoom) para caber; no PDF vai em tamanho real
             doc.querySelectorAll('.folha').forEach(f => { f.style.zoom = '1'; f.style.boxShadow = 'none'; });
+            // html2canvas com algarismos tabulares quebra datas e números em pedaços ("06/11 /2026", "37,7 %"): no PDF, desligado
+            const st = doc.createElement('style'); st.textContent = '.folha, .folha * { font-feature-settings: normal !important; font-variant-numeric: normal !important; }'; doc.head.appendChild(st);
             // html2canvas desenha o conteúdo de <details> fechado: tira antes de capturar
             doc.querySelectorAll('details:not([open]) > :not(summary)').forEach(e => e.remove());
             // avisos internos da tela ("+N na aba Obra") não vão para o cliente
@@ -1705,9 +1707,10 @@
     const P = r.prazo;
     const lim01 = v => Math.max(0, Math.min(100, (v || 0) * 100));
     const corte = dBR(r.corte);
-    const cab = (titulo, sub) => `<header class="fl-cab"><div class="fl-cab-a"><img src="${LOGO}" alt="Machine"><i></i><span>Relatório de<br>acompanhamento</span></div>
+    // cabeçalho único de todas as folhas internas (dashboard inclusive): Machine · título da folha · logo do cliente e posição
+    const cab = (titulo, sub) => `<header class="fl-cab"><div class="fl-cab-a"><img src="${LOGO}" alt="Machine"><i></i><span>Relatório mensal<br>de contrato</span></div>
         <div class="fl-cab-b"><b>${titulo}</b><span>Obra ${esc(o.codigo)} · ${esc(o.nome)}${sub ? ` · ${sub}` : ''}</span></div>
-        <div class="fl-cab-c"><small>Posição de</small><b>${corte}</b></div></header>`;
+        <div class="fl-cab-c">${capa.logo ? `<img class="fl-cli" src="${capa.logo}" alt="${esc(o.cliente || 'Cliente')}"><i></i>` : ''}<div><small>Posição de</small><b>${corte}</b></div></div></header>`;
     const pe = `<footer class="fl-pe"><span>Machine · Planejamento e Controle</span><span>${esc([o.cliente, o.cidade].filter(Boolean).join(' · '))}</span><span class="fl-n"></span></footer>`;
     const folha = (titulo, corpo, cls = '', sub = '') => `<article class="folha paisagem exec ${cls}">${cab(titulo, sub)}<div class="fl-corpo">${corpo}</div>${pe}</article>`;
 
@@ -1717,19 +1720,19 @@
     const capa = o.capa || {}, nomeCapa = capa.titulo || o.nome;
     const mr = o.mesReferencia, mesRefIso = mr && /^\d{4}-\d{2}$/.test(mr.mes || '') && mr.corte === o.dataCorte ? mr.mes : r.corte.slice(0, 7);
     const mesRef = Core.mesLongo(mesRefIso).replace(/^./, c => c.toUpperCase());
-    const linhaCapa = (k, v) => v ? `<div><dt>${k}:</dt><dd>${esc(v)}</dd></div>` : '';
+    // Capa em grade editorial, tudo alinhado à mesma margem esquerda: logos no topo (Machine à esquerda, cliente à
+    // direita, na mesma altura), o título da obra no centro da folha e a ficha (obra, cliente, local, referência,
+    // revisão) numa linha de colunas no pé, sobre um fio — o mesmo alinhamento das folhas internas.
+    const linhaCapa = (k, v) => v ? `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>` : '';
     const folhaCapa = `<article class="folha paisagem capa" aria-label="Capa do relatório">
-        <div class="cp-titulo"><h1>RELATÓRIO MENSAL DE CONTRATO</h1><p>Obra ${esc(o.codigo)} - ${esc(nomeCapa)}</p></div>
-        <div class="cp-bloco">
-          <div class="cp-logos"><div class="cp-machine"><img src="${LOGO}" alt="Machine"><span>Realizações com base sólida</span></div>
-            ${capa.logo ? `<img class="cp-cli" src="${capa.logo}" alt="${esc(o.cliente || 'Cliente')}">` : ''}</div>
-          <i class="cp-reg" aria-hidden="true"></i>
-          <dl class="cp-dados">${linhaCapa('Mês/Ano de referência', mesRef)}${linhaCapa('Obra', `${o.codigo} - ${nomeCapa}`)}${linhaCapa('Local', o.cidade)}${linhaCapa('Cliente', o.cliente)}${linhaCapa('Revisão', capa.revisao || '00')}</dl>
-        </div>
+        <header class="cp-topo"><img class="cp-logo" src="${LOGO}" alt="Machine">${capa.logo ? `<img class="cp-cli" src="${capa.logo}" alt="${esc(o.cliente || 'Cliente')}">` : ''}</header>
+        <div class="cp-titulo"><span class="cp-kick">Relatório mensal de contrato</span><h1>${esc(nomeCapa)}</h1><i class="cp-fio" aria-hidden="true"></i><p>${esc(mesRef)}</p></div>
+        <dl class="cp-dados">${linhaCapa('Obra', o.codigo)}${linhaCapa('Cliente', o.cliente)}${linhaCapa('Local', o.cidade)}${linhaCapa('Mês de referência', mesRef)}${linhaCapa('Revisão', capa.revisao || '00')}</dl>
+        <footer class="cp-pe"><span>Machine · Planejamento e Controle</span><span>Realizações com base sólida</span></footer>
       </article>`;
 
     // ----- Dashboard · status geral (2ª folha, mesmo desenho em todas as obras) -----
-    const folhaDash = dashboardStatus(o, r, capa);
+    const folhaDash = dashboardStatus(o, r, capa, cab, pe);
 
     // ----- Físico (3ª folha): a curva física num quadro só — acumulado em cima, avanço de cada mês na faixa de baixo, no
     // mesmo eixo de meses — e as barras Base / Previsto / Realizado na data. Cartões e identificação já estão no dashboard.
@@ -1796,7 +1799,7 @@
   // Previsto × Realizado por frente da EAP (Base, Previsto e Realizado da própria linha no cronograma do Prevision).
   // Faixas dos índices = farol do painel (Core.FAIXAS). Sem o dado, o cartão mostra "—" e diz o que falta.
   const DASH_LINHAS = 15;
-  function dashboardStatus(o, r, capa) {
+  function dashboardStatus(o, r, capa, cab, pe) {
     const P = r.prazo, F = Core.FAIXAS, n2 = v => v === null || v === undefined || isNaN(v) ? '—' : fmtNum(v * 100, 2);
     const farol = v => v === null || v === undefined ? 'neutro' : v >= F.ok ? 'ok' : v >= F.atencao ? 'atencao' : 'critico';
     const rf = Core.calcFinanceiro(o, r.corte), comVA = Core.vaNoReport(o, rf);
@@ -1808,8 +1811,8 @@
         ${card('ac-fis', 'Avanço físico (acum.)', `${n2(r.real)}%`, `Base: ${n2(r.baseCorte)}%`)}
         ${card('ac-fis', 'Avanço financeiro (acum.)', comVA && rf.evFrac !== null ? `${n2(rf.evFrac)}%` : '—', comVA && rf.baseFrac !== null ? `Base: ${n2(rf.baseFrac)}%` : 'sem Curva S financeira no report')}
         <div class="ds-ind">
-          <div class="ds-ind-g">${card(`ac-${farol(idp)}`, `IDP<em>(Índice de Prazo)</em>`, idp ? fmtNum(idp, 2) : '—', 'Meta: 1,00')}
-            ${card(`ac-${farol(cpi)}`, `IDC<em>(Índice de Custo)</em>`, cpi ? fmtNum(cpi, 2) : '—', cpi ? 'Meta: 1,00' : 'sem IDC no Prevision')}</div>
+          <div class="ds-ind-g">${card(`ac-${farol(idp)}`, `IDP<em> · Índice de Prazo</em>`, idp ? fmtNum(idp, 2) : '—', 'Meta: 1,00')}
+            ${card(`ac-${farol(cpi)}`, `IDC<em> · Índice de Custo</em>`, cpi ? fmtNum(cpi, 2) : '—', cpi ? 'Meta: 1,00' : 'sem IDC no Prevision')}</div>
           <div class="ds-leg"><span><i class="ok"></i>≥ ${fmtNum(F.ok, 2)}</span><span><i class="atencao"></i>${fmtNum(F.atencao, 2)} ≤ índice &lt; ${fmtNum(F.ok, 2)}</span><span><i class="critico"></i>&lt; ${fmtNum(F.atencao, 2)}</span></div>
         </div>
         ${card(`ac-${varFim === null ? 'neutro' : varFim > 0 ? 'critico' : 'escuro'}`, 'Variação término', varFim === null ? '—' : `${varFim > 0 ? '+' : ''}${varFim} ${Math.abs(varFim) === 1 ? 'dia' : 'dias'}`, 'Meta: 0 dias')}
@@ -1848,10 +1851,11 @@
     const tabela = `<section class="ds-tab${densa ? ' densa' : ''}"><h2>Previsto x Realizado<em>EAP da obra · % de cada item · posição de ${dBR(raizC && o.cronograma.dataRef ? o.cronograma.dataRef : r.corte)}</em></h2>
         <table><thead><tr><th>Nome</th><th>Base (%)</th><th>Previsto (%)</th><th>Realizado (%)</th><th>Δ Base (%)</th><th>Δ Previsto (%)</th></tr></thead>
           <tbody>${lin(raiz, 'obra')}${linhas.map(x => lin(x)).join('')}</tbody></table></section>`;
-    return `<article class="folha paisagem dash${algumAberto ? ' aberta' : ''}" aria-label="Dashboard, status geral">
-        <header class="ds-cab"><h1>DASHBOARD – STATUS GERAL</h1><div class="cp-machine"><img src="${LOGO}" alt="Machine"><span>Realizações com base sólida</span></div></header>
-        <div class="ds-corpo">${cards}${prazo}${tabela}</div>
-        <footer class="ds-pe"><span>Obra ${esc(o.codigo)} · ${esc((capa && capa.titulo) || o.nome)}</span><span class="fl-n"></span>${capa && capa.logo ? `<img class="ds-cli" src="${capa.logo}" alt="${esc(o.cliente || 'Cliente')}">` : '<i></i>'}</footer>
+    // mesmo cabeçalho e rodapé das demais folhas (antes o dashboard tinha moldura própria, fundo cinza e título em caixa alta)
+    return `<article class="folha paisagem exec dash${algumAberto ? ' aberta' : ''}" aria-label="Dashboard, status geral">
+        ${cab('Dashboard · status geral', 'visão geral do contrato')}
+        <div class="fl-corpo ds-corpo">${cards}${prazo}${tabela}</div>
+        ${pe}
       </article>`;
   }
 
@@ -1868,8 +1872,11 @@
     const soma = k => meses.reduce((s, m) => s + (m[k] || 0), 0);
     const pctMed = R.totalContrato && R.medidoAcumulado !== null ? R.medidoAcumulado / R.totalContrato : null;
     const cards = [['Valor do contrato', R.totalContrato, R.contrato || ''], ['Medido acumulado', R.medidoAcumulado, pctMed !== null ? pct(pctMed, 1) + ' do contrato' : ''],
-      ['Saldo de contrato', R.saldo, pctMed !== null ? pct(1 - pctMed, 1) + ' a medir' : ''], ['Última medição', null, R.ultimaMedicao || '—']]
-      .map(([t, v, s]) => `<div class="md-card"><small>${t}</small><b>${v === null ? esc(s) : moeda(v)}</b>${v === null ? '' : `<span>${esc(s)}</span>`}</div>`).join('');
+      ['Saldo de contrato', R.saldo, pctMed !== null ? pct(1 - pctMed, 1) + ' a medir' : '']]
+      .map(([t, v, s]) => `<div class="md-card"><small>${t}</small><b>${moeda(v)}</b><span>${esc(s)}</span></div>`).join('')
+      // última medição no mesmo desenho dos outros cartões: o mês em destaque e a situação embaixo ("Outubro (em análise)")
+      + (() => { const u = String(R.ultimaMedicao || '—'), m = u.match(/^(.*?)\s*\((.+)\)\s*$/);
+        return `<div class="md-card"><small>Última medição</small><b>${esc(m ? m[1] : u)}</b><span>${esc(m ? m[2] : '')}</span></div>`; })();
     const hist = meses.length ? `<table class="md-tab"><thead><tr><th>Mês</th>${COLS.map(([, t]) => `<th class="n">${t}</th>`).join('')}${temSt ? '<th>Status</th>' : ''}</tr></thead>
         <tbody>${meses.map(m => `<tr><td>${esc(m.mes)}</td>${COLS.map(([k]) => `<td class="n">${$$v(m[k])}</td>`).join('')}${temSt ? `<td>${esc(m.status || '')}</td>` : ''}</tr>`).join('')}</tbody>
         <tfoot><tr><td>Total</td>${COLS.map(([k]) => `<td class="n">${$$v(soma(k))}</td>`).join('')}${temSt ? '<td></td>' : ''}</tr></tfoot></table>` : '<p class="sub">Sem série mensal no Controle de Medição.</p>';

@@ -158,29 +158,32 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .fl-pe { display: flex; justify-content: space-between; gap: 12px; padding: 8px 32px 11px; border-top: 1px solid var(--rx-line); font-size: 10px; line-height: 1.3; color: var(--rx-faint); }
 .fl-n { font-weight: 600; color: var(--rx-muted); white-space: nowrap; }
 
-/* ---------- Capa: padrão único para todas as obras ----------
-   Título, nome da obra, logos (Machine e, quando houver, a do cliente), fio azul e os dados da capa. Só a logo do
-   cliente varia entre obras; de um mês para o outro, só o mês de referência. Tipografia da marca (Barlow): títulos em
-   Barlow Semi Condensed, texto em Barlow — as duas são fontes de nuvem do Office, então o PowerPoint abre igual.
-   Sem halo, sombra ou faixa clara atrás das letras: texto direto sobre o fundo. */
-.folha.capa { --cp-navy: #0A2463; --cp-azul: #154CB0; --cp-fundo: #F4F5F8;
-  display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 22mm; padding: 0 18mm 6mm;
-  background: var(--cp-fundo); color: var(--cp-navy); font-family: "Barlow", "Segoe UI", Arial, sans-serif; }
+/* ---------- Capa: padrão único para todas as obras (rev. 10/11/2026) ----------
+   Grade editorial alinhada à esquerda, na mesma margem das folhas internas:
+     topo   — logo da Machine à esquerda e do cliente à direita, na mesma altura e em tamanho contido
+     centro — "Relatório mensal de contrato", o nome da obra em destaque, fio azul e o mês de referência
+     pé     — ficha da obra numa linha de colunas sobre um fio (obra · cliente · local · mês · revisão)
+   Faixa azul-marinho na borda esquerda dá o peso da marca. Tipografia Barlow (títulos em Barlow Semi Condensed),
+   fontes de nuvem do Office: o PowerPoint abre igual. Nada de halo, sombra ou faixa clara atrás das letras. */
+.folha.capa { --cp-navy: #0A2463; --cp-azul: #154CB0; position: relative;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; padding: 15mm 20mm 8mm 28mm;
+  background: #FFFFFF; color: var(--cp-navy); font-family: "Barlow", "Segoe UI", Arial, sans-serif; }
 .folha.capa * { font-family: inherit; }
-.cp-titulo { width: 100%; max-width: 262mm; box-sizing: border-box; padding: 16mm 18mm 17mm; text-align: center; }
-.folha.capa .cp-titulo h1 { margin: 0; font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; font-size: 46px; line-height: 1.1; font-weight: 700; letter-spacing: .03em; text-align: center; color: var(--cp-navy); }
-.folha.capa .cp-titulo p { margin: 5mm 0 0; font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; font-size: 20px; line-height: 1.35; font-weight: 600; letter-spacing: .02em; text-align: center; color: var(--cp-azul); text-wrap: balance; }
-.cp-bloco { display: flex; align-items: stretch; gap: 9mm; max-width: 252mm; }
-.cp-logos { flex: none; width: 66mm; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9mm; }
-.cp-machine { display: grid; justify-items: end; gap: 2px; }
-.cp-machine img { width: 58mm; display: block; }
-.folha.capa .cp-machine span { font-family: "Barlow", "Segoe UI", Arial, sans-serif; font-size: 9.5px; font-weight: 500; letter-spacing: .04em; color: #8B9099; }
-.cp-cli { display: block; max-width: 54mm; max-height: 24mm; width: auto; height: auto; object-fit: contain; }
-.cp-reg { flex: none; width: 3px; border-radius: 2px; background: var(--cp-azul); }
-.cp-dados { margin: 0; width: 158mm; display: grid; align-content: center; gap: 5px; min-width: 0; }
-.cp-dados > div { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; column-gap: 10px; padding: 3px 10px 3px 6px; }
-.cp-dados dt { font-size: 15px; line-height: 1.45; font-weight: 600; color: var(--cp-navy); white-space: nowrap; }
-.cp-dados dd { margin: 0; font-size: 15px; line-height: 1.45; font-weight: 400; color: #3D434A; min-width: 0; }
+.folha.capa::before { content: ""; position: absolute; left: 0; top: 0; width: 9mm; height: 210mm; background: var(--cp-navy); }
+.cp-topo { display: flex; justify-content: space-between; align-items: center; gap: 20mm; height: 17mm; }
+.cp-logo { height: 10mm; width: auto; display: block; }
+.cp-cli { display: block; max-height: 15mm; max-width: 46mm; width: auto; height: auto; object-fit: contain; }
+.cp-titulo { align-self: center; display: grid; justify-items: start; max-width: 230mm; padding-bottom: 6mm; }
+.folha.capa .cp-kick { font-size: 13px; line-height: 1.3; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--cp-azul); }
+.folha.capa .cp-titulo h1 { margin: 5mm 0 0; font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; font-size: 46px; line-height: 1.08; font-weight: 700; letter-spacing: .005em; text-align: left; color: var(--cp-navy); text-wrap: balance; }
+.cp-fio { display: block; width: 34mm; height: 3px; margin: 8mm 0 6mm; background: var(--cp-azul); }
+.folha.capa .cp-titulo p { margin: 0; font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; font-size: 24px; line-height: 1.2; font-weight: 600; text-align: left; color: #3D434A; }
+.cp-dados { margin: 0 0 7mm; display: grid; grid-auto-flow: column; grid-auto-columns: auto; justify-content: start; padding-top: 5mm; border-top: 1px solid #D5DAE1; }
+.cp-dados > div { padding: 0 9mm 0 0; min-width: 0; }
+.cp-dados > div + div { padding-left: 9mm; border-left: 1px solid #E4E7EC; }
+.cp-dados dt { font-size: 10px; line-height: 1.3; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #8B9099; white-space: nowrap; }
+.cp-dados dd { margin: 4px 0 0; font-size: 16px; line-height: 1.3; font-weight: 500; color: var(--cp-navy); white-space: nowrap; }
+.cp-pe { display: flex; justify-content: space-between; gap: 12px; font-size: 10px; line-height: 1.3; color: #9AA3AE; letter-spacing: .02em; }
 .rx-s > h2 em.fl-cont { margin-left: 0; color: var(--rx-faint); font-size: var(--fs-11); }
 /* tamanhos do report impresso (mais compactos que na tela da aba Obra) */
 .folha.exec .rx-box { padding: 12px 18px 14px; }
@@ -285,66 +288,54 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
   .folha, .folha * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
-/* ---------- Dashboard · status geral (2ª folha): mesmo desenho em todas as obras; a tabela segue a EAP de cada obra ---------- */
-.folha.dash { --cp-navy: #0A2463; --ds-azul: #2F5BD8; --ds-barra: #6F93D6; --ds-cab: #1D3A66; --ds-linha: #E3E6EC;
-  --ds-ok: #2E9E57; --ds-warn: #E0B400; --ds-crit: #D7262E;
-  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: #F5F6F8; color: var(--cp-navy);
-  font-family: "Barlow", "Segoe UI", Arial, sans-serif; padding: 9mm 13mm 5mm; }
-.folha.dash * { font-family: inherit; }
-.ds-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; padding-bottom: 5mm; }
-.folha.dash .ds-cab h1 { margin: 2mm 0 0; font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; font-size: 32px; line-height: 1.1; font-weight: 700; letter-spacing: .03em; color: var(--cp-navy); }
-.folha.dash .ds-card b, .folha.dash .ds-tab h2 { font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; }
-.ds-cab .cp-machine img { width: 50mm; }
-.folha.dash .cp-machine span { font-family: "Barlow", "Segoe UI", Arial, sans-serif; font-size: 9px; font-weight: 500; letter-spacing: .04em; color: #8B9099; }
-.ds-corpo { min-height: 0; display: flex; flex-direction: column; gap: 4.5mm; }
-.ds-cards { display: grid; grid-template-columns: 1.15fr 1.15fr 2fr .95fr; gap: 4mm; align-items: stretch; }
-.ds-card { position: relative; display: grid; align-content: center; gap: 2px; padding: 9px 12px 10px 20px; background: #fff; border-radius: 10px;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, .06); min-width: 0; }
-.ds-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 7px; border-radius: 10px 0 0 10px; background: var(--ds-azul); }
+/* ---------- Dashboard · status geral (2ª folha), rev. 10/11/2026 ----------
+   Mesma moldura das demais folhas (cabeçalho, rodapé, fundo branco) e o mesmo cartão do report: branco, fio
+   cinza e faixa de cor no topo (farol). A tabela segue a EAP de cada obra; as barras viram um traço fino sob o
+   número, em vez de blocos cheios. */
+.folha.dash { --cp-navy: #0A2463; --ds-azul: #154CB0; --ds-cab: #1D3A66; --ds-linha: #E4E7EC;
+  --ds-ok: #2E9E57; --ds-warn: #E0B400; --ds-crit: #D7262E; }
+.folha.dash .ds-corpo { gap: 12px; }
+.ds-cards { display: grid; grid-template-columns: 1fr 1fr 1.9fr 1fr; gap: 12px; align-items: stretch; }
+.ds-card { position: relative; display: grid; align-content: center; gap: 2px; padding: 13px 16px 12px; background: #fff; border: 1px solid var(--rx-line); border-radius: 8px; min-width: 0; overflow: hidden; }
+.ds-card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--ds-azul); }
 .ds-card.ac-escuro::before, .ds-card.ac-neutro::before { background: #2B2F36; }
 .ds-card.ac-ok::before { background: var(--ds-ok); } .ds-card.ac-atencao::before { background: var(--ds-warn); } .ds-card.ac-critico::before { background: var(--ds-crit); }
-.ds-card small { font-size: 11.5px; line-height: 1.3; color: #2B2F36; }
-.ds-card small em { display: block; font-style: normal; }
-.ds-card b { margin-top: 4px; font-size: 28px; line-height: 1.1; font-weight: 700; color: #1B1E24; white-space: nowrap; }
-.ds-card span { font-size: 13px; color: #5E6470; }
-.ds-ind { display: grid; gap: 6px; padding: 6px; background: #ECEEF2; border-radius: 12px; }
-.ds-ind-g { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.folha.dash .ds-leg { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 14px; font-family: "Barlow", Arial, sans-serif; font-size: 11px; color: #3D434A; }
-.folha.dash .ds-leg * { font-family: "Barlow", Arial, sans-serif; }
-.ds-leg i { display: inline-block; width: 8px; height: 8px; margin-right: 4px; vertical-align: 0; }
+.ds-card small { font-size: 11.5px; line-height: 1.3; font-weight: 500; color: var(--rx-muted); }
+.ds-card small em { font-style: normal; color: var(--rx-faint); }
+.folha.dash .ds-card b { margin-top: 4px; font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; font-size: 30px; line-height: 1.05; font-weight: 700; color: var(--rx-navy); white-space: nowrap; }
+.ds-card span { font-size: 12px; line-height: 1.3; color: var(--rx-muted); }
+.ds-ind { display: grid; gap: 8px; padding: 8px; background: var(--rx-bg); border: 1px solid var(--rx-line); border-radius: 10px; }
+.ds-ind-g { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ds-leg { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 16px; font-size: 11px; color: var(--rx-ink); }
+.ds-leg i { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 1.5px; vertical-align: 0; }
 .ds-leg i.ok { background: var(--ds-ok); } .ds-leg i.atencao { background: var(--ds-warn); } .ds-leg i.critico { background: var(--ds-crit); }
-.ds-prazo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8mm; align-items: center; padding: 8px 18px 10px; background: #fff; border-radius: 8px; }
-.ds-pz-d { display: flex; justify-content: space-between; font-size: 13px; color: #1B1E24; }
-.ds-pz-d span { display: grid; } .ds-pz-d .dir { text-align: right; }
-.ds-pz-d b { font-weight: 700; }
-.ds-pz-bar { position: relative; height: 13px; margin: 20px 0 2px; background: #E6EAF1; border-radius: 3px; }
-.ds-pz-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ds-azul); border-radius: 3px; }
-.folha.dash .ds-pz-bar em { position: absolute; bottom: 15px; transform: translateX(-50%); font-family: "Barlow", Arial, sans-serif; font-style: normal; font-weight: 600; font-size: 12px; color: #3D434A; }
-.ds-pz-r { margin: 0; padding-left: 7mm; border-left: 1px solid var(--ds-linha); display: grid; grid-template-columns: auto; font-size: 12.5px; text-transform: uppercase; color: #5E6470; }
-.ds-pz-r dd { margin: 0 0 4px; font-weight: 700; text-transform: none; color: #1B1E24; }
-.ds-tab { min-height: 0; display: flex; flex-direction: column; gap: 6px; }
-.ds-tab h2 { margin: 0; font-size: 17px; font-weight: 700; color: #1B1E24; }
-.folha.dash .ds-tab h2 em { margin-left: 12px; font-family: "Barlow", Arial, sans-serif; font-style: normal; font-weight: 500; font-size: 11px; color: #8B9099; }
+.ds-prazo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8mm; align-items: center; padding: 10px 18px 12px; background: #fff; border: 1px solid var(--rx-line); border-radius: 8px; }
+.ds-pz-d { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--rx-muted); }
+.ds-pz-d span { display: grid; gap: 1px; } .ds-pz-d .dir { text-align: right; }
+.ds-pz-d b { font-size: 14px; font-weight: 600; color: var(--rx-navy); }
+.ds-pz-bar { position: relative; height: 8px; margin: 20px 0 2px; background: #E6EAF1; border-radius: 4px; }
+.ds-pz-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ds-azul); border-radius: 4px; }
+.ds-pz-bar em { position: absolute; bottom: 12px; transform: translateX(-50%); font-style: normal; font-weight: 600; font-size: 11.5px; color: var(--rx-ink); }
+.ds-pz-r { margin: 0; padding-left: 7mm; border-left: 1px solid var(--rx-line); display: grid; font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--rx-faint); }
+.ds-pz-r dd { margin: 1px 0 6px; font-size: 14px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--rx-navy); }
+.ds-tab { min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.folha.dash .ds-tab h2 { margin: 0; display: flex; align-items: baseline; gap: 12px; font-family: "Barlow Semi Condensed", "Barlow", Arial, sans-serif; font-size: 15px; font-weight: 700; color: var(--rx-navy); }
+.folha.dash .ds-tab h2 em { font-family: "Barlow", Arial, sans-serif; font-style: normal; font-weight: 500; font-size: 11px; color: var(--rx-faint); }
 .ds-tab table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; }
-.folha.dash .ds-tab table, .folha.dash .ds-tab table * { font-family: "Barlow", "Segoe UI", Arial, sans-serif; }
-.ds-tab th { background: var(--ds-cab); color: #fff; font-size: 13px; font-weight: 600; padding: 5px 6px; text-align: center; }
+.ds-tab th { background: var(--ds-cab); color: #fff; font-size: 11.5px; font-weight: 600; padding: 6px 8px; text-align: center; letter-spacing: .02em; }
 .ds-tab th:first-child { text-align: left; width: 39%; }
-.ds-tab td { position: relative; padding: 6px 8px; font-size: 13px; line-height: 1.25; color: #1B1E24; border-bottom: 1px solid var(--ds-linha); }
+.ds-tab td { position: relative; padding: 6px 8px; font-size: 12.5px; line-height: 1.25; color: #1B1E24; border-bottom: 1px solid var(--ds-linha); }
 .ds-tab td.nm { overflow-wrap: anywhere; }
-.ds-tab td.n { text-align: center; padding: 4px; }
-.ds-tab td.n i { position: absolute; left: 4px; top: 4px; bottom: 4px; max-width: calc(100% - 8px); background: var(--ds-barra); opacity: .85; }
-.ds-tab td.n span { position: relative; font-weight: 600; }
+.ds-tab td.n { text-align: center; padding: 5px 12px 9px; }
+.ds-tab td.n i { position: absolute; left: 12px; bottom: 4px; height: 3px; max-width: calc(100% - 24px); background: var(--ds-azul); opacity: .55; border-radius: 2px; }
+.ds-tab td.n span { position: relative; font-weight: 500; }
 .ds-tab td.d { text-align: center; font-weight: 600; white-space: nowrap; }
-.ds-tab td.d.pos { color: #D88B00; } .ds-tab td.d.neg { color: var(--ds-crit); } .ds-tab td.d.z { color: #5E6470; }
-.ds-seta { display: inline-block; width: 14px; margin-right: 6px; font-weight: 800; }
+.ds-tab td.d.pos { color: #B87400; } .ds-tab td.d.neg { color: var(--ds-crit); } .ds-tab td.d.z { color: #5E6470; }
+.ds-seta { display: inline-block; width: 14px; margin-right: 4px; font-weight: 800; }
 .ds-tab td.d.pos .ds-seta, .ds-tab td.d.z .ds-seta { color: #2E8B6A; } .ds-tab td.d.neg .ds-seta { color: var(--ds-crit); }
-.ds-tab tr.obra td { background: #E4E6EA; font-weight: 700; }
-.ds-tab.densa td { padding-top: 2px; padding-bottom: 2px; font-size: 11px; }
-.ds-tab.densa td.n i { top: 2px; bottom: 2px; }
-.folha.dash .ds-pe { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding-top: 3mm; font-family: "Barlow", Arial, sans-serif; font-size: 10px; color: #9AA3AE; }
-.folha.dash .ds-pe * { font-family: "Barlow", Arial, sans-serif; }
-.ds-pe .fl-n { margin-left: auto; margin-right: 6mm; }
-.ds-cli { max-height: 13mm; max-width: 34mm; display: block; }
+.ds-tab tr.obra td { background: #EEF1F5; font-weight: 700; }
+.ds-tab.densa td { padding-top: 3px; padding-bottom: 6px; font-size: 11px; }
+.ds-tab.densa td.n i { bottom: 2px; }
 /* dashboard na tela: a EAP abre até o pacote executável (setas); a folha cresce enquanto houver linha aberta */
 .folha.dash.aberta { height: auto; min-height: 210mm; }
 .folha.dash.aberta .ds-corpo { min-height: auto; }
@@ -457,3 +448,27 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .bm.densa2 .bm-tab th, .bm.densa2 .bm-tab td, .bm.densa2 .bm-ret th, .bm.densa2 .bm-ret td { padding: 1px 5px; line-height: 1.2; }
 .bm.densa2 .bm-cab dt, .bm.densa2 .bm-cab dd, .bm.densa2 .bm-liq dt, .bm.densa2 .bm-liq dd { padding: 0 8px; line-height: 1.25; }
 .bm.densa2 .bm-liq, .bm.densa2 .bm-tot span { font-size: 10px; }
+
+/* ---------- Acabamento das folhas internas (rev. 10/11/2026) ---------- */
+/* cabeçalho: logo do cliente à direita, junto da posição (todas as folhas internas, dashboard inclusive) */
+.fl-cab-c { display: flex; align-items: center; gap: 14px; }
+.fl-cab-c > div { display: grid; gap: 1px; text-align: right; }
+.fl-cab-c > i { width: 1px; height: 28px; background: var(--rx-line); }
+.fl-cli { display: block; max-height: 30px; max-width: 96px; width: auto; height: auto; object-fit: contain; }
+/* sem ícone decorativo (lupa) nos títulos dos quadros do report */
+.folha.exec .rx-ic { display: none; }
+/* amostras de legenda que o PDF (html2canvas) desenha: traço tracejado com borda e quadrado vazado com contorno
+   (degradê e sombra interna não saíam no PDF) */
+.folha.exec .sw-base { background: none; height: 0; border-top: 2px dashed var(--rx-blue-2); border-radius: 0; }
+.folha.exec .sw-bplan { background: #fff; box-shadow: none; border: 1.25px solid var(--rx-blue); box-sizing: border-box; }
+/* planta já marcada: título no topo e o conjunto planta + legenda centrado no espaço que sobra (antes a planta
+   ficava solta no meio e a legenda presa no pé da folha) */
+.mp-folha-limpa .mp-limpa { flex: 0 1 auto; margin-top: auto; }
+.mp-folha-limpa .mp-leg-h { margin-bottom: auto; padding-top: 4px; }
+/* cartões de medição: conteúdo a partir do topo (o cartão sem linha de apoio não desce o valor) */
+.md-card { align-content: start; }
+/* histórico de medição: o quadro acaba na tabela (antes esticava até o pé da folha com um vazio cinza) */
+.md-box:not(.bm) { flex: 0 1 auto; }
+/* valor do corte nas curvas: recorte na cor do quadro só onde a letra cruza a linha (sem caixa visível);
+   rótulos de mês e eixos ficam sem recorte */
+.folha.exec .chart .lbl { paint-order: stroke; stroke: var(--rx-bg); stroke-width: 3px; stroke-linejoin: round; }
