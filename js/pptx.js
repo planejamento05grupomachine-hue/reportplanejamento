@@ -336,6 +336,16 @@
           valAxisMinVal: 0, valAxisLabelFormatCode: '0%', displayBlanksAs: 'gap' });
         return;
       }
+      // custo real (planilha de orçamento cliente): barras do desembolso mensal em R$
+      if (el.id === 'ch-cr-mes' && rf && rf.meses) {
+        const cat = rf.meses.map(m => rotulo(m.mes, rf.corte.slice(0, 7)));
+        this.s.addChart(this.pptx.ChartType.bar, [
+          { name: 'Previsto no mês', labels: cat, values: rf.meses.map(m => (m.previsto || 0) / 1e6) },
+          { name: 'Realizado no mês', labels: cat, values: rf.meses.map(m => m.realizado === null || m.realizado === undefined ? null : m.realizado / 1e6) },
+        ], { ...b, ...eixo, barDir: 'col', barGrouping: 'clustered', barGapWidthPct: 60, chartColors: ['FFFFFF', COR.real], dataBorder: { pt: 0.75, color: COR.plan },
+          valAxisMinVal: 0, valAxisLabelFormatCode: '"R$ "0.0" mi"', displayBlanksAs: 'gap' });
+        return;
+      }
       if (el.id === 'ch-fin-r' && rf && rf.pts) {
         const S = serieFinanceira(rf, r.corte);
         this.s.addChart([

@@ -23,7 +23,7 @@
       if (achado === null || achado === undefined) return;
       out.push(achado === cod ? ['ok', `${rotulo}: obra ${cod} (${como}).`] : ['er', `${rotulo} é da obra ${achado} (${como}), não da obra ${cod}. Arquivo não aplicado.`]);
     };
-    Object.entries(nomes).forEach(([tipo, nome]) => confere({ curva: 'Curva S', mensal: 'Progresso mensal', tarefas: 'Progresso por tarefas', cronograma: 'Cronograma', rdos: 'PDF de RDOs' }[tipo] || tipo, codigoEm(nome), 'pelo nome do arquivo'));
+    Object.entries(nomes).forEach(([tipo, nome]) => confere({ curva: 'Curva S', mensal: 'Progresso mensal', tarefas: 'Progresso por tarefas', cronograma: 'Cronograma', rdos: 'PDF de RDOs', custoReal: 'Planilha de custo real' }[tipo] || tipo, codigoEm(nome), 'pelo nome do arquivo'));
     const raizT = d.tarefas && d.tarefas.find(t => t.nivel === 1), raizC = d.cronograma && d.cronograma.find(l => l.nivel === 1);
     [['Progresso por tarefas', raizT && raizT.tarefa], ['Cronograma', raizC && raizC.nome]].forEach(([rot, nome]) => {
       if (!nome) return;
@@ -92,6 +92,12 @@
       const pend = c.filter(l => /pendente de contrata/i.test(l.responsaveis || '') && l.realizado < 0.9995).length;
       if (pend) out.push(['av', `${pend} linhas com responsável "Pendente de contratação"; vão para Atenção no report.`]);
     }
+    if (d.custoReal) {
+      const c = d.custoReal, soma = (c.etapas || []).reduce((s, e) => s + (e.realizado || 0), 0);
+      out.push(['ok', `Custo real (planilha de orçamento): ${c.lancamentos} lançamentos, última baixa em ${dBR(c.ultimaBaixa)}. Realizado ${core().moeda(c.realizadoTotal)} de ${core().moeda(c.total)} previstos (LB2).`]);
+      out.push([Math.abs(soma - c.realizadoTotal) < 1 ? 'ok' : 'av', Math.abs(soma - c.realizadoTotal) < 1 ? 'Realizado por etapa soma o mesmo que a curva mensal.' : `Realizado por etapa (${core().moeda(soma)}) difere da curva mensal (${core().moeda(c.realizadoTotal)}): confira as abas PLANILHA GERAL e FÍS X FIN.`]);
+      if (o.dataCorte && c.ultimaBaixa && c.ultimaBaixa < core().addDias(o.dataCorte, -10)) out.push(['av', `A última baixa da planilha (${dBR(c.ultimaBaixa)}) é bem anterior ao corte físico (${dBR(o.dataCorte)}): atualize a planilha com as contas pagas recentes.`]);
+    }
     if (d.rdos) {
       const r = d.rdos;
       const par = r.at(-1)?.atividades.filter(a => /paralis/i.test(a.situacao)).length || 0;
@@ -129,12 +135,13 @@
   function aplicarCarga(base, pacote, corte, fontes, hoje, { temRascunho } = {}) {
     const ras = clone(base);
     // indicesPrevision (IDC/IDP da Gestão de Custos do Prevision): tem data de referência própria, não mexe no corte
-    ['curva', 'mensal', 'tarefas', 'rdos', 'cronograma', 'medicao', 'indicesPrevision'].forEach(k => { if (pacote[k]) ras[k] = pacote[k]; });
+    // custoReal: planilha de orçamento cliente (FÍS X FIN), substitui a anterior inteira
+    ['curva', 'mensal', 'tarefas', 'rdos', 'cronograma', 'medicao', 'indicesPrevision', 'custoReal'].forEach(k => { if (pacote[k]) ras[k] = pacote[k]; });
     // financeiro tem 3 subtipos (curva/mensal/tarefas) em lotes separados: funde em vez de substituir,
     // senão enviar só a Curva S financeira apagaria o Progresso por tarefas financeiro do mês anterior.
     if (pacote.financeiro) ras.financeiro = { ...(ras.financeiro || {}), ...pacote.financeiro };
     if (['curva', 'mensal', 'tarefas', 'rdos', 'cronograma'].some(k => pacote[k])) ras.dataCorte = corte;
-    if (['financeiro', 'medicao'].some(k => pacote[k])) ras.dataCorteFinanceiro = corte;
+    if (['financeiro', 'medicao', 'custoReal'].some(k => pacote[k])) ras.dataCorteFinanceiro = corte;
     ras.atualizadoEm = hoje;
     ras.fontes = { ...(base.fontes || {}), ...fontes };
     delete ras.publicadoEm;

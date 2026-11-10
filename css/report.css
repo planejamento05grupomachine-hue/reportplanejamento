@@ -406,6 +406,10 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .md-tab tfoot td { font-weight: 700; color: var(--rx-navy); background: #E4E6EA; border-bottom: 0; }
 .md-nota { margin: 8px 0 0; font-size: 10.5px; line-height: 1.4; color: var(--rx-muted); }
 .bm-selo { margin-left: auto; padding: 3px 10px; font-family: "Barlow", Arial, sans-serif; font-size: 10.5px; font-weight: 600; color: #8A5A00; background: #FFF4DC; border: 1px solid #F0D79A; border-radius: 999px; }
+/* custo real (planilha de orçamento cliente): mês a mês e por etapa lado a lado */
+.cr-duas { flex: none; display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px; align-items: start; }
+.cr-duas .md-box { flex: none; }
+.cr-tab td, .cr-tab th { font-size: 11px; padding: 4px 6px; }
 .md-bol td { font-size: 11.5px; padding: 4px 8px; }
 .md-bol tr.md-n1 td { font-weight: 700; background: #EEF1F6; }
 

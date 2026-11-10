@@ -458,9 +458,19 @@
       <div class="legend"><span><i class="sw sw-bplan"></i>Previsto no mês</span><span><i class="sw sw-breal"></i>Realizado no mês</span><span class="note">* mês do corte, parcial até ${dCurto(r.corte)}</span></div>
       <div class="chart" id="ch-mensal"></div>`, true);
 
-    const rf = Core.calcFinanceiro(o, r.corte);
+    const rf = Core.calcFinanceiro(o, r.corte), crO = Core.calcCustoReal(o);
+    // custo real (planilha de orçamento cliente): mesma fonte do report, vale para todos os perfis
+    const financeiro = crO ? sec('financeiro', 'Financeiro — previsto × realizado', `${pct(crO.pct, 1)} realizado`, `
+      <div class="kpis">
+        <div class="kpi"><span>Projeção total da obra</span><b>${moeda(crO.total)}</b><small>orçamento consolidado</small></div>
+        <div class="kpi"><span>Realizado acumulado</span><b>${moeda(crO.realizado)}</b><small>${pct(crO.pct, 1)} da projeção · até ${dBR(crO.corte)}</small></div>
+        <div class="kpi"><span>Previsto para a mesma data</span><b>${moeda(crO.previsto)}</b><small>${pct(crO.pctPrev, 1)} da projeção</small></div>
+        <div class="kpi"><span>Saldo a realizar</span><b>${moeda(crO.saldo)}</b><small>${pct(1 - crO.pct, 1)} da projeção</small></div>
+      </div><div class="rx-tok">${NOTA_CUSTO_REAL}</div>
+      <div class="legend"><span><i class="sw sw-real"></i>Realizado</span><span><i class="sw sw-prev"></i>Previsto</span><span class="note">% da projeção total · realizado até ${dBR(crO.corte)} (${crO.lancamentos} lançamentos)</span></div>
+      <div class="chart" id="ch-fin"></div>`)
     // cliente vê o financeiro nas mesmas condições do report (cadastro da obra → Valor agregado no report)
-    const financeiro = rf && (!ehCliente() || Core.vaNoReport(o, rf)) ? sec('financeiro', 'Financeiro — Valor Agregado', rf.spi !== null ? `SPI ${fmtNum(rf.spi, 2)}` : (rf.faturamento ? moeda(rf.faturamento.medido) : ''), `
+    : rf && (!ehCliente() || Core.vaNoReport(o, rf)) ? sec('financeiro', 'Financeiro — Valor Agregado', rf.spi !== null ? `SPI ${fmtNum(rf.spi, 2)}` : (rf.faturamento ? moeda(rf.faturamento.medido) : ''), `
       <div class="kpis">
         ${rf.faturamento ? `<div class="kpi"><span>Valor do contrato</span><b>${moeda(rf.faturamento.contratual)}</b><small>com aditivos</small></div>
         <div class="kpi"><span>Medido acumulado</span><b>${moeda(rf.faturamento.medido)}</b><small>${rf.faturamento.pctMedido !== null ? pct(rf.faturamento.pctMedido, 1) + ' do contrato · ' : ''}última medição ${esc(rf.faturamento.ultimaMedicao || '—')}</small></div>
@@ -984,6 +994,7 @@
     ['financeiro.curva', 'Curva S financeira (VA)', 'Prevision · .xls'],
     ['financeiro.mensal', 'Progresso mensal/semanal financeiro', 'Prevision · .xls'],
     ['financeiro.tarefas', 'Progresso por tarefas financeiro', 'Prevision · .xlsx'],
+    ['custoReal', 'Custo real (planilha de orçamento)', 'Machine · .xlsx com FÍS X FIN'],
   ];
   const TIPOS_CONTRATO = [['medicao', 'Controle de Medição', 'Machine · .xlsx']];
   const TIPOS = [...TIPOS_FISICO, ...TIPOS_FINANCEIRO, ...TIPOS_CONTRATO];
@@ -993,7 +1004,7 @@
     const imp = S.imp || { arquivos: [], dados: {}, avisos: {} };
     const modo = S.impModo || 'fisico';
     const val = k => k.includes('.') ? ((imp.dados[k.split('.')[0]] || {})[k.split('.')[1]]) : imp.dados[k];
-    const tiposMostrar = modo === 'financeiro' ? [...TIPOS_FINANCEIRO, ...TIPOS_CONTRATO] : [...TIPOS_FISICO, ...TIPOS_CONTRATO];
+    const tiposMostrar = modo === 'financeiro' ? [...TIPOS_FINANCEIRO, ...TIPOS_CONTRATO] : [...TIPOS_FISICO, ...TIPOS_CONTRATO, ...(imp.dados.custoReal ? TIPOS_FINANCEIRO.filter(t => t[0] === 'custoReal') : [])];
     return `
       <div><div class="kicker">Administração</div><h1 class="h1">Alimentar dados</h1>
       <p class="sub">Envie as exportações do Prevision (Curva S, Progresso mensal, Progresso por tarefas e Cronograma), o PDF dos diários de obra dos últimos 30 dias e, mensalmente, o Controle de Medição e a Curva S financeira (Valor Agregado). O painel reconhece cada arquivo, confere os números e grava a carga como rascunho.</p></div>
@@ -1033,6 +1044,7 @@
     if (k === 'tarefas' || k === 'financeiro.tarefas') return `${d.length} tarefas`;
     if (k === 'cronograma') return `${d.length} linhas`;
     if (k === 'rdos') return `${d.length} RDOs${S.imp && S.imp.dados.fotos ? ' · ' + S.imp.dados.fotos.length + ' fotos' : S.imp && S.imp.lendo ? ' · lendo as fotos…' : ''}`;
+    if (k === 'custoReal') return `${Core.moedaCurta(d.realizadoTotal)} até ${dBR(d.ultimaBaixa)}`;
     if (k === 'medicao') return `${d.resumo && d.resumo.totalContrato ? moeda(d.resumo.totalContrato) + ' · ' : ''}${d.boletins.length} ${d.boletins.length === 1 ? 'boletim' : 'boletins'}`;
     return '';
   }
@@ -1083,7 +1095,14 @@
           } catch (e) { reg.tipoNome = `RDOs (${rdos.length}); as fotos não puderam ser lidas (${e.message})`; }
         } else {
           const wb = Parsers.wbDe(window.XLSX, buf);
-          if (Parsers.ehMedicao(wb)) {
+          if (Parsers.ehCustoReal(wb)) {
+            // planilha de orçamento cliente (FÍS X FIN + LANÇ.FIN): dado financeiro, vale nos dois modos
+            S.imp.dados.custoReal = Parsers.parseCustoReal(window.XLSX, wb);
+            S.imp.nomes = { ...(S.imp.nomes || {}), custoReal: f.name };
+            reg.tipoNome = 'Custo real (planilha de orçamento)';
+            // lote só financeiro: a data de corte proposta é a da última baixa (com físicos, vale a do RDO/cronograma)
+            if (!S.imp.corte && S.imp.dados.custoReal.ultimaBaixa) S.imp.corte = S.imp.dados.custoReal.ultimaBaixa;
+          } else if (Parsers.ehMedicao(wb)) {
             S.imp.dados.medicao = Parsers.parseMedicaoContrato(window.XLSX, wb);
             S.imp.nomes = { ...(S.imp.nomes || {}), medicao: f.name };
             reg.tipoNome = 'Controle de Medição';
@@ -1186,10 +1205,17 @@
         'Uma aba de boletim por medição (M1, M2…), com Referência (EAP), Descrição, Contratada, Acumulado, Medida, % executado, Preço unitário e Medição.',
         'Layouts lidos: Controle Mensal (198), VISÃO GERAL (208) e SÉRIE DE MEDIÇÕES + RESUMO (207). Vale nos dois tipos de envio.'],
       usa: 'valor do contrato, medido e saldo no quadro financeiro e última medição' },
+    { k: 'custoReal', opcional: true, t: 'Custo real (planilha de orçamento)', de: 'Planilha Machine · REVISAO DE ORCAMENTO REVnn (Cliente) · .xlsx', quando: 'Toda semana, junto com os dados físicos', pasta: '2_Orçamento',
+      como: ['Atualizar a planilha antes de enviar: contas pagas em nome do cliente pela data da baixa na LANÇ.FIN (valor bruto, apropriação do Sienge) e a taxa de administração das medições já enviadas ao cliente (só a do mês corrente fica de fora).',
+        'Conferir na FÍS X FIN que as linhas de conferência dão OK: LANÇ.FIN, PLANILHA GERAL e curva com o mesmo total.',
+        'Enviar o arquivo salvo pelo Excel (o painel lê o valor gravado nas fórmulas). Vale nos dois tipos de envio.'],
+      cols: 'abas FÍS X FIN (custo mensal e acumulado previsto e realizado LB2, realizado por etapa) e LANÇ.FIN (data da baixa)',
+      usa: 'avanço financeiro real no dashboard e folhas financeiras do report (previsto × realizado em R$, mês a mês e por etapa), no lugar da Curva S financeira do Prevision' },
   ];
   const ROTINA = [
     ['Toda semana · dados físicos', ['RDOs do período aprovados na plataforma.', 'Avanço da semana lançado no Prevision.', 'Exportar no mesmo dia: Cronograma, Progresso por tarefas, Curva S e Progresso semanal.',
       'Exportar o PDF dos RDOs dos últimos 30 dias.', 'Alimentar → Dados físicos: enviar tudo de uma vez, sem nenhum × na conferência, com a data de corte do dia da exportação.',
+      'Obras com custo real (ex.: 207): atualizar a planilha de orçamento cliente com as contas pagas da semana e enviá-la no mesmo lote.',
       'Conferir a aba Obra, publicar para o cliente e baixar o report.']],
     ['Todo mês · dados financeiros', ['Fechar a medição no Controle de Medição: linha do mês, situação e aba do boletim.', 'Exportar a Curva S financeira (Financeiro VA).',
       'Alimentar → Dados financeiros: enviar a Curva S financeira e o Controle de Medição.', 'Conferir o quadro financeiro na aba Obra e publicar.']],
@@ -1251,7 +1277,7 @@
     const hojeIso = new Date().toISOString().slice(0, 10);
     const idade = (d, lim) => { if (!d) return '<span class="pill critico plain">sem carga</span>'; const n = diff(d, hojeIso); return `<span class="pill ${n > lim ? 'atencao' : 'ok'} plain">${dCurto(d)}</span>${n > lim ? `<small>${n} dias</small>` : ''}`; };
     const celDoc = (x, D) => { const it = x.d[D.k], s = nota(it);
-      if (!it) return D.k === 'mapas' ? '<span class="pill atencao plain">sem planta</span>' : '<span class="pill critico plain">não enviado</span>';
+      if (!it) return D.k === 'mapas' ? '<span class="pill atencao plain">sem planta</span>' : D.opcional ? '<span class="hint">não usa</span>' : '<span class="pill critico plain">não enviado</span>';
       return s === null ? '—' : `<span class="pill ${cls(s)} plain">${pct(s, 0)}</span>`; };
     const geral = obras.length ? `<div class="tw"><table class="t man-t"><thead><tr><th>Documento</th><th>Quando</th>${obras.map(x => `<th class="n">${nome(x)}</th>`).join('')}</tr></thead><tbody>
       ${DOCS.map((D, i) => { const ref = refDoc(D);
@@ -1483,7 +1509,7 @@
     dashAberta.forEach(f => { $$('.ds-sub', f).forEach(e => e.remove()); f.classList.remove('aberta'); });
     try {
       const base = DB.obras.find(x => x.id === S.obraId) || obrasDoUsuario()[0];
-      const o = visaoDaObra(base), r = calcObra(base), rf = Core.calcFinanceiro(o, r.corte);
+      const o = visaoDaObra(base), r = calcObra(base), rf = Core.calcCustoReal(o) || Core.calcFinanceiro(o, r.corte);
       const blob = await ReportPptx.gerar({ paper: $('#paper'), o, r, rf, progresso: (n, t) => { btn.textContent = `Gerando PowerPoint… ${n}/${t}`; } });
       const nome = `Report-Obra-${o.codigo}-${$('#paper').dataset.corte || new Date().toISOString().slice(0, 10)}.pptx`;
       if (dl) await dl.save({ filename: nome, data: blob });
@@ -1509,6 +1535,42 @@
       `<div class="rx-card ac-plan"><small>PV · previsto</small><b class="rx-card-v">${Core.moedaCurta(rf.pv)}</b><span class="rx-card-s">para a mesma data</span></div>`,
     ]).concat(spi ? [spi] : []);
     return `<div class="rx-cards${cards.length === 3 ? ' c3' : cards.length === 2 ? ' c2' : ''}">${cards.join('')}</div>`;
+  }
+  // ---------- Custo real (planilha de orçamento cliente): folhas financeiras do report ----------
+  // Quando a obra tem a planilha (Alimentar → Custo real), as folhas financeiras do report saem dela, no lugar do valor
+  // agregado do Prevision: cartões, Curva S financeira em % da projeção e, na folha seguinte, mês a mês e por etapa.
+  const NOTA_CUSTO_REAL = '<p class="rx-glos"><b>Realizado</b> = notas pagas em nome do cliente (faturamento direto, pela data do pagamento) + taxa de administração faturada · <b>Previsto</b> = cronograma de desembolso da projeção consolidada da obra</p>';
+  function cartoesCustoReal(cr) {
+    const mc = Core.moedaCurta;
+    return `<div class="rx-cards">
+      <div class="rx-card ac-base"><small>Projeção total da obra</small><b class="rx-card-v">${mc(cr.total)}</b><span class="rx-card-s">orçamento consolidado</span></div>
+      <div class="rx-card ac-real"><small>Realizado acumulado</small><b class="rx-card-v">${mc(cr.realizado)}</b><span class="rx-card-s">${pct(cr.pct, 1)} da projeção · até ${dCurto(cr.corte)}</span></div>
+      <div class="rx-card ac-plan"><small>Previsto para a mesma data</small><b class="rx-card-v">${mc(cr.previsto)}</b><span class="rx-card-s">${pct(cr.pctPrev, 1)} da projeção</span></div>
+      <div class="rx-card ac-base"><small>Saldo a realizar</small><b class="rx-card-v">${mc(cr.saldo)}</b><span class="rx-card-s">${pct(1 - cr.pct, 1)} da projeção</span></div></div>`;
+  }
+  function folhasCustoReal(cr, folha) {
+    const v2 = v => v === null || v === undefined ? '—' : 'R$ ' + fmtNum(v, 2);
+    const curva = `<section class="rx-s rx-box fx p-cresce"><h2><i class="rx-ic">${IC.search}</i>Curva S financeira<em>% da projeção total (${Core.moedaCurta(cr.total)}) · realizado até ${dCurto(cr.corte)}</em></h2>
+        <div class="legend rx-leg"><span><i class="sw sw-real"></i>Realizado</span><span><i class="sw sw-prev"></i>Previsto</span>${cr.parcial ? `<span class="note">${Core.mesCurto(cr.corte)} parcial até ${dCurto(cr.corte)}</span>` : ''}</div>
+        <div class="chart" id="ch-fin-r" data-fill></div></section>`;
+    const f1 = folha('Financeiro (previsto x realizado)', cartoesCustoReal(cr) + NOTA_CUSTO_REAL + curva, 'fl-valor');
+    const mesC = cr.corte.slice(0, 7);
+    const linhasMes = cr.meses.map(m => { const futuro = m.realizadoAcum === null || m.realizadoAcum === undefined;
+      return `<tr><td>${Core.mesCurto(m.mes + '-01')}${m.mes === mesC && cr.parcial ? '*' : ''}</td><td class="n">${v2(m.previsto)}</td><td class="n">${futuro ? '' : v2(m.realizado)}</td>
+        <td class="n">${v2(m.previstoAcum)}</td><td class="n">${futuro ? '' : v2(m.realizadoAcum)}</td><td class="n">${futuro || !m.previstoAcum ? '' : pct(m.realizadoAcum / m.previstoAcum, 1)}</td></tr>`; }).join('');
+    const somaPrev = cr.meses.reduce((s, m) => s + (m.previsto || 0), 0);
+    const tabMes = `<section class="rx-s rx-box md-box"><h2>Mês a mês</h2><table class="md-tab cr-tab"><thead><tr><th>Mês</th><th class="n">Previsto</th><th class="n">Realizado</th><th class="n">Previsto acum.</th><th class="n">Realizado acum.</th><th class="n">Real. ÷ prev.</th></tr></thead>
+        <tbody>${linhasMes}</tbody><tfoot><tr><td>Total</td><td class="n">${v2(somaPrev)}</td><td class="n">${v2(cr.realizado)}</td><td class="n"></td><td class="n"></td><td class="n"></td></tr></tfoot></table>
+        ${cr.parcial ? `<p class="md-nota">* ${Core.mesLongo(cr.corte)}: realizado parcial, até ${dBR(cr.corte)}.</p>` : ''}</section>`;
+    const somaEt = k => cr.etapas.reduce((s, e) => s + (e[k] || 0), 0);
+    const tabEt = `<section class="rx-s rx-box md-box"><h2>Por etapa</h2><table class="md-tab cr-tab"><thead><tr><th>Etapa</th><th class="n">Projeção</th><th class="n">Realizado</th><th class="n">% realizado</th></tr></thead>
+        <tbody>${cr.etapas.map(e => `<tr><td>${esc(e.nome)}</td><td class="n">${v2(e.projecao)}</td><td class="n">${v2(e.realizado)}</td><td class="n">${e.projecao > 0 ? pct(e.realizado / e.projecao, 1) : '—'}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td>Total</td><td class="n">${v2(somaEt('projecao'))}</td><td class="n">${v2(somaEt('realizado'))}</td><td class="n">${somaEt('projecao') > 0 ? pct(somaEt('realizado') / somaEt('projecao'), 1) : '—'}</td></tr></tfoot></table></section>`;
+    const barras = `<section class="rx-s rx-box fx p-cresce"><h2><i class="rx-ic">${IC.search}</i>Desembolso mensal<em>R$ milhões · previsto × realizado</em></h2>
+        <div class="legend rx-leg"><span><i class="sw sw-bplan"></i>Previsto no mês</span><span><i class="sw sw-breal"></i>Realizado no mês</span>${cr.parcial ? `<span class="note">${Core.mesCurto(cr.corte)} parcial até ${dCurto(cr.corte)}</span>` : ''}</div>
+        <div class="chart" id="ch-cr-mes" data-fill></div></section>`;
+    const f2 = folha('Financeiro — mês a mês e por etapa', `<div class="cr-duas">${tabMes}${tabEt}</div>${barras}`, 'fl-medicao fl-custo', 'custo real');
+    return f1 + f2;
   }
   // a Curva S financeira do Prevision nem sempre está na base do contrato (207: orçamento da obra × contrato Machine)
   const notaEscalaVA = rf => rf.escala === 'orcamento' ? `% do orçamento no Prevision (${Core.moedaCurta(rf.totalCurva)}), não do contrato` : '% do valor do contrato';
@@ -1749,9 +1811,10 @@
           <div class="chart" id="ch-combo-r" data-fill></div></section>
       <div class="rx-tri">${tri.map(([t, v, k]) => `<div class="rx-tri-i ${k}"><span>${t}</span><b>${pct(v, 2)}</b><i><em style="width:${lim01(v)}%"></em></i></div>`).join('')}</div>`;
 
-    // ----- Valor agregado -----
-    const rf = Core.calcFinanceiro(o, r.corte);
-    const valor = Core.vaNoReport(o, rf) ? `${cartoesVA(rf, o)}${rf.spi !== null ? GLOSSARIO_VA : ''}
+    // ----- Valor agregado (ou custo real, quando a obra tem a planilha de orçamento cliente) -----
+    const rf = Core.calcFinanceiro(o, r.corte), cr = Core.calcCustoReal(o);
+    const folhasFin = cr ? folhasCustoReal(cr, folha) : '';
+    const valor = cr ? '' : Core.vaNoReport(o, rf) ? `${cartoesVA(rf, o)}${rf.spi !== null ? GLOSSARIO_VA : ''}
       ${rf.pts ? `<section class="rx-s rx-box fx p-cresce"><h2><i class="rx-ic">${IC.search}</i>Curva S financeira<em>${notaEscalaVA(rf)}</em></h2>
         <div class="legend rx-leg"><span><i class="sw sw-real"></i>Realizado (EV)</span><span><i class="sw sw-prev"></i>Planejado (PV)</span><span><i class="sw sw-base"></i>Base</span>${rf.cpi !== null ? `<span class="note">CPI ${fmtNum(rf.cpi, 2)}</span>` : ''}</div>
         <div class="chart" id="ch-fin-r" data-fill></div></section>` : ''}` : '';
@@ -1795,7 +1858,7 @@
         ${folhaDash}
         ${folha('Físico (previsto x realizado)', visao, 'fl-visao fl-fisico')}
         ${fotos}
-        ${valor ? folha('Valor agregado', valor, 'fl-valor') : ''}
+        ${folhasFin}${valor ? folha('Valor agregado', valor, 'fl-valor') : ''}
         ${folhasMedicao(o, folha)}
       </div>`;
   }
@@ -1809,14 +1872,15 @@
     const P = r.prazo, F = Core.FAIXAS, n2 = v => v === null || v === undefined || isNaN(v) ? '—' : fmtNum(v * 100, 2);
     // farol pelo índice como ele aparece (2 casas), a mesma regra do Core.semaforo
     const farol = v => { if (v === null || v === undefined || isNaN(v)) return 'neutro'; v = Math.round(v * 100) / 100; return v >= F.ok ? 'ok' : v >= F.atencao ? 'atencao' : 'critico'; };
-    const rf = Core.calcFinanceiro(o, r.corte), comVA = Core.vaNoReport(o, rf);
+    const rf = Core.calcFinanceiro(o, r.corte), comVA = Core.vaNoReport(o, rf), cr = Core.calcCustoReal(o);
     // IDC: só o da Gestão de Custos do Prevision (gravado pela sincronização em obra.indicesPrevision)
     const IP = o.indicesPrevision, idp = r.farolTempo ? r.prazoGanho.idpT : r.idp, cpi = IP && IP.idc ? IP.idc : null;
     const varFim = P.contrFim && P.fimCron ? diff(P.contrFim, P.fimCron) : (r.crono && r.crono.slip !== undefined ? r.crono.slip : null);
     const card = (cls, rot, val, sub) => `<div class="ds-card ${cls}"><small>${rot}</small><b>${val}</b><span>${sub}</span></div>`;
     const cards = `<div class="ds-cards">
         ${card('ac-fis', 'Avanço físico (acum.)', `${n2(r.real)}%`, `Base: ${n2(r.baseCorte)}%`)}
-        ${card('ac-fis', 'Avanço financeiro (acum.)', comVA && rf.evFrac !== null ? `${n2(rf.evFrac)}%` : '—', comVA && rf.baseFrac !== null ? `Base: ${n2(rf.baseFrac)}%` : 'sem Curva S financeira no report')}
+        ${cr ? card('ac-fis', 'Avanço financeiro (acum.)', `${n2(cr.pct)}%`, `Previsto: ${n2(cr.pctPrev)}% · custo real até ${dCurto(cr.corte)}`)
+          : card('ac-fis', 'Avanço financeiro (acum.)', comVA && rf.evFrac !== null ? `${n2(rf.evFrac)}%` : '—', comVA && rf.baseFrac !== null ? `Base: ${n2(rf.baseFrac)}%` : 'sem Curva S financeira no report')}
         <div class="ds-ind">
           <div class="ds-ind-g">${card(`ac-${farol(idp)}`, `IDP<em> · Índice de Prazo</em>`, idp ? fmtNum(idp, 2) : '—', 'Meta: 1,00')}
             ${card(`ac-${farol(cpi)}`, `IDC<em> · Índice de Custo</em>`, cpi ? fmtNum(cpi, 2) : '—', cpi ? 'Meta: 1,00' : 'sem IDC no Prevision')}</div>
@@ -2099,14 +2163,16 @@
     const el2 = $('#ch-mensal'); if (el2 && el2.closest('details').open) Core.chartMensal(el2, o, r);
     const el3 = $('#ch-efetivo'); if (el3 && r.campo && el3.closest('details').open) Core.chartEfetivo(el3, r.campo);
     const elT = $('#ch-tend'); if (elT && elT.closest('details').open) Core.chartTendencia(elT, r.tendencia);
-    const rf = Core.calcFinanceiro(o, r.corte);
-    const rFin = rf && rf.pts ? { pts: rf.pts, corte: r.corte, real: rf.evFrac, prevCorte: rf.pvFrac, baseCorte: rf.baseFrac, desvio: (rf.evFrac || 0) - (rf.pvFrac || 0) } : null;
-    const el5 = $('#ch-fin'); if (el5 && rFin && el5.closest('details').open) Core.chartCurvaS(el5, o, rFin);
+    const rf = Core.calcFinanceiro(o, r.corte), cr = Core.calcCustoReal(o);
+    // custo real (planilha de orçamento cliente) já vem no formato da curva; senão, a Curva S financeira do Prevision
+    const rFin = cr || (rf && rf.pts ? { pts: rf.pts, corte: r.corte, real: rf.evFrac, prevCorte: rf.pvFrac, baseCorte: rf.baseFrac, desvio: (rf.evFrac || 0) - (rf.pvFrac || 0) } : null);
+    const el5 = $('#ch-fin'); if (el5 && rFin && el5.closest('details').open) Core.chartCurvaS(el5, o, rFin, cr ? { rotulos: true } : {});
     // report: os gráficos são desenhados na montagem das folhas, já na altura que sobrou no quadro
     if (S.view !== 'report') return;
     const el4 = $('#ch-combo-r'), el6 = $('#ch-fin-r'), graf = {};
     if (el4) graf['ch-combo-r'] = h => Core.chartCombo(el4, o, r, { altura: h });
     if (el6 && rFin) graf['ch-fin-r'] = h => Core.chartCurvaS(el6, o, rFin, { altura: h });
+    const el7 = $('#ch-cr-mes'); if (el7 && cr) graf['ch-cr-mes'] = h => Core.chartCustoMensal(el7, cr, { altura: h });
     montaFolhas(graf); ajustaZoomFolhas();
   }
 

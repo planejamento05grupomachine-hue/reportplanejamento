@@ -1,5 +1,19 @@
 # Notas de versão — Painel de Obras Machine
 
+## 2026-11-10d · Custo real pela planilha de orçamento (obra 207)
+
+O avanço financeiro real de obra administrada passa a vir da **planilha de orçamento cliente da Machine**
+("REVISAO DE ORCAMENTO REVnn (Cliente)", abas FÍS X FIN e LANÇ.FIN), no lugar da Curva S financeira do Prevision.
+
+- Novo documento em Alimentar: **Custo real (planilha de orçamento)**. O painel reconhece a planilha pelas abas, lê
+  previsto e realizado mês a mês (LB2), o realizado por etapa e a data da última baixa, e confere se as etapas somam o
+  mesmo que a curva. Vale nos dois tipos de envio; lote só financeiro propõe a última baixa como data de corte.
+- Report: com a planilha, as folhas de valor agregado dão lugar a **Financeiro (previsto x realizado)** (cartões e
+  Curva S financeira em % da projeção) e **Financeiro — mês a mês e por etapa** (tabelas e desembolso mensal em R$).
+  O PowerPoint sai com os dois gráficos nativos.
+- Dashboard: o cartão "Avanço financeiro (acum.)" usa o custo real, com o previsto para a mesma data.
+- Aba Obra: quadro "Financeiro — previsto × realizado".
+- Manual de alimentação: documento novo e passo na rotina semanal. Obras sem a planilha não mudam.
 ## 2026-11-10c · Report coerente com as ferramentas
 
 Revisão completa feita com Sienge, Prevision, Diário de Obra e o próprio painel. A régua do avanço da obra é sempre a
