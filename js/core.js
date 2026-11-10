@@ -57,7 +57,9 @@
   // Situação de prazo (gestão de projetos: índice de desempenho de prazo, IDP = realizado ÷ planejado).
   // Simétrica: a obra pode estar adiantada, em dia, em atenção ou atrasada. Faixas configuráveis por obra.
   function semaforo(idp, faixas = FAIXAS) {
-    if (idp === null || isNaN(idp)) return { k: 'neutro', t: 'Sem dados', e: 'sem-dados' };
+    if (idp === null || idp === undefined || isNaN(idp)) return { k: 'neutro', t: 'Sem dados', e: 'sem-dados' };
+    // compara o índice como ele é mostrado (2 casas): 0,845 aparece "0,85" e não pode acender o vermelho de "< 0,85"
+    idp = Math.round(idp * 100) / 100;
     if (idp >= (faixas.adiantada || 1.05)) return { k: 'ok', t: 'Adiantada', e: 'adiantada' };
     if (idp >= faixas.ok) return { k: 'ok', t: 'Em dia', e: 'em-dia' };
     if (idp >= faixas.atencao) return { k: 'atencao', t: 'Atenção', e: 'atencao' };
@@ -683,10 +685,13 @@
     return '';
   }
   // Atraso em dias em linguagem comum: "23 dias de atraso" · "5 dias adiantada" · "no prazo"
-  function textoAtraso(g) {
+  // sem (opcional): com o farol verde, alguns dias atrás do plano não são "atraso" (seria "Em dia" e "4 dias de atraso"
+  // lado a lado): o texto diz que está na tolerância.
+  function textoAtraso(g, sem) {
     if (!g) return '—';
     const n = Math.abs(g.atraso);
     if (n < 1) return 'no prazo';
+    if (g.atraso > 0 && sem && sem.k === 'ok') return `${n} ${n === 1 ? 'dia' : 'dias'}, na tolerância`;
     return g.atraso > 0 ? `${n} ${n === 1 ? 'dia' : 'dias'} de atraso` : `${n} ${n === 1 ? 'dia' : 'dias'} adiantada`;
   }
 

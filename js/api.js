@@ -164,11 +164,20 @@
       try { if (!refAtual) refAtual = await GH.head(); return await GH.ler(caminho, refAtual); }
       catch (e) { if (e.codigo !== 'TOKEN') throw e; /* token ruim: cai para o site */ }
     }
-    const r = await fetch(caminho + '?t=' + Date.now(), { cache: 'no-store' });
+    // o GitHub Pages devolve 5xx passageiro de vez em quando: tenta de novo (3 vezes, com espera) antes de desistir
+    let r = null;
+    for (let t = 0; t < 3; t++) {
+      try { r = await fetch(caminho + '?t=' + Date.now(), { cache: 'no-store' }); } catch (e) { r = null; }
+      if (r && r.status < 500) break;
+      if (t < 2) await new Promise(ok => setTimeout(ok, 600 * (t + 1)));
+    }
+    if (!r) throw erro(`Não consegui ler ${caminho} (sem conexão).`);
     if (r.status === 404) return null;
     if (!r.ok) throw erro(`Não consegui ler ${caminho} (${r.status}).`);
     return r.arrayBuffer();
   }
+  // arquivo opcional (restrições): falha de leitura não impede a entrada no painel
+  async function lerOpcional(fn) { try { return await fn(); } catch (e) { console.warn(e && e.message); return null; } }
   async function lerJSON(caminho) { const b = await ler(caminho); return b ? JSON.parse(td.decode(b)) : null; }
   async function lerCifrado(caminho, chave) { const b = await ler(caminho); return b ? desempacotarJSON(await decifrar(chave, b)) : null; }
   async function lerFotos(caminho, chave) { const b = await ler(caminho); return b ? desempacotarFotos(await decifrar(chave, b)) : null; }
@@ -296,7 +305,7 @@
     const k = CH.obras[id]; if (!k) return;
     const pub = await lerCifrado(P.obra(id), chave(k));
     const ras = ehInterno() ? await lerCifrado(P.ras(id), chave(CH.ki)) : null;
-    const res = ehInterno() ? await lerCifrado(P.res(id), chave(CH.ki)) : null;
+    const res = ehInterno() ? await lerOpcional(() => lerCifrado(P.res(id), chave(CH.ki))) : null;
     const antes = OB[id];
     OB[id] = { pub, ras, res, fotos: { pub: null, ras: null } };
     if (antes) revogarUrls(antes);

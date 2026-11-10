@@ -286,7 +286,8 @@
   // ---------- portfólio ----------
   // Matriz executiva: uma coluna por obra (faixa na cor da obra) e as mesmas linhas para todas — prazo, avanço geral,
   // planejado × realizado na data, situação e pontos de atenção. Em telas estreitas cada obra vira um cartão.
-  const COR_OBRA = ['#154CB0', '#1E9BD7', '#4E9A3F', '#E07A2F', '#6E56C2', '#C2416B'];
+  // cor de identificação de cada obra no Portfólio: tons da marca (azul Machine, navy e variações), sem arco-íris
+  const COR_OBRA = ['#154CB0', '#0A2463', '#3D6FCC', '#1D3A66', '#6A8BC4', '#2B4F8F'];
   const ICP = {
     prazo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
     avanco: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5A8.5 8.5 0 0 1 20.5 12H12Z" fill="currentColor" stroke="none"/></svg>',
@@ -323,6 +324,9 @@
     const interno = !ehCliente();
     const indRes = o => Core.indicadoresRestricoes(o.restricoes || [], hojeP);
     const resVencidas = interno ? obras.reduce((s, x) => s + vencidasDe(x.o), 0) : 0;
+    // a linha de restrições só aparece quando o mapa de restrições está em uso (uma linha de zeros não informa nada)
+    const comRes = interno && obras.some(x => (x.o.restricoes || []).length);
+    const emDia = obras.filter(x => x.r.sem.k === 'ok').length;
     const coluna = ({ o, r, cor }) => {
       const P = r.prazo, slip = r.crono && r.crono.slip, cp = Core.comparaPlano(r.desvio);
       const corDesvio = r.sem.k === 'critico' ? 'neg' : r.desvio >= Core.TOLERANCIA ? 'pos' : '';
@@ -333,14 +337,14 @@
         <div class="pf-cel"><h4>Avanço físico</h4><div class="pf-av"><p><b>${pct(r.real)}</b><span>realizado · planejado ${pct(r.prevCorte)}</span></p>
           <div class="pf-bul" role="img" aria-label="Realizado ${pct(r.real)}, planejado ${pct(r.prevCorte)}"><i style="width:${Math.min(100, r.real * 100)}%"></i><em style="left:${Math.min(100, r.prevCorte * 100)}%"></em></div>
           <div class="pf-bul-l"><span>0%</span><span>100%</span></div></div></div>
-        ${interno ? (() => { const I = indRes(o); return `<div class="pf-cel"><h4>Restrições</h4><div class="pf-sit">
+        ${comRes ? (() => { const I = indRes(o); return `<div class="pf-cel"><h4>Restrições</h4><div class="pf-sit">
           <div><span>Vencidas</span><b class="${I.vencidas ? 'neg' : ''}">${I.vencidas}</b></div>
           <div><span>Abertas · vencem em 7 dias</span><b>${I.abertas} · ${I.vencem7}</b></div>
           <div><span>IRR · 4 semanas</span><b class="${I.irr4 === null ? '' : I.irr4 >= I.meta ? 'pos' : 'neg'}">${I.irr4 === null ? '—' : pct(I.irr4, 0)}</b></div>
           <button class="pf-res" data-obrares="${esc(o.id)}">Abrir restrições ${IC.right}</button></div></div>`; })() : ''}
         <div class="pf-cel"><h4>Situação</h4><div class="pf-sit">
           <div>${pill(r.sem.k, r.sem.t)}<b>${indicePrazo(r)}</b></div>
-          ${r.prazoGanho ? `<div><span>Prazo</span><b class="${clsAtraso(r)}">${Core.textoAtraso(r.prazoGanho)}</b></div>` : ''}
+          ${r.prazoGanho ? `<div><span>Prazo</span><b class="${clsAtraso(r)}">${Core.textoAtraso(r.prazoGanho, r.sem)}</b></div>` : ''}
           <div><span>Comparado ao plano</span><b class="${corDesvio}">${cp.dir === 0 ? 'em linha' : pp(r.desvio)}</b></div>
           <div><span>Término do cronograma</span><b class="${slip > 0 ? 'neg' : slip < 0 ? 'pos' : ''}">${dCurto(P.fimCron)}${slip ? ` (${slip > 0 ? '+' : ''}${slip} d)` : ''}</b></div></div></div>
         <div class="pf-cel"><h4>Pontos de atenção</h4><div class="pf-iss">${atencao(r).map(([t, n]) => `<div class="${n ? '' : 'z'}"><span>${t}</span><i style="width:${n ? Math.max(4, n / maxAt * 100) : 4}%"></i><b>${n}</b></div>`).join('')}</div></div>
@@ -350,13 +354,13 @@
     return `${cabecalho}<p class="sub">Posição física das obras até ${dBR(corte)}.</p></div>
       <div class="kpi-strip">
         <div class="kpi-t neutro"><span>Obras ativas</span><b>${obras.length}</b><small>com cronograma carregado</small></div>
-        ${interno ? `<div class="kpi-t ${resVencidas ? 'crit' : 'ok'}"><span>Restrições vencidas</span><b class="${resVencidas ? 'crit' : ''}">${resVencidas}</b><small>em todas as obras</small></div>` : `<div class="kpi-t"><span>Avanço médio</span><b>${pct(realMed)}</b><small>previsto ${pct(prevMed)} na data</small></div>`}
+        ${comRes ? `<div class="kpi-t ${resVencidas ? 'crit' : 'ok'}"><span>Restrições vencidas</span><b class="${resVencidas ? 'crit' : ''}">${resVencidas}</b><small>em todas as obras</small></div>` : `<div class="kpi-t ok"><span>Obras em dia</span><b>${emDia}</b><small>índice de prazo a partir de ${fmtNum(Core.FAIXAS.ok, 2)}</small></div>`}
         <div class="kpi-t ${atrasadas ? 'crit' : 'ok'}"><span>Obras atrasadas</span><b class="${atrasadas ? 'crit' : ''}">${atrasadas}</b><small>índice de prazo abaixo de ${fmtNum(Core.FAIXAS.atencao, 2)}</small></div>
         <div class="kpi-t ${tarefasAtr ? 'crit' : 'ok'}"><span>Tarefas atrasadas</span><b>${tarefasAtr}</b><small>em todas as obras</small></div>
         <div class="kpi-t ${paralis ? 'crit' : 'ok'}"><span>Frentes paralisadas</span><b class="${paralis ? 'crit' : ''}">${paralis}</b><small>no último RDO de cada obra</small></div>
       </div>
-      <section class="pf" style="--n:${obras.length};--l:${interno ? 7 : 6}" aria-label="Obras">
-        <div class="pf-lab" aria-hidden="true"><div>${esc(Core.mesLongo(corte))}</div><div>${ICP.prazo}Prazo</div><div>${ICP.avanco}Avanço físico</div>${interno ? `<div>${IC.rlist}Restrições</div>` : ''}<div>${ICP.sit}Situação</div><div>${IC.alert}Pontos de atenção</div><div class="pf-vazio"></div></div>
+      <section class="pf" style="--n:${obras.length};--l:${comRes ? 7 : 6}" aria-label="Obras">
+        <div class="pf-lab" aria-hidden="true"><div>${esc(Core.mesLongo(corte))}</div><div>${ICP.prazo}Prazo</div><div>${ICP.avanco}Avanço físico</div>${comRes ? `<div>${IC.rlist}Restrições</div>` : ''}<div>${ICP.sit}Situação</div><div>${IC.alert}Pontos de atenção</div><div class="pf-vazio"></div></div>
         ${obras.map(coluna).join('')}
       </section>
       ${vazias.length || ehAdmin() ? `<div class="obras-sem">
@@ -417,7 +421,7 @@
           <div style="display:grid;gap:18px;align-content:start">
             <div class="kpis">
               <div class="kpi"><span>Comparado ao plano</span><b class="${r.sem.k === 'critico' ? 'crit' : r.sem.k === 'atencao' ? 'warn' : r.desvio >= Core.TOLERANCIA ? 'ok' : ''}">${Core.comparaPlano(r.desvio).dir === 0 ? 'Em linha' : pp(r.desvio)}</b><small>planejado ${pct(r.prevCorte)} na data</small></div>
-              ${r.prazoGanho ? `<div class="kpi"><span>Prazo</span><b class="${clsAtraso(r).replace('neg', 'crit').replace('pos', 'ok')}">${Core.textoAtraso(r.prazoGanho)}</b><small>${r.farolTempo ? `IDP(t) ${fmtNum(r.prazoGanho.idpT, 2)} · IDP em % ${fmtNum(r.idp, 2)}` : `IDP ${fmtNum(r.idp, 2)} · ${r.prazoGanho.confiavel ? 'farol pelo IDP em % (cadastro da obra)' : 'início da obra, índice em tempo ainda instável'}`}</small></div>`
+              ${r.prazoGanho ? `<div class="kpi"><span>Prazo</span><b class="${clsAtraso(r).replace('neg', 'crit').replace('pos', 'ok')}">${Core.textoAtraso(r.prazoGanho, r.sem)}</b><small>${r.farolTempo ? `IDP(t) ${fmtNum(r.prazoGanho.idpT, 2)} · IDP em % ${fmtNum(r.idp, 2)}` : `IDP ${fmtNum(r.idp, 2)} · ${r.prazoGanho.confiavel ? 'farol pelo IDP em % (cadastro da obra)' : 'início da obra, índice em tempo ainda instável'}`}</small></div>`
                 : r.inicioObra ? `<div class="kpi"><span>Prazo</span><b>—</b><small>início da obra · farol a partir de 2% previsto</small></div>` : `<div class="kpi"><span>IDP</span><b>${fmtNum(r.idp, 2)}</b><small>realizado ÷ previsto</small></div>`}
               <div class="kpi"><span>Ritmo atual</span><b>${pct(r.ritmo)}</b><small>média/mês · últimos 3 meses</small></div>
               ${(() => { const dias = diff(r.corte, P.fimCron);
@@ -1716,9 +1720,11 @@
 
     // ----- Capa (padrão único para todas as obras) -----
     // Fixo por obra (cadastro): nome no report, cliente, local, revisão e a logo do cliente (quando houver).
-    // Muda todo mês: só o mês/ano de referência (escolhido na tela do report; sem escolha, o mês da data de corte).
+    // Muda todo mês: só o mês/ano de referência. Sem escolha na tela do report, é automático: o report mensal fecha o mês
+    // anterior, então um corte até o dia 15 (ex.: 06/11) é o report de outubro; depois do dia 15, o mês do próprio corte.
     const capa = o.capa || {}, nomeCapa = capa.titulo || o.nome;
-    const mr = o.mesReferencia, mesRefIso = mr && /^\d{4}-\d{2}$/.test(mr.mes || '') && mr.corte === o.dataCorte ? mr.mes : r.corte.slice(0, 7);
+    const mesAuto = (() => { const [y, m, d] = r.corte.split('-').map(Number); if (d > 15) return r.corte.slice(0, 7); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; })();
+    const mr = o.mesReferencia, mesRefIso = mr && /^\d{4}-\d{2}$/.test(mr.mes || '') && mr.corte === o.dataCorte ? mr.mes : mesAuto;
     const mesRef = Core.mesLongo(mesRefIso).replace(/^./, c => c.toUpperCase());
     // Capa em grade editorial, tudo alinhado à mesma margem esquerda: logos no topo (Machine à esquerda, cliente à
     // direita, na mesma altura), o título da obra no centro da folha e a ficha (obra, cliente, local, referência,
@@ -1801,7 +1807,8 @@
   const DASH_LINHAS = 15;
   function dashboardStatus(o, r, capa, cab, pe) {
     const P = r.prazo, F = Core.FAIXAS, n2 = v => v === null || v === undefined || isNaN(v) ? '—' : fmtNum(v * 100, 2);
-    const farol = v => v === null || v === undefined ? 'neutro' : v >= F.ok ? 'ok' : v >= F.atencao ? 'atencao' : 'critico';
+    // farol pelo índice como ele aparece (2 casas), a mesma regra do Core.semaforo
+    const farol = v => { if (v === null || v === undefined || isNaN(v)) return 'neutro'; v = Math.round(v * 100) / 100; return v >= F.ok ? 'ok' : v >= F.atencao ? 'atencao' : 'critico'; };
     const rf = Core.calcFinanceiro(o, r.corte), comVA = Core.vaNoReport(o, rf);
     // IDC: só o da Gestão de Custos do Prevision (gravado pela sincronização em obra.indicesPrevision)
     const IP = o.indicesPrevision, idp = r.farolTempo ? r.prazoGanho.idpT : r.idp, cpi = IP && IP.idc ? IP.idc : null;
@@ -1815,13 +1822,16 @@
             ${card(`ac-${farol(cpi)}`, `IDC<em> · Índice de Custo</em>`, cpi ? fmtNum(cpi, 2) : '—', cpi ? 'Meta: 1,00' : 'sem IDC no Prevision')}</div>
           <div class="ds-leg"><span><i class="ok"></i>≥ ${fmtNum(F.ok, 2)}</span><span><i class="atencao"></i>${fmtNum(F.atencao, 2)} ≤ índice &lt; ${fmtNum(F.ok, 2)}</span><span><i class="critico"></i>&lt; ${fmtNum(F.atencao, 2)}</span></div>
         </div>
-        ${card(`ac-${varFim === null ? 'neutro' : varFim > 0 ? 'critico' : 'escuro'}`, 'Variação término', varFim === null ? '—' : `${varFim > 0 ? '+' : ''}${varFim} ${Math.abs(varFim) === 1 ? 'dia' : 'dias'}`, 'Meta: 0 dias')}
+        ${card(`ac-${varFim === null ? 'neutro' : varFim > 0 ? 'critico' : 'escuro'}`, 'Variação do término<em> · cronograma × contrato</em>', varFim === null ? '—' : `${varFim > 0 ? '+' : ''}${varFim} ${Math.abs(varFim) === 1 ? 'dia' : 'dias'}`, r.prazoGanho ? `Hoje: ${Core.textoAtraso(r.prazoGanho, r.sem)}` : 'Meta: 0 dias')}
       </div>`;
     const decor = P.total ? Math.max(0, Math.min(1, P.decorrido / P.total)) : null;
+    // data da última medição física lançada no Prevision (o corte é a data da exportação; quando a obra não mediu desde a
+    // semana anterior, o report diz de quando é o avanço)
+    const ultMed = [...(o.curva || [])].reverse().find(p => p.data <= r.corte && (p.realizado || 0) > 0)?.data || null;
     const prazo = `<div class="ds-prazo">
         <div class="ds-pz-l"><div class="ds-pz-d"><span>Início contratual<b>${dBR(P.contrIni)}</b></span><span class="dir">Término contratual<b>${dBR(P.contrFim)}</b></span></div>
           ${decor === null ? '' : `<div class="ds-pz-bar"><i style="width:${(decor * 100).toFixed(1)}%"></i><em style="left:${(decor * 100).toFixed(1)}%">${fmtNum(decor * 100, 0)}%</em></div>`}</div>
-        <dl class="ds-pz-r"><dt>Prazo total</dt><dd>${P.total ? `${P.total} dias` : '—'}</dd><dt>A vencer</dt><dd>${P.aVencer !== null && P.aVencer !== undefined ? `${Math.max(0, P.aVencer)} dias` : '—'}</dd></dl>
+        <dl class="ds-pz-r"><dt>Prazo total</dt><dd>${P.total ? `${P.total} dias` : '—'}</dd>${P.aVencer !== null && P.aVencer !== undefined && P.aVencer < 0 ? `<dt>Vencido há</dt><dd class="neg">${-P.aVencer} dias</dd>` : `<dt>A vencer</dt><dd>${P.aVencer !== null && P.aVencer !== undefined ? `${P.aVencer} dias` : '—'}</dd>`}${ultMed && ultMed < r.corte ? `<dt>Última medição física</dt><dd>${dBR(ultMed)}</dd>` : ''}</dl>
       </div>`;
     // tabela: a EAP da própria obra — raiz e linhas de nível 2 do cronograma do Prevision, na ordem e com os nomes da EAP,
     // com Base, Previsto e Realizado de cada linha. Sem cronograma, o Progresso por tarefas (nível 2), também na ordem da EAP.
@@ -1837,7 +1847,11 @@
     const filhosDe = x => nos.filter(y => y.nivel === x.nivel + 1 && String(y.eap).startsWith(x.eap + '.'));
     const linhas = [];
     const poe = x => { const f = filhosDe(x), ab = f.length > 0 && !!S.abertos['d' + x.eap]; linhas.push({ ...x, temFilhos: f.length > 0, aberto: ab }); if (ab) f.forEach(poe); };
-    nos.filter(x => x.nivel === 2).forEach(poe);
+    // marcos (liberações do cliente, entregas) e aditivos condicionados não são frentes de execução: vão num bloco à parte,
+    // no fim da tabela, sem as setas de desvio (um marco "100% previsto e 0% feito" não é atraso de produção)
+    const ehMarco = x => /^\s*(marcos?\b|aditivos?\b|taxa de administra)/i.test(x.nome || '');
+    nos.filter(x => x.nivel === 2 && !ehMarco(x)).forEach(poe);
+    const marcos = nos.filter(x => x.nivel === 2 && ehMarco(x));
     const densa = nos.filter(x => x.nivel === 2).length > DASH_LINHAS, algumAberto = linhas.some(x => x.nivel > 2);
     const barra = v => v === null || v === undefined ? '<td class="n">—</td>' : `<td class="n"><i style="width:${Math.max(0, Math.min(100, v * 100)).toFixed(1)}%"></i><span>${n2(v)}</span></td>`;
     const delta = (a, b) => { if (a === null || b === null || a === undefined || b === undefined) return '<td class="d">—</td>';
@@ -1846,11 +1860,15 @@
     const nomeLinha = x => x.nivel === undefined ? esc(x.nome)
       : `<span class="ds-nm" style="padding-left:${(x.nivel - 2) * 16}px">${x.temFilhos ? `<button class="ds-tg" data-abre="d${esc(x.eap)}" aria-expanded="${x.aberto}" aria-label="${x.aberto ? 'Recolher' : 'Abrir'} ${esc(x.nome)}">${IC.right}</button>` : '<i class="ds-tg-sp"></i>'}<span>${esc(x.nome)}</span></span>`;
     const lin = (x, cls = '') => `<tr class="${cls}${x.nivel > 2 ? ` ds-sub n${Math.min(x.nivel, 6)}` : ''}"><td class="nm">${nomeLinha(x)}</td>${barra(x.base)}${barra(x.prev)}${barra(x.real)}${delta(x.real, x.base)}${delta(x.real, x.prev)}</tr>`;
-    const raiz = raizC ? { nome: raizC.nome, base: raizC.base, prev: raizC.previsto, real: raizC.realizado }
-      : { nome: `${o.codigo} - ${(capa && capa.titulo) || o.nome}`, base: r.baseCorte, prev: r.prevCorte, real: r.real };
+    // nome da obra pelo cadastro (o do Prevision vem cru, com abreviações e barras: "Camaçari\Ba")
+    const nomeObra = `Obra ${o.codigo} · ${(capa && capa.titulo) || o.nome}`;
+    const raiz = raizC ? { nome: nomeObra, base: raizC.base, prev: raizC.previsto, real: raizC.realizado }
+      : { nome: nomeObra, base: r.baseCorte, prev: r.prevCorte, real: r.real };
+    const linMarco = x => `<tr class="ds-marco"><td class="nm"><span class="ds-nm"><i class="ds-tg-sp"></i><span>${esc(x.nome)}</span></span></td>${barra(x.base)}${barra(x.prev)}${barra(x.real)}<td class="d">—</td><td class="d">—</td></tr>`;
+    const blocoMarcos = marcos.length ? `<tr class="ds-sep"><td colspan="6">Marcos, itens condicionados e taxa · acompanhamento, fora do desvio de produção</td></tr>${marcos.map(linMarco).join('')}` : '';
     const tabela = `<section class="ds-tab${densa ? ' densa' : ''}"><h2>Previsto x Realizado<em>EAP da obra · % de cada item · posição de ${dBR(raizC && o.cronograma.dataRef ? o.cronograma.dataRef : r.corte)}</em></h2>
         <table><thead><tr><th>Nome</th><th>Base (%)</th><th>Previsto (%)</th><th>Realizado (%)</th><th>Δ Base (%)</th><th>Δ Previsto (%)</th></tr></thead>
-          <tbody>${lin(raiz, 'obra')}${linhas.map(x => lin(x)).join('')}</tbody></table></section>`;
+          <tbody>${lin(raiz, 'obra')}${linhas.map(x => lin(x)).join('')}${blocoMarcos}</tbody></table></section>`;
     // mesmo cabeçalho e rodapé das demais folhas (antes o dashboard tinha moldura própria, fundo cinza e título em caixa alta)
     return `<article class="folha paisagem exec dash${algumAberto ? ' aberta' : ''}" aria-label="Dashboard, status geral">
         ${cab('Dashboard · status geral', 'visão geral do contrato')}
@@ -1866,9 +1884,14 @@
   function folhasMedicao(o, folha) {
     const M = o.medicao; if (!M || !M.resumo) return '';
     const R = M.resumo, meses = R.meses || [], $$v = v => v === null || v === undefined ? '' : 'R$ ' + fmtNum(v, 2);
-    const COLS = [['previstoCT', 'Previsto (CT)'], ['realizadoCT', 'Realizado (CT)'], ['faturamentoDireto', 'Faturamento direto'], ['medicaoPrevista', 'Medição Machine prevista'], ['medicaoRealizada', 'Medição Machine realizada']]
+    const COLS = [['previstoCT', 'Previsto (CT)'], ['realizadoCT', 'Realizado (CT)'], ['faturamentoDireto', 'Faturamento direto'], ['medicaoPrevista', 'Medição Machine prevista'], ['medicaoRealizada', 'Medição Machine realizada¹']]
       .filter(([k]) => meses.some(m => m[k] !== null && m[k] !== undefined));
-    const temSt = meses.some(m => m.status);
+    // mês sem medição do contrato e sem faturamento direto, mas com valor recebido pela Machine: é a entrada (adiantamento)
+    // de mobilização, não uma medição; a linha diz isso no lugar do status
+    const ehEntrada = m => !m.realizadoCT && !m.faturamentoDireto && (m.medicaoRealizada || 0) > 0;
+    const stDe = m => ehEntrada(m) ? 'Entrada de mobilização (adiantamento)' : (m.status || '');
+    const temSt = meses.some(m => stDe(m));
+    const temLiq = COLS.some(([k]) => k === 'medicaoRealizada');
     const soma = k => meses.reduce((s, m) => s + (m[k] || 0), 0);
     const pctMed = R.totalContrato && R.medidoAcumulado !== null ? R.medidoAcumulado / R.totalContrato : null;
     const cards = [['Valor do contrato', R.totalContrato, R.contrato || ''], ['Medido acumulado', R.medidoAcumulado, pctMed !== null ? pct(pctMed, 1) + ' do contrato' : ''],
@@ -1878,8 +1901,9 @@
       + (() => { const u = String(R.ultimaMedicao || '—'), m = u.match(/^(.*?)\s*\((.+)\)\s*$/);
         return `<div class="md-card"><small>Última medição</small><b>${esc(m ? m[1] : u)}</b><span>${esc(m ? m[2] : '')}</span></div>`; })();
     const hist = meses.length ? `<table class="md-tab"><thead><tr><th>Mês</th>${COLS.map(([, t]) => `<th class="n">${t}</th>`).join('')}${temSt ? '<th>Status</th>' : ''}</tr></thead>
-        <tbody>${meses.map(m => `<tr><td>${esc(m.mes)}</td>${COLS.map(([k]) => `<td class="n">${$$v(m[k])}</td>`).join('')}${temSt ? `<td>${esc(m.status || '')}</td>` : ''}</tr>`).join('')}</tbody>
-        <tfoot><tr><td>Total</td>${COLS.map(([k]) => `<td class="n">${$$v(soma(k))}</td>`).join('')}${temSt ? '<td></td>' : ''}</tr></tfoot></table>` : '<p class="sub">Sem série mensal no Controle de Medição.</p>';
+        <tbody>${meses.map(m => `<tr><td>${esc(m.mes)}</td>${COLS.map(([k]) => `<td class="n">${$$v(m[k])}</td>`).join('')}${temSt ? `<td>${esc(stDe(m))}</td>` : ''}</tr>`).join('')}</tbody>
+        <tfoot><tr><td>Total</td>${COLS.map(([k]) => `<td class="n">${$$v(soma(k))}</td>`).join('')}${temSt ? '<td></td>' : ''}</tr></tfoot></table>
+        ${temLiq ? '<p class="md-nota">¹ Medido no mês menos faturamento direto e demais descontos, antes dos impostos retidos na liberação. O total líquido de cada boletim já desconta esses impostos.</p>' : ''}` : '<p class="sub">Sem série mensal no Controle de Medição.</p>';
     const out = [folha('Medições / faturamento — controle', `<div class="md-cards">${cards}</div><section class="rx-s rx-box md-box"><h2>Histórico de medição</h2>${hist}</section>`, 'fl-medicao', 'histórico de medição')];
     // boletim da última medição: o de maior número (o contrato principal antes dos aditivos)
     const nBol = b => +((String(b.aba).match(/\d+/) || [0])[0]);
@@ -1903,7 +1927,7 @@
       || [...meses].reverse().find(m => (m.realizadoCT || m.medicaoRealizada || 0) > 0);
     const par = (t, v) => `<dt>${t}</dt><dd>${v === null || v === undefined || v === '' ? '—' : esc(v)}</dd>`;
     const cab = `<div class="bm-cab"><dl>${par('Contrato', B.contrato || R.contrato)}${par('Obra', B.obra || R.obra)}${par('Unidade construtiva', B.unidadeConstrutiva)}${par('Número da medição', B.numero || n)}${par('Data de vencimento', B.vencimento && dBR(B.vencimento))}</dl>
-        <dl>${par('Total do contrato', B.totalContrato !== null && B.totalContrato !== undefined ? fmtNum(B.totalContrato, 2) : R.totalContrato && fmtNum(R.totalContrato, 2))}${par('Total da obra', B.totalObra !== null && B.totalObra !== undefined ? fmtNum(B.totalObra, 2) : null)}${par('Cliente', B.cliente)}${par('Data da medição', B.dataMedicao && dBR(B.dataMedicao))}</dl></div>`;
+        <dl>${par('Total do contrato', B.totalContrato !== null && B.totalContrato !== undefined ? fmtNum(B.totalContrato, 2) : R.totalContrato && fmtNum(R.totalContrato, 2))}${B.totalObra !== null && B.totalObra !== undefined && Math.abs(B.totalObra - (B.totalContrato ?? R.totalContrato ?? NaN)) >= 0.01 ? par('Total da obra', fmtNum(B.totalObra, 2)) : ''}${par('Cliente', B.cliente)}${par('Data da medição', B.dataMedicao && dBR(B.dataMedicao))}</dl></div>`;
     const tab = `<table class="bm-tab"><thead><tr class="bm-g"><th colspan="4"></th><th colspan="3">Quantidades</th><th colspan="3">Valores</th></tr>
         <tr><th>Referência</th><th>Descrição</th><th>Un.</th><th class="n">Contratada</th><th class="n">Acum. anterior</th><th class="n">Medida</th><th class="n">%Exe.</th><th class="n">Preço unitário</th><th class="n">Acum. anterior</th><th class="n">Medição</th></tr></thead>
         <tbody>${itens.map(i => `<tr class="${prof(i.eap) === minP ? 'bm-n1' : ''}"><td>${esc(i.eap)}</td><td>${esc(i.descricao)}</td><td>${esc(i.unidade || '')}</td><td class="n">${i.contratada === null || i.contratada === undefined ? '' : fmtNum(i.contratada, 0)}</td>
@@ -1915,7 +1939,10 @@
         <div class="bm-dois"><table class="bm-ret"><thead><tr><th>Retenções · imposto</th><th class="n">Retenção</th></tr></thead><tbody>${(B.retencoes && B.retencoes.length ? B.retencoes : [{ imposto: '—', valor: null }]).map(x => `<tr><td>${esc(x.imposto)}</td><td class="n">${v2(x.valor)}</td></tr>`).join('')}</tbody></table>
           <dl class="bm-liq">${[['Subtotal', B.subtotal], ['Descontos', B.descontos], ['Caução', B.caucao], ['Sinal', B.sinal], ['Total de impostos retido', B.impostosRetidos]].map(([t, v]) => `<dt>${t}</dt><dd>${v2(v)}</dd>`).join('')}<dt class="bm-l">Total líquido</dt><dd class="bm-l">${v2(B.totalLiquido)}</dd></dl></div>
         ${B.observacao ? `<p class="bm-obs"><b>Desconto</b>${esc(B.observacao).replace(/\r?\n/g, '<br>')}</p>` : ''}</div>`;
-    return folha('Medições / faturamento — controle', `<section class="rx-s rx-box md-box bm"><h2>Boletim de medições<em>Medição ${esc(B.numero || n)}${mesBol ? ` · competência ${esc(mesBol.mes)}` : ''}</em></h2>${cab}${tab}${fecho}</section>`, 'fl-medicao', 'boletim de medição');
+    // medição ainda não liberada no Sienge: o líquido muda na liberação (é quando entram os impostos)
+    const provisoria = mesBol && /an[aá]lise|aprovar|proposta|pendente/i.test(mesBol.status || '');
+    const selo = provisoria ? '<span class="bm-selo">Em análise pelo cliente · valores sujeitos aos impostos da liberação</span>' : '';
+    return folha('Medições / faturamento — controle', `<section class="rx-s rx-box md-box bm"><h2>Boletim de medições<em>Medição ${esc(B.numero || n)}${mesBol ? ` · competência ${esc(mesBol.mes)}` : ''}</em>${selo}</h2>${cab}${tab}${fecho}</section>`, 'fl-medicao', 'boletim de medição');
   }
 
   // ---------- montagem das folhas ----------
@@ -1930,6 +1957,8 @@
     $$('.chart[data-fill]', fl).forEach(el => { if (graf[el.id]) graf[el.id](Math.max(110, Math.floor(el.clientHeight) - 4)); });
     // boletim com muitos itens (198: 14 etapas): compacta em até dois passos para o fechamento (total líquido) caber na folha
     // (o quadro .bm corta o que passa: a medida é a do próprio quadro)
+    // dashboard com EAP longa: compacta a tabela em até dois passos para caber na folha (nada cortado no PDF)
+    $$('.folha.dash', fl).forEach(f => { const c = f.querySelector('.fl-corpo'), t = f.querySelector('.ds-tab'); if (!c || !t) return; for (const k of ['densa', 'densa2', 'compacta']) { if (c.scrollHeight <= c.clientHeight + 1) break; (k === 'compacta' ? f : t).classList.add(k); } });
     $$('.folha .bm', fl).forEach(bm => { for (const k of ['densa', 'densa2']) { if (bm.scrollHeight <= bm.clientHeight + 1) break; bm.classList.add(k); } });
     const todas = $$('.folha', fl);
     todas.forEach((f, k) => { const n = f.querySelector('.fl-n'); if (n) n.textContent = `Página ${k + 1} de ${todas.length}`; });
