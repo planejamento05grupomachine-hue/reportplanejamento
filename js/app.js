@@ -1509,7 +1509,7 @@
     dashAberta.forEach(f => { $$('.ds-sub', f).forEach(e => e.remove()); f.classList.remove('aberta'); });
     try {
       const base = DB.obras.find(x => x.id === S.obraId) || obrasDoUsuario()[0];
-      const o = visaoDaObra(base), r = calcObra(base), rf = Core.calcCustoReal(o) || Core.calcFinanceiro(o, r.corte);
+      const o = visaoDaObra(base), r = calcObra(base), rf = custoRealReport(o, r) || Core.calcFinanceiro(o, r.corte);
       const blob = await ReportPptx.gerar({ paper: $('#paper'), o, r, rf, progresso: (n, t) => { btn.textContent = `Gerando PowerPoint… ${n}/${t}`; } });
       const nome = `Report-Obra-${o.codigo}-${$('#paper').dataset.corte || new Date().toISOString().slice(0, 10)}.pptx`;
       if (dl) await dl.save({ filename: nome, data: blob });
@@ -1535,6 +1535,28 @@
       `<div class="rx-card ac-plan"><small>PV · previsto</small><b class="rx-card-v">${Core.moedaCurta(rf.pv)}</b><span class="rx-card-s">para a mesma data</span></div>`,
     ]).concat(spi ? [spi] : []);
     return `<div class="rx-cards${cards.length === 3 ? ' c3' : cards.length === 2 ? ' c2' : ''}">${cards.join('')}</div>`;
+  }
+  // Mês de referência do report: o report mensal fecha o mês anterior, então um corte até o dia 15 (ex.: 06/11) é o
+  // report de outubro; depois do dia 15, o mês do próprio corte. A escolha manual na tela do report prevalece.
+  function mesReferenciaReport(o, r) {
+    const [y, m, d] = r.corte.split('-').map(Number);
+    const mesAuto = d > 15 ? r.corte.slice(0, 7) : m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+    const mr = o.mesReferencia;
+    return mr && /^\d{4}-\d{2}$/.test(mr.mes || '') && mr.corte === o.dataCorte ? mr.mes : mesAuto;
+  }
+  // Custo real do report: cortado no fim do mês de referência (report de outubro = baixas até 31/10)
+  const custoRealReport = (o, r) => Core.calcCustoReal(o, Core.fimDoMes(mesReferenciaReport(o, r)));
+  // IDC (índice de desempenho de custo, CPI) = valor agregado ÷ custo real, na mesma data e na mesma base. Com a planilha de
+  // custo real, o VA vem da Curva S financeira do Prevision quando ela está na base da planilha (total ±2%); senão, vale o
+  // IDC da Gestão de Custos do Prevision. Devolve { v, fonte, data } ou null.
+  function idcDaObra(o, r) {
+    const cr = custoRealReport(o, r);
+    if (cr && cr.realizado > 0 && o.financeiro && (o.financeiro.curva || []).length) {
+      const rf = Core.calcFinanceiro(o, cr.corte);
+      if (rf && rf.ev > 0 && rf.totalCurva && Math.abs(rf.totalCurva / cr.total - 1) <= 0.02) return { v: rf.ev / cr.realizado, fonte: 'va-custo-real', data: cr.corte, ev: rf.ev, ac: cr.realizado };
+    }
+    const IP = o.indicesPrevision;
+    return IP && IP.idc ? { v: IP.idc, fonte: 'prevision', data: IP.dataReferencia || null } : null;
   }
   // ---------- Custo real (planilha de orçamento cliente): folhas financeiras do report ----------
   // Quando a obra tem a planilha (Alimentar → Custo real), as folhas financeiras do report saem dela, no lugar do valor
@@ -1745,7 +1767,7 @@
   // No celular a folha A4 é reduzida até caber e o texto fica pequeno demais. O resumo traz o essencial em tamanho de
   // leitura (só na tela estreita; fora da impressão e do PDF), com os mesmos números do dashboard.
   function resumoCelular(o, r) {
-    const P = r.prazo, IP = o.indicesPrevision, idp = r.farolTempo ? r.prazoGanho.idpT : r.idp;
+    const P = r.prazo, ID = idcDaObra(o, r), IP = ID ? { idc: ID.v } : null, idp = r.farolTempo ? r.prazoGanho.idpT : r.idp;
     const varFim = P.contrFim && P.fimCron ? diff(P.contrFim, P.fimCron) : null;
     return `<section class="rx-mob no-print" aria-label="Resumo do report">
       <div class="rx-mob-top">${pill(r.sem.k, r.sem.t)}<span>Posição de <b>${dBR(r.corte)}</b></span></div>
@@ -1785,8 +1807,7 @@
     // Muda todo mês: só o mês/ano de referência. Sem escolha na tela do report, é automático: o report mensal fecha o mês
     // anterior, então um corte até o dia 15 (ex.: 06/11) é o report de outubro; depois do dia 15, o mês do próprio corte.
     const capa = o.capa || {}, nomeCapa = capa.titulo || o.nome;
-    const mesAuto = (() => { const [y, m, d] = r.corte.split('-').map(Number); if (d > 15) return r.corte.slice(0, 7); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; })();
-    const mr = o.mesReferencia, mesRefIso = mr && /^\d{4}-\d{2}$/.test(mr.mes || '') && mr.corte === o.dataCorte ? mr.mes : mesAuto;
+    const mesRefIso = mesReferenciaReport(o, r);
     const mesRef = Core.mesLongo(mesRefIso).replace(/^./, c => c.toUpperCase());
     // Capa em grade editorial, tudo alinhado à mesma margem esquerda: logos no topo (Machine à esquerda, cliente à
     // direita, na mesma altura), o título da obra no centro da folha e a ficha (obra, cliente, local, referência,
@@ -1812,7 +1833,7 @@
       <div class="rx-tri">${tri.map(([t, v, k]) => `<div class="rx-tri-i ${k}"><span>${t}</span><b>${pct(v, 2)}</b><i><em style="width:${lim01(v)}%"></em></i></div>`).join('')}</div>`;
 
     // ----- Valor agregado (ou custo real, quando a obra tem a planilha de orçamento cliente) -----
-    const rf = Core.calcFinanceiro(o, r.corte), cr = Core.calcCustoReal(o);
+    const rf = Core.calcFinanceiro(o, r.corte), cr = custoRealReport(o, r);
     const folhasFin = cr ? folhasCustoReal(cr, folha) : '';
     const valor = cr ? '' : Core.vaNoReport(o, rf) ? `${cartoesVA(rf, o)}${rf.spi !== null ? GLOSSARIO_VA : ''}
       ${rf.pts ? `<section class="rx-s rx-box fx p-cresce"><h2><i class="rx-ic">${IC.search}</i>Curva S financeira<em>${notaEscalaVA(rf)}</em></h2>
@@ -1872,9 +1893,9 @@
     const P = r.prazo, F = Core.FAIXAS, n2 = v => v === null || v === undefined || isNaN(v) ? '—' : fmtNum(v * 100, 2);
     // farol pelo índice como ele aparece (2 casas), a mesma regra do Core.semaforo
     const farol = v => { if (v === null || v === undefined || isNaN(v)) return 'neutro'; v = Math.round(v * 100) / 100; return v >= F.ok ? 'ok' : v >= F.atencao ? 'atencao' : 'critico'; };
-    const rf = Core.calcFinanceiro(o, r.corte), comVA = Core.vaNoReport(o, rf), cr = Core.calcCustoReal(o);
-    // IDC: só o da Gestão de Custos do Prevision (gravado pela sincronização em obra.indicesPrevision)
-    const IP = o.indicesPrevision, idp = r.farolTempo ? r.prazoGanho.idpT : r.idp, cpi = IP && IP.idc ? IP.idc : null;
+    const rf = Core.calcFinanceiro(o, r.corte), comVA = Core.vaNoReport(o, rf), cr = custoRealReport(o, r);
+    // IDC = VA ÷ custo real (com a planilha de custo real); sem ela, o da Gestão de Custos do Prevision (obra.indicesPrevision)
+    const ID = idcDaObra(o, r), idp = r.farolTempo ? r.prazoGanho.idpT : r.idp, cpi = ID ? ID.v : null;
     const varFim = P.contrFim && P.fimCron ? diff(P.contrFim, P.fimCron) : (r.crono && r.crono.slip !== undefined ? r.crono.slip : null);
     const card = (cls, rot, val, sub) => `<div class="ds-card ${cls}"><small>${rot}</small><b>${val}</b><span>${sub}</span></div>`;
     const cards = `<div class="ds-cards">
@@ -1883,7 +1904,7 @@
           : card('ac-fis', 'Avanço financeiro (acum.)', comVA && rf.evFrac !== null ? `${n2(rf.evFrac)}%` : '—', comVA && rf.baseFrac !== null ? `Base: ${n2(rf.baseFrac)}%` : 'sem Curva S financeira no report')}
         <div class="ds-ind">
           <div class="ds-ind-g">${card(`ac-${farol(idp)}`, `IDP<em> · Índice de Prazo</em>`, idp ? fmtNum(idp, 2) : '—', 'Meta: 1,00')}
-            ${card(`ac-${farol(cpi)}`, `IDC<em> · Índice de Custo</em>`, cpi ? fmtNum(cpi, 2) : '—', cpi ? 'Meta: 1,00' : 'sem IDC no Prevision')}</div>
+            ${card(`ac-${farol(cpi)}`, `IDC<em> · Índice de Custo</em>`, cpi ? fmtNum(cpi, 2) : '—', !cpi ? 'sem IDC no Prevision' : ID.fonte === 'va-custo-real' ? `Meta: 1,00 · VA ÷ custo real em ${dCurto(ID.data)}` : 'Meta: 1,00')}</div>
           <div class="ds-leg"><span><i class="ok"></i>≥ ${fmtNum(F.ok, 2)}</span><span><i class="atencao"></i>${fmtNum(F.atencao, 2)} ≤ índice &lt; ${fmtNum(F.ok, 2)}</span><span><i class="critico"></i>&lt; ${fmtNum(F.atencao, 2)}</span></div>
         </div>
         ${card(`ac-${varFim === null ? 'neutro' : varFim > 0 ? 'critico' : 'escuro'}`, 'Variação do término<em> · cronograma × contrato</em>', varFim === null ? '—' : `${varFim > 0 ? '+' : ''}${varFim} ${Math.abs(varFim) === 1 ? 'dia' : 'dias'}`, r.prazoGanho ? `Hoje: ${Core.textoAtraso(r.prazoGanho, r.sem)}` : 'Meta: 0 dias')}
@@ -1913,9 +1934,21 @@
     const poe = x => { const f = filhosDe(x), ab = f.length > 0 && !!S.abertos['d' + x.eap]; linhas.push({ ...x, temFilhos: f.length > 0, aberto: ab }); if (ab) f.forEach(poe); };
     // marcos (liberações do cliente, entregas) e aditivos condicionados não são frentes de execução: vão num bloco à parte,
     // no fim da tabela, sem as setas de desvio (um marco "100% previsto e 0% feito" não é atraso de produção)
-    const ehMarco = x => /^\s*(marcos?\b|aditivos?\b|taxa de administra)/i.test(x.nome || '');
+    // Itens sem linha de base (base e previsto zerados no Prevision, mas com realizado) também vão para o bloco de
+    // acompanhamento: sem base não há desvio a medir, e a seta de "+53%" seria só a falta de planejamento da linha.
+    const semBase = x => (x.base || 0) < 0.0005 && (x.prev || 0) < 0.0005 && (x.real || 0) > 0.0005;
+    const ehMarco = x => /^\s*(marcos?\b|aditivos?\b|taxa de administra)/i.test(x.nome || '') || semBase(x);
     nos.filter(x => x.nivel === 2 && !ehMarco(x)).forEach(poe);
-    const marcos = nos.filter(x => x.nivel === 2 && ehMarco(x));
+    // Taxa de administração: o realizado é o que foi medido/faturado da taxa (custo real da planilha até o fim do mês do
+    // report ÷ valor do contrato no Controle de Medição); o previsto é o avanço físico da obra, que é a base da medição
+    // (a taxa é medida proporcional ao avanço físico, balanceada pela saúde do contrato). O Prevision não acompanha isso.
+    const contratoTaxa = o.medicao && o.medicao.resumo && o.medicao.resumo.totalContrato;
+    const taxaReal = cr && cr.taxa !== null && contratoTaxa > 0 ? cr.taxa / contratoTaxa : null;
+    const marcos = nos.filter(x => x.nivel === 2 && ehMarco(x)).map(x => {
+      if (/^\s*taxa de administra/i.test(x.nome || '') && taxaReal !== null) return { ...x, base: null, prev: r.real, real: taxaReal, nota: 'medido ÷ contrato · previsto = avanço físico da obra' };
+      if (semBase(x)) return { ...x, base: null, prev: null, nota: 'sem linha de base no cronograma' };
+      return x;
+    });
     const densa = nos.filter(x => x.nivel === 2).length > DASH_LINHAS, algumAberto = linhas.some(x => x.nivel > 2);
     const barra = v => v === null || v === undefined ? '<td class="n">—</td>' : `<td class="n"><i style="width:${Math.max(0, Math.min(100, v * 100)).toFixed(1)}%"></i><span>${n2(v)}</span></td>`;
     const delta = (a, b) => { if (a === null || b === null || a === undefined || b === undefined) return '<td class="d">—</td>';
@@ -1928,8 +1961,9 @@
     const nomeObra = `Obra ${o.codigo} · ${(capa && capa.titulo) || o.nome}`;
     const raiz = raizC ? { nome: nomeObra, base: raizC.base, prev: raizC.previsto, real: raizC.realizado }
       : { nome: nomeObra, base: r.baseCorte, prev: r.prevCorte, real: r.real };
-    const linMarco = x => `<tr class="ds-marco"><td class="nm"><span class="ds-nm"><i class="ds-tg-sp"></i><span>${esc(x.nome)}</span></span></td>${barra(x.base)}${barra(x.prev)}${barra(x.real)}<td class="d">—</td><td class="d">—</td></tr>`;
-    const blocoMarcos = marcos.length ? `<tr class="ds-sep"><td colspan="6">Marcos, itens condicionados e taxa · acompanhamento, fora do desvio de produção</td></tr>${marcos.map(linMarco).join('')}` : '';
+    const linMarco = x => `<tr class="ds-marco"><td class="nm"><span class="ds-nm"><i class="ds-tg-sp"></i><span>${esc(x.nome)}${x.nota ? `<em class="ds-nota"> · ${esc(x.nota)}</em>` : ''}</span></span></td>${barra(x.base)}${barra(x.prev)}${barra(x.real)}<td class="d">—</td><td class="d">—</td></tr>`;
+    const tituloBloco = ['Marcos', 'itens condicionados', marcos.some(x => x.nota === 'sem linha de base no cronograma') ? 'itens sem linha de base' : null, 'taxa'].filter(Boolean);
+    const blocoMarcos = marcos.length ? `<tr class="ds-sep"><td colspan="6">${tituloBloco.slice(0, -1).join(', ')} e ${tituloBloco.at(-1)} · acompanhamento, fora do desvio de produção</td></tr>${marcos.map(linMarco).join('')}` : '';
     const tabela = `<section class="ds-tab${densa ? ' densa' : ''}"><h2>Previsto x Realizado<em>EAP da obra · % de cada item · posição de ${dBR(raizC && o.cronograma.dataRef ? o.cronograma.dataRef : r.corte)}</em></h2>
         <table><thead><tr><th>Nome</th><th>Base (%)</th><th>Previsto (%)</th><th>Realizado (%)</th><th>Δ Base (%)</th><th>Δ Previsto (%)</th></tr></thead>
           <tbody>${lin(raiz, 'obra')}${linhas.map(x => lin(x)).join('')}${blocoMarcos}</tbody></table></section>`;
@@ -2171,8 +2205,10 @@
     if (S.view !== 'report') return;
     const el4 = $('#ch-combo-r'), el6 = $('#ch-fin-r'), graf = {};
     if (el4) graf['ch-combo-r'] = h => Core.chartCombo(el4, o, r, { altura: h });
-    if (el6 && rFin) graf['ch-fin-r'] = h => Core.chartCurvaS(el6, o, rFin, { altura: h });
-    const el7 = $('#ch-cr-mes'); if (el7 && cr) graf['ch-cr-mes'] = h => Core.chartCustoMensal(el7, cr, { altura: h });
+    // no report, o custo real vai até o fim do mês de referência (na aba Obra, até a última baixa)
+    const crR = cr ? custoRealReport(o, r) : null, rFinR = crR || rFin;
+    if (el6 && rFinR) graf['ch-fin-r'] = h => Core.chartCurvaS(el6, o, rFinR, { altura: h });
+    const el7 = $('#ch-cr-mes'); if (el7 && crR) graf['ch-cr-mes'] = h => Core.chartCustoMensal(el7, crR, { altura: h });
     montaFolhas(graf); ajustaZoomFolhas();
   }
 

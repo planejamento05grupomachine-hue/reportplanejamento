@@ -842,6 +842,30 @@
       if (typeof b !== 'number' || !nome || typeof nome !== 'string') continue;
       etapas.push({ ordem: b, nome: nome.replace(/\s+/g, ' ').trim(), projecao: nv(r, E) || 0, realizado: cReal >= 0 ? nv(r, cReal) || 0 : null });
     }
+    // Realizado de cada etapa por mês da baixa: CONC.APROP liga cada valor à linha da LANÇ.FIN (data da baixa) e ao item
+    // da PLANILHA GERAL (o 2º nível do código é a etapa: "01. 004. 001.001" → 004). Serve para cortar as etapas no fim
+    // do mês do report. Ligações antigas sem linha válida ficam fora (só pesam no total, que vem da FÍS X FIN).
+    const wpg = wb.Sheets[abaPor(wb, /^planilha geral/)], wca = wb.Sheets[abaPor(wb, /^conc\.?\s*aprop/)];
+    if (wpg && wca && cBaixa >= 0) {
+      const rp = XLSX.utils.decode_range(wpg['!ref']), rc = XLSX.utils.decode_range(wca['!ref']);
+      const vp = (r, c) => { const x = wpg[XLSX.utils.encode_cell({ r, c })]; return x ? x.v : null; };
+      const vc = (r, c) => { const x = wca[XLSX.utils.encode_cell({ r, c })]; return x ? x.v : null; };
+      const segPorNome = {};
+      for (let r = rp.s.r; r <= rp.e.r; r++) { const m = String(vp(r, 0) || '').match(/^\d{2}\.\s*(\d{3})\.\s*$/); if (m && vp(r, 1)) segPorNome[norm(String(vp(r, 1)).replace(/\s+/g, ' '))] = m[1]; }
+      let cL = -1, cC = -1, cV = -1, rH = -1;
+      for (let r = rc.s.r; r <= Math.min(rc.e.r, 5) && rH < 0; r++) for (let c = 0; c <= rc.e.c; c++) {
+        const h = norm(vc(r, c)); if (/^linha lanc/.test(h)) { cL = c; rH = r; } if (/^cod\.? eap/.test(h)) cC = c; if (/^valor$/.test(h)) cV = c;
+      }
+      const porSeg = {};
+      if (rH >= 0 && cL >= 0 && cC >= 0 && cV >= 0) for (let r = rH + 1; r <= rc.e.r; r++) {
+        const lr = vc(r, cL), cod = String(vc(r, cC) || ''), val = vc(r, cV);
+        const m = cod.match(/^\d{2}\.\s*(\d{3})/);
+        if (typeof lr !== 'number' || lr !== Math.round(lr) || lr <= rCab + 1 || typeof val !== 'number' || !m) continue;
+        const d = serialISO(vl(lr - 1, cBaixa)); if (!d) continue;
+        const k = d.slice(0, 7); porSeg[m[1]] = porSeg[m[1]] || {}; porSeg[m[1]][k] = (porSeg[m[1]][k] || 0) + val;
+      }
+      etapas.forEach(e => { const s = segPorNome[norm(e.nome)]; if (s) { e.codigo = s; e.porMes = porSeg[s] || {}; } });
+    }
     return { ultimaBaixa, lancamentos: nLanc, total: nv(L.totLb2, E), totalLb1: L.totLb1 >= 0 ? nv(L.totLb1, E) : null,
       realizadoTotal: ra, meses, etapas: etapas.sort((a, b) => a.ordem - b.ordem) };
   }
