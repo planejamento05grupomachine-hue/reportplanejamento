@@ -347,6 +347,7 @@ details.rx-av-n[open] > summary.n0 { border-bottom-color: var(--rx-line); }
 .ds-tab tr.ds-sep td { padding: 9px 8px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--rx-muted); background: transparent; }
 .ds-tab tr.ds-marco td { color: #5E6470; font-size: 12px; }
 .ds-tab tr.ds-marco td.n i { opacity: .3; }
+.ds-tab .ds-nota { font-style: normal; font-size: 10.5px; color: var(--rx-muted); }
 .ds-tab.densa td { padding-top: 3px; padding-bottom: 6px; font-size: 11px; }
 .ds-tab.densa td.n i { bottom: 2px; }
 .ds-tab.densa2 td { padding-top: 2px; padding-bottom: 4px; font-size: 10px; line-height: 1.15; }

@@ -521,19 +521,31 @@
   // realizado são as contas pagas em nome do cliente pela data da baixa mais a taxa de administração. Quando a obra
   // tem essa planilha, ela é a fonte dos dados financeiros do report (no lugar da Curva S financeira do Prevision).
   // Sai no formato que chartCurvaS e o PowerPoint já desenham (pts em fração do total, corte, real, prevCorte).
-  function calcCustoReal(obra) {
+  // ate (opcional, 'AAAA-MM-DD'): corta o realizado nessa data — o report mensal usa o fim do mês de referência
+  // (report de outubro = custo real até 31/10, mesmo que a planilha já tenha baixas de novembro).
+  function calcCustoReal(obra, ate) {
     const c = obra && obra.custoReal;
     if (!c || !(c.meses || []).length || !(c.total > 0)) return null;
-    const T = c.total, ms = c.meses;
+    const T = c.total;
+    const comReal0 = c.meses.filter(m => m.realizadoAcum !== null && m.realizadoAcum !== undefined);
+    let corte = c.ultimaBaixa || (comReal0.length ? fimDoMes(comReal0.at(-1).mes) : c.meses[0].mes + '-01');
+    if (ate && ate < corte) corte = ate;
+    const mesCorte = corte.slice(0, 7);
+    const ms = c.meses.map(m => m.mes > mesCorte ? { ...m, realizado: null, realizadoAcum: null } : m);
     const comReal = ms.filter(m => m.realizadoAcum !== null && m.realizadoAcum !== undefined);
-    const corte = c.ultimaBaixa || (comReal.length ? fimDoMes(comReal.at(-1).mes) : ms[0].mes + '-01');
     const pts = [{ data: ms[0].mes + '-01', base: 0, previsto: 0, realizado: 0 }]
       .concat(ms.map(m => ({ data: fimDoMes(m.mes), base: m.previstoAcum / T, previsto: m.previstoAcum / T, realizado: (m.realizadoAcum || 0) / T })));
-    const realizado = c.realizadoTotal, previsto = interp(pts, 'previsto', corte) * T;
-    const mesCorte = corte.slice(0, 7), ultimoMes = ms.at(-1).mes;
+    const realizado = comReal.length ? comReal.at(-1).realizadoAcum : 0, previsto = interp(pts, 'previsto', corte) * T;
+    // realizado de cada etapa na data do corte: total da planilha menos o baixado nos meses seguintes
+    // (porMes vem da CONC.APROP ligada à data da baixa na LANÇ.FIN)
+    const etapas = (c.etapas || []).map(e => {
+      const depois = Object.entries(e.porMes || {}).filter(([m]) => m > mesCorte).reduce((s, [, v]) => s + v, 0);
+      return { ...e, realizado: e.realizado === null || e.realizado === undefined ? null : e.realizado - depois };
+    });
+    const tx = etapas.find(e => /taxa de administra/i.test(e.nome));
     return { fonte: 'planilha', total: T, totalLb1: c.totalLb1, realizado, previsto, saldo: T - realizado, desvio$: realizado - previsto,
       pct: realizado / T, pctPrev: previsto / T, corte, parcial: corte < fimDoMes(mesCorte), lancamentos: c.lancamentos,
-      meses: ms, etapas: c.etapas || [], posFim: mesCorte > ultimoMes,
+      ultimaBaixa: c.ultimaBaixa, meses: ms, etapas, taxa: tx ? tx.realizado : null,
       // compatível com chartCurvaS / PowerPoint (mesmo objeto da Curva S financeira)
       pts, real: realizado / T, prevCorte: previsto / T, baseCorte: previsto / T, desvio: (realizado - previsto) / T, evFrac: realizado / T };
   }
@@ -1399,7 +1411,7 @@
     });
   }
 
-  root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, diaSemana, diff, addDias, semaforo, FAIXAS,
+  root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, fimDoMes, diaSemana, diff, addDias, semaforo, FAIXAS,
     calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, dataDoPrevisto, prazoGanho, tendenciaPrazo, textoAtraso, fraseProjecao, chartTendencia, narrativa, resumoExecutivo, ST_RESTR, TIPOS_RESTR, META_IRR, JANELA_RESTR, farolRestricao, indicadoresRestricoes, ordenarRestricoes, restricaoImpede, dataRestricao, pessoasDe, prazoOriginal, chartCurvaS, chartMensal, chartCustoMensal, chartCombo, chartEfetivo,
     LIM_FOTOS: LIM.fotos, calcFinanceiro, calcCustoReal, moeda, moedaCurta, vaNoReport, empresasFrente, qualidadeRdo, qualidadeDocs, LIMIAR_DIAS: { fisico: LIMIAR_DIAS_FISICO, financeiro: LIMIAR_DIAS_FINANCEIRO }, MAPA_ST, atividadesParaMapa, ptsZona, geoZona, mapasDaObra, fotoNoMapa };
 })(typeof window !== 'undefined' ? window : globalThis);

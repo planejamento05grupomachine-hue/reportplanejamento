@@ -1,5 +1,25 @@
 # Notas de versão — Painel de Obras Machine
 
+## 2026-11-10e · Revisão do report (obra 207): corte do mês, IDC, taxa e itens sem base
+
+- **Custo real no fim do mês do report:** o report de outubro usa as baixas até 31/10, inclusive o realizado por etapa
+  (a planilha passa a ser lida também pela CONC.APROP com a data da baixa). A aba Obra continua até a última baixa.
+  Reenviar a planilha de custo real para gravar o realizado por etapa e mês.
+- **IDC = valor agregado ÷ custo real** na mesma data, quando a Curva S financeira do Prevision está na base da
+  planilha (±2%). Sem planilha, vale o IDC da Gestão de Custos do Prevision.
+- **Taxa de administração** no dashboard: medido ÷ contrato (Controle de Medição), com o avanço físico da obra como
+  previsto (base da medição).
+- **Itens sem linha de base** vão para o bloco de acompanhamento, sem seta de desvio.
+## 2026-11-10e · Revisão do report (obra 207): corte do mês, IDC, taxa e itens sem base
+
+- **Custo real no fim do mês do report:** o report de outubro usa as baixas até 31/10, inclusive o realizado por etapa
+  (a planilha passa a ser lida também pela CONC.APROP com a data da baixa). A aba Obra continua até a última baixa.
+  Reenviar a planilha de custo real para gravar o realizado por etapa e mês.
+- **IDC = valor agregado ÷ custo real** na mesma data, quando a Curva S financeira do Prevision está na base da
+  planilha (±2%). Sem planilha, vale o IDC da Gestão de Custos do Prevision.
+- **Taxa de administração** no dashboard: medido ÷ contrato (Controle de Medição), com o avanço físico da obra como
+  previsto (base da medição).
+- **Itens sem linha de base** vão para o bloco de acompanhamento, sem seta de desvio.
 ## 2026-11-10d · Custo real pela planilha de orçamento (obra 207)
 
 O avanço financeiro real de obra administrada passa a vir da **planilha de orçamento cliente da Machine**

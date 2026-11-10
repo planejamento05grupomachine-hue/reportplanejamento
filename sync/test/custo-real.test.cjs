@@ -33,6 +33,22 @@ test('custo real: realizado, previsto na data da última baixa e curva em fraç�
   assert.equal(cr.real, cr.evFrac);
 });
 
+test('custo real: corte no fim do mês do report tira as baixas seguintes, inclusive por etapa', () => {
+  const comMes = { ...custoReal, etapas: [
+    { ordem: 1, nome: 'Etapa A', projecao: 250, realizado: 150, porMes: { '2026-03': 0, '2026-04': 20 } },
+    { ordem: 2, nome: 'Taxa de Administração', projecao: 150, realizado: 80, porMes: { '2026-04': 10 } }] };
+  const cr = Core.calcCustoReal({ custoReal: comMes }, '2026-03-31');
+  assert.equal(cr.corte, '2026-03-31');
+  assert.equal(cr.realizado, 200);
+  assert.equal(cr.parcial, false);
+  assert.equal(cr.previsto, 300);
+  assert.equal(cr.meses.at(-1).realizado, null, 'abril fica sem realizado');
+  assert.deepEqual(cr.etapas.map(e => e.realizado), [130, 70]);
+  assert.equal(cr.taxa, 70);
+  // corte depois da última baixa não muda nada
+  assert.equal(Core.calcCustoReal({ custoReal: comMes }, '2026-12-31').corte, '2026-04-10');
+});
+
 test('custo real: sem planilha não há cálculo', () => {
   assert.equal(Core.calcCustoReal({}), null);
   assert.equal(Core.calcCustoReal({ custoReal: { ...custoReal, total: 0 } }), null);
