@@ -67,7 +67,7 @@
     // Na administração (custo real ou taxa no cadastro) a categoria certa é a de custos. Só aviso: não bloqueia a carga.
     const finCurva = d.financeiro && d.financeiro.curva;
     const contratoTotal = ((d.medicao || o.medicao || {}).resumo || {}).totalContrato;
-    const administracao = !!(o.custoReal || d.custoReal || o.taxaAdm);
+    const administracao = !!(o.custoReal || d.custoReal);
     if (finCurva && finCurva.length && contratoTotal > 0 && !administracao) {
       const baseCurva = Math.max(finCurva.at(-1).base || 0, finCurva.at(-1).previsto || 0), r = baseCurva / contratoTotal, m = core().moeda;
       out.push(Math.abs(r - 1) <= 0.02

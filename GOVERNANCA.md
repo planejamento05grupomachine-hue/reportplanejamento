@@ -248,7 +248,8 @@ Há só **duas modalidades**, e a diferença é a fonte do financeiro realizado:
 - Conferência antes de publicar: dashboard = folha de valor agregado; folha Financeiro = total por etapa = realizado acumulado do
   mês. Ajuste se faz na fonte (planilha, Controle de Medição, Prevision), não no PowerPoint baixado.
 
-**Administração · taxa** (cadastro da obra: % do valor agregado e mobilização; 207: 8% e R$ 460.000): teto acumulado =
-mobilização + % × valor agregado das obras (sem a própria linha da taxa), limitado ao contrato; mede-se abaixo do teto
-considerando o saldo e a saúde do contrato. No dashboard, o previsto da linha da taxa é o teto e a nota mostra quanto o saldo cobre
-da taxa que falta. A medição do mês corrente não entra no custo real.
+**Administração · taxa** (FEE fixo do contrato, não vinculado ao custo final): taxa devida acumulada = taxa total × % de avanço das
+obras (valor agregado sem a linha da taxa ÷ orçamento sem a linha da taxa). O adiantamento operacional de entrada está dentro do
+contrato; a medição do mês = devida − (adiantamento + medições anteriores), nunca acima do saldo. No dashboard, a linha da taxa mostra
+o faturado ÷ contrato (realizado) contra o avanço das obras (previsto); acima do previsto é antecipação. A medição do mês corrente não
+entra no custo real.

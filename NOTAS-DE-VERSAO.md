@@ -14,6 +14,12 @@ financeiro" na GOVERNANCA.md.
   report. A conta aparece escrita na folha financeira.
 - Cartão "Avanço financeiro" do dashboard volta a ser o valor agregado do Prevision (também na 207).
 - Folhas financeiras e PowerPoint no corte do fim do mês de referência.
+- **Realizado = todos os custos do contrato**, em valor bruto: faturamento direto (contas pagas) + medição Machine.
+- **Alimentar:** a conferência avisa quando a Curva S financeira de uma obra de empreitada vem fora da base do contrato (±2%):
+  exportar a categoria "Recebíveis do projeto" do Prevision.
+- **Taxa de administração (207):** a linha da taxa no dashboard mostra o faturado ÷ contrato contra o avanço das obras (valor
+  agregado); faturado acima do previsto é antecipação. Saem do cadastro da obra os campos "% do valor agregado" e "mobilização",
+  da versão 20261110f (regra do FEE fixo do contrato, ver GOVERNANCA.md).
 ## 2026-11-11a · Financeiro do report: regra única para empreitada global e administração
 
 Toda obra passa a ter os mesmos três números, uma folha para cada, na mesma ordem: **físico**, **valor agregado** (Prevision)

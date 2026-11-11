@@ -79,8 +79,8 @@ test('conferência: empreitada com a curva financeira fora da base do contrato a
   const custo = { ...fim, base: 800, previsto: 800 };
   const av = Carga.conferencia({ codigo: '901', medicao: o.medicao }, { dados: { financeiro: { curva: [custo] } } });
   assert.ok(av.some(([k, t]) => k === 'av' && /Recebíveis do projeto/.test(t) && /Custos do projeto/.test(t)));
-  // administração (taxa no cadastro): a categoria de custos é a certa, sem aviso
-  const adm = Carga.conferencia({ codigo: '207', taxaAdm: { pct: 0.08, mobilizacao: 0 }, medicao: o.medicao }, { dados: { financeiro: { curva: [custo] } } });
+  // administração (custo real da planilha): a categoria de custos é a certa, sem aviso
+  const adm = Carga.conferencia({ codigo: '207', custoReal: { total: 1 }, medicao: o.medicao }, { dados: { financeiro: { curva: [custo] } } });
   assert.ok(!adm.some(([, t]) => /Recebíveis do projeto/.test(t)));
 });
 
