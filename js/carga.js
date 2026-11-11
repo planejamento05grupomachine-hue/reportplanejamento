@@ -62,6 +62,18 @@
       const mono = d.curva.every((p, i) => !i || p.base >= d.curva[i - 1].base - 1e-6);
       out.push([mono ? 'ok' : 'er', mono ? 'Curva base sempre crescente.' : 'A curva base diminui em algum mês: confira a exportação.']);
     }
+    // Curva S financeira (valor agregado): na empreitada global ela tem de estar na categoria "Recebíveis do projeto" do
+    // Dashboard do Prevision (valor de venda = base do contrato); em "Custos do projeto" a base é menor que o contrato.
+    // Na administração (custo real ou taxa no cadastro) a categoria certa é a de custos. Só aviso: não bloqueia a carga.
+    const finCurva = d.financeiro && d.financeiro.curva;
+    const contratoTotal = ((d.medicao || o.medicao || {}).resumo || {}).totalContrato;
+    const administracao = !!(o.custoReal || d.custoReal || o.taxaAdm);
+    if (finCurva && finCurva.length && contratoTotal > 0 && !administracao) {
+      const baseCurva = Math.max(finCurva.at(-1).base || 0, finCurva.at(-1).previsto || 0), r = baseCurva / contratoTotal, m = core().moeda;
+      out.push(Math.abs(r - 1) <= 0.02
+        ? ['ok', `Curva S financeira na base do contrato (${m(baseCurva)}): categoria Recebíveis do projeto.`]
+        : ['av', `A Curva S financeira está em ${m(baseCurva)} e o contrato em ${m(contratoTotal)} (${pct(r, 1)}): em obra de empreitada, exporte o Dashboard do Prevision na categoria "Recebíveis do projeto" (valor de venda), não em "Custos do projeto".`]);
+    }
     if (d.mensal) {
       const soma = d.mensal.reduce((s, m) => s + (m.base || 0), 0);
       out.push([Math.abs(soma - 1) < 0.002 ? 'ok' : 'av', `Progresso ${d.mensal.some(m => m.origem === 'semanal') ? 'semanal (somado por mês)' : 'mensal'}: ${d.mensal.length} meses; a base soma ${pct(soma, 2)}.`]);

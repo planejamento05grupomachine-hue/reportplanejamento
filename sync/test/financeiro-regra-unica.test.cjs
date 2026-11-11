@@ -70,6 +70,20 @@ test('IDC: curva do valor agregado em outra base (custo × venda) usa os percent
   assert.ok(Math.abs(idc.evPct - 0.56) < 1e-9 && Math.abs(idc.acPct - 0.6) < 1e-9);
 });
 
+test('conferência: empreitada com a curva financeira fora da base do contrato avisa para usar Recebíveis', () => {
+  const Carga = require(path.join(__dirname, '..', '..', 'js', 'carga.js'));
+  const o = obraEmpreitada();
+  const fim = { data: '2026-10-31', base: 1000, previsto: 1000, realizado: 0 };
+  const ok = Carga.conferencia({ codigo: '901', medicao: o.medicao }, { dados: { financeiro: { curva: [fim] } } });
+  assert.ok(ok.some(([k, t]) => k === 'ok' && /Recebíveis do projeto/.test(t)));
+  const custo = { ...fim, base: 800, previsto: 800 };
+  const av = Carga.conferencia({ codigo: '901', medicao: o.medicao }, { dados: { financeiro: { curva: [custo] } } });
+  assert.ok(av.some(([k, t]) => k === 'av' && /Recebíveis do projeto/.test(t) && /Custos do projeto/.test(t)));
+  // administração (taxa no cadastro): a categoria de custos é a certa, sem aviso
+  const adm = Carga.conferencia({ codigo: '207', taxaAdm: { pct: 0.08, mobilizacao: 0 }, medicao: o.medicao }, { dados: { financeiro: { curva: [custo] } } });
+  assert.ok(!adm.some(([, t]) => /Recebíveis do projeto/.test(t)));
+});
+
 test('administração (custo real da planilha) usa o mesmo IDC', () => {
   const o = obraEmpreitada(); delete o.medicao;
   o.custoReal = { ultimaBaixa: '2026-08-20', lancamentos: 3, total: 1000, totalLb1: 800, realizadoTotal: 500,
