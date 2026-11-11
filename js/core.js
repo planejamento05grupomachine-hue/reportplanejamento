@@ -508,13 +508,10 @@
         pctMedido: resumo.totalContrato && resumo.medidoAcumulado !== null ? resumo.medidoAcumulado / resumo.totalContrato : null } : null,
       medidoVsExecutado };
   }
-  // Valor agregado no report (cadastro da obra: obra.reportVA = 'auto' | 'mostrar' | 'ocultar').
-  // Automático: só quando há SPI e a Curva S financeira está na base do contrato — sem isso o quadro vira só faturamento,
-  // ou mistura bases (207: curva = orçamento da obra, contrato Machine = outro valor) e confunde cliente e diretoria.
+  // Valor agregado no report. Regra única (11/2026): aparece em todas as obras que têm a Curva S financeira do Prevision,
+  // na própria base (a folha mostra o total da curva); só some se o cadastro pedir (obra.reportVA = 'ocultar').
   function vaNoReport(obra, rf) {
-    if (!rf || obra.reportVA === 'ocultar') return false;
-    if (obra.reportVA === 'mostrar') return true;
-    return rf.spi !== null && (rf.escala === 'contrato' || !rf.bac);
+    return !!rf && !!rf.pts && obra.reportVA !== 'ocultar';
   }
   // Custo real (avanço financeiro real): planilha de orçamento cliente da Machine (aba FÍS X FIN), carregada em
   // Alimentar → Dados financeiros. Previsto e realizado em R$ por mês (LB2 = projeção/contratação consolidada); o
@@ -548,6 +545,68 @@
       ultimaBaixa: c.ultimaBaixa, meses: ms, etapas, taxa: tx ? tx.realizado : null,
       // compatível com chartCurvaS / PowerPoint (mesmo objeto da Curva S financeira)
       pts, real: realizado / T, prevCorte: previsto / T, baseCorte: previsto / T, desvio: (realizado - previsto) / T, evFrac: realizado / T };
+  }
+  // ---------- Financeiro realizado: uma regra para empreitada global e administração ----------
+  // Cada obra tem três números: o físico (Prevision, duração), o valor agregado (Prevision, Financeiro VA) e o financeiro
+  // realizado = o que de fato foi faturado ao cliente (empreitada global: Controle de Medição, bruto) ou pago por ele
+  // (administração: planilha de orçamento cliente = custo real). Os dois saem no mesmo formato; o report só troca os rótulos.
+  const NUM_MES = { jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12 };
+  // Faturamento: Previsto (CT) × Realizado (CT) mês a mês do Controle de Medição, com o valor do contrato como base.
+  // Os meses da planilha vêm sem ano: o último mês medido é ancorado no mês da data financeira da obra e o resto anda
+  // para os dois lados. As etapas saem do boletim mais recente (valor contratado e medido acumulado de cada etapa).
+  function calcFaturamento(obra, ate) {
+    const M = obra && obra.medicao, R = M && M.resumo;
+    if (!R || !(R.totalContrato > 0)) return null;
+    const lin = (R.meses || []).map(m => ({ m, n: NUM_MES[String(m.mes || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().slice(0, 3)] })).filter(x => x.n);
+    const iUlt = lin.map(x => (x.m.realizadoCT || 0) > 0).lastIndexOf(true);
+    if (lin.length < 3 || iUlt < 0 || !lin.some(x => (x.m.previstoCT || 0) > 0)) return null;
+    const ref = String(obra.dataCorteFinanceiro || obra.dataCorte || '').slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(ref)) return null;
+    const yRef = +ref.slice(0, 4), mRef = +ref.slice(5, 7), ano = new Array(lin.length);
+    ano[iUlt] = lin[iUlt].n <= mRef ? yRef : yRef - 1;
+    for (let i = iUlt + 1; i < lin.length; i++) ano[i] = ano[i - 1] + (lin[i].n < lin[i - 1].n ? 1 : 0);
+    for (let i = iUlt - 1; i >= 0; i--) ano[i] = ano[i + 1] - (lin[i].n > lin[i + 1].n ? 1 : 0);
+    const T = R.totalContrato, chave = i => `${ano[i]}-${String(lin[i].n).padStart(2, '0')}`;
+    let corte = fimDoMes(chave(iUlt));
+    if (ate && ate < corte) corte = ate;
+    const mesCorte = corte.slice(0, 7);
+    let pa = 0, ra = 0;
+    const ms = lin.map((x, i) => { const mes = chave(i); pa += x.m.previstoCT || 0;
+      const medido = i <= iUlt && mes <= mesCorte; if (medido) ra += x.m.realizadoCT || 0;
+      return { mes, previsto: x.m.previstoCT || 0, realizado: medido ? (x.m.realizadoCT || 0) : null, previstoAcum: pa, realizadoAcum: medido ? ra : null }; });
+    const pts = [{ data: ms[0].mes + '-01', base: 0, previsto: 0, realizado: 0 }]
+      .concat(ms.map(m => ({ data: fimDoMes(m.mes), base: m.previstoAcum / T, previsto: m.previstoAcum / T, realizado: (m.realizadoAcum || 0) / T })));
+    const comReal = ms.filter(m => m.realizadoAcum !== null);
+    const realizado = comReal.length ? comReal.at(-1).realizadoAcum : 0, previsto = interp(pts, 'previsto', corte) * T;
+    const nBol = b => +((String(b.aba).match(/\d+/) || [0])[0]);
+    const ult = [...(M.boletins || [])].filter(b => !/aditivo/i.test(b.aba)).sort((a, b) => nBol(a) - nBol(b)).at(-1);
+    let etapas = [];
+    if (ult && (ult.itens || []).length) {
+      const prof = e => String(e).split('.').length, minP = Math.min(...ult.itens.map(i => prof(i.eap)));
+      etapas = ult.itens.filter(i => prof(i.eap) === minP + 1).map((i, k) => ({ ordem: k + 1, nome: String(i.descricao || i.eap).replace(/\s+/g, ' ').trim(),
+        projecao: (i.precoUnitario || 0) * (i.contratada || 1), realizado: (i.acumuladoAnteriorValor || 0) + (i.medicao || 0) }));
+      // etapas só valem quando o boletim fecha com o realizado da data (boletim de outro mês: tabela omitida)
+      if (Math.abs(etapas.reduce((s, e) => s + e.realizado, 0) - realizado) > 1) etapas = [];
+    }
+    return { fonte: 'medicao', tipo: 'faturamento', total: T, totalLb1: null, realizado, previsto, saldo: T - realizado, desvio$: realizado - previsto,
+      pct: realizado / T, pctPrev: previsto / T, corte, parcial: corte < fimDoMes(mesCorte), lancamentos: null, ultimaBaixa: null,
+      meses: ms, etapas, taxa: null,
+      pts, real: realizado / T, prevCorte: previsto / T, baseCorte: previsto / T, desvio: (realizado - previsto) / T, evFrac: realizado / T };
+  }
+  // O financeiro realizado da obra, qualquer que seja a modalidade (ate = fim do mês do report)
+  function calcRealFinanceiro(obra, ate) {
+    const a = calcCustoReal(obra, ate);
+    return a ? { ...a, tipo: 'desembolso' } : calcFaturamento(obra, ate);
+  }
+  // IDC = valor agregado ÷ financeiro realizado, acumulados até a mesma data e na mesma base (índice de desempenho de custo,
+  // CPI = EV ÷ AC, com AC = o que o cliente já pagou ou foi faturado). Só vale quando a curva do valor agregado e o realizado
+  // estão na mesma base (totais a ±2%); senão devolve null e o report cai para o IDC da Gestão de Custos do Prevision.
+  function calcIDC(obra, ate) {
+    const fr = calcRealFinanceiro(obra, ate);
+    if (!fr || !(fr.realizado > 0)) return null;
+    const rf = calcFinanceiro(obra, fr.corte);
+    if (!rf || !(rf.ev > 0) || !rf.totalCurva || Math.abs(rf.totalCurva / fr.total - 1) > 0.02) return null;
+    return { v: rf.ev / fr.realizado, ev: rf.ev, ac: fr.realizado, data: fr.corte, tipo: fr.tipo };
   }
   // R$ compacto para cartões: "R$ 12,84 mi" · "R$ 103,0 mil"
   const moedaCurta = v => v === null || v === undefined || isNaN(v) ? '—' : Math.abs(v) >= 1e6 ? 'R$ ' + fmtNum(v / 1e6, 2) + ' mi' : Math.abs(v) >= 1e3 ? 'R$ ' + fmtNum(v / 1e3, 1) + ' mil' : 'R$ ' + fmtNum(v, 0);
@@ -1413,6 +1472,6 @@
 
   root.Core = { esc, fmtNum, pct, pp, dBR, dCurto, mesCurto, mesLongo, fimDoMes, diaSemana, diff, addDias, semaforo, FAIXAS,
     calc, atividades, comparaPlano, TOLERANCIA, estimaDataRef, dataDoPrevisto, prazoGanho, tendenciaPrazo, textoAtraso, fraseProjecao, chartTendencia, narrativa, resumoExecutivo, ST_RESTR, TIPOS_RESTR, META_IRR, JANELA_RESTR, farolRestricao, indicadoresRestricoes, ordenarRestricoes, restricaoImpede, dataRestricao, pessoasDe, prazoOriginal, chartCurvaS, chartMensal, chartCustoMensal, chartCombo, chartEfetivo,
-    LIM_FOTOS: LIM.fotos, calcFinanceiro, calcCustoReal, moeda, moedaCurta, vaNoReport, empresasFrente, qualidadeRdo, qualidadeDocs, LIMIAR_DIAS: { fisico: LIMIAR_DIAS_FISICO, financeiro: LIMIAR_DIAS_FINANCEIRO }, MAPA_ST, atividadesParaMapa, ptsZona, geoZona, mapasDaObra, fotoNoMapa };
+    LIM_FOTOS: LIM.fotos, calcFinanceiro, calcCustoReal, calcFaturamento, calcRealFinanceiro, calcIDC, moeda, moedaCurta, vaNoReport, empresasFrente, qualidadeRdo, qualidadeDocs, LIMIAR_DIAS: { fisico: LIMIAR_DIAS_FISICO, financeiro: LIMIAR_DIAS_FINANCEIRO }, MAPA_ST, atividadesParaMapa, ptsZona, geoZona, mapasDaObra, fotoNoMapa };
 })(typeof window !== 'undefined' ? window : globalThis);
 

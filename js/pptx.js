@@ -52,14 +52,14 @@
   }
   // custo real (planilha): usa o próprio corte (fim do mês do report) e só marca o mês com * quando ele é parcial
   function serieFinanceira(rf, corte) {
-    const c = rf.fonte === 'planilha' ? rf.corte : corte, pts = rf.pts, mc = c.slice(0, 7);
-    const marca = rf.fonte === 'planilha' && !rf.parcial ? null : mc;
+    const c = rf.fonte ? rf.corte : corte, pts = rf.pts, mc = c.slice(0, 7);
+    const marca = c === fimDoMes(mc) ? null : mc;
     const meses = mesesEntre(pts[0].data.slice(0, 7), pts.at(-1).data.slice(0, 7));
     return { cat: meses.map(k => rotulo(k, marca)), ac: acumulado(pts, c, rf.evFrac, meses) };
   }
 
   // ---------- montagem ----------
-  async function gerar({ paper, o, r, rf, progresso }) {
+  async function gerar({ paper, o, r, rf, fr, dataFin, progresso }) {
     if (!root.PptxGenJS) await new Promise((ok, err) => { const s = document.createElement('script'); s.src = LIB; s.onload = ok; s.onerror = () => err(new Error('PptxGenJS')); document.head.appendChild(s); });
     try { await document.fonts.ready; } catch (e) { /* segue */ }
     const pptx = new root.PptxGenJS();
@@ -78,7 +78,7 @@
     try {
       for (let i = 0; i < folhas.length; i++) {
         if (progresso) progresso(i + 1, folhas.length);
-        await new Slide(pptx, folhas[i], { o, r, rf, dataURL }).montar();
+        await new Slide(pptx, folhas[i], { o, r, rf, fr, dataFin, dataURL }).montar();
       }
     } finally { folhas.forEach((f, i) => { f.style.zoom = zooms[i]; }); }
     return pptx.write({ outputType: 'blob' });
@@ -317,7 +317,7 @@
 
     // ----- gráficos nativos -----
     grafico(el) {
-      const b = this.box(el.getBoundingClientRect()), { o, r, rf } = this.ctx;
+      const b = this.box(el.getBoundingClientRect()), { o, r, rf, fr, dataFin } = this.ctx;
       const eixo = { catAxisLabelFontFace: 'Barlow', valAxisLabelFontFace: 'Barlow', catAxisLabelFontSize: 8, valAxisLabelFontSize: 8, catAxisLabelColor: COR.eixo, valAxisLabelColor: COR.eixo,
         catAxisLineShow: true, catAxisLineColor: COR.grade, valAxisLineShow: false, valGridLine: { color: COR.grade, size: 0.5 }, catGridLine: { style: 'none' }, showLegend: false, plotArea: { fill: { color: 'FFFFFF', transparency: 100 } } };
       const linha = (nome, cat, vals, cor, extra = {}) => ({ type: this.pptx.ChartType.line, data: [{ name: nome, labels: cat, values: vals }],
@@ -338,18 +338,27 @@
           valAxisMinVal: 0, valAxisLabelFormatCode: '0%', displayBlanksAs: 'gap' });
         return;
       }
-      // custo real (planilha de orçamento cliente): barras do desembolso mensal em R$
-      if (el.id === 'ch-cr-mes' && rf && rf.meses) {
-        const cat = rf.meses.map(m => rotulo(m.mes, rf.parcial ? rf.corte.slice(0, 7) : null));
+      // financeiro realizado (faturamento do contrato ou custo real): barras mensais em R$ e curva previsto × realizado
+      if (el.id === 'ch-real-mes' && fr && fr.meses) {
+        const cat = fr.meses.map(m => rotulo(m.mes, fr.parcial ? fr.corte.slice(0, 7) : null));
         this.s.addChart(this.pptx.ChartType.bar, [
-          { name: 'Previsto no mês', labels: cat, values: rf.meses.map(m => (m.previsto || 0) / 1e6) },
-          { name: 'Realizado no mês', labels: cat, values: rf.meses.map(m => m.realizado === null || m.realizado === undefined ? null : m.realizado / 1e6) },
+          { name: 'Previsto no mês', labels: cat, values: fr.meses.map(m => (m.previsto || 0) / 1e6) },
+          { name: 'Realizado no mês', labels: cat, values: fr.meses.map(m => m.realizado === null || m.realizado === undefined ? null : m.realizado / 1e6) },
         ], { ...b, ...eixo, barDir: 'col', barGrouping: 'clustered', barGapWidthPct: 60, chartColors: ['FFFFFF', COR.real], dataBorder: { pt: 0.75, color: COR.plan },
           valAxisMinVal: 0, valAxisLabelFormatCode: '"R$ "0.0" mi"', displayBlanksAs: 'gap' });
         return;
       }
-      if (el.id === 'ch-fin-r' && rf && rf.pts) {
-        const S = serieFinanceira(rf, r.corte);
+      if (el.id === 'ch-real-r' && fr && fr.pts) {
+        const S = serieFinanceira(fr, fr.corte);
+        this.s.addChart([
+          linha('Previsto', S.cat, S.ac.map(x => x.prev), COR.plan),
+          linha('Realizado', S.cat, S.ac.map(x => x.real), COR.real, rotReal),
+        ], { ...b, ...eixo, valAxisMinVal: 0, valAxisMaxVal: 1, valAxisMajorUnit: 0.25, valAxisLabelFormatCode: '0%', displayBlanksAs: 'gap' });
+        return;
+      }
+      // valor agregado (Prevision)
+      if (el.id === 'ch-va-r' && rf && rf.pts) {
+        const S = serieFinanceira(rf, dataFin || r.corte);
         this.s.addChart([
           linha('Base', S.cat, S.ac.map(x => x.base), COR.base, { lineDash: 'dash', lineSize: 1.5 }),
           linha('Planejado (PV)', S.cat, S.ac.map(x => x.prev), COR.plan),
