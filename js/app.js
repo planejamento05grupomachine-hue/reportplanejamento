@@ -1435,6 +1435,8 @@
           <small class="hint">Automático: o quadro só entra no report quando há SPI e a Curva S financeira está na base do contrato. Na aba Obra, administradores e diretoria continuam vendo os números.</small></div>
         <div class="field"><label for="o-ip">Índice que acende o farol de prazo</label><select class="inp" id="o-ip">${Object.entries(OPCOES_IP).map(([k, t]) => `<option value="${k}" ${((o && o.indicePrazo) || 'tempo') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
           <small class="hint">Prazo ganho: compara datas (em quantos dias o realizado está atrás do plano) e não perde sensibilidade no fim da obra; no primeiro mês, ou com menos de 2% previsto, o painel usa o IDP em %. IDP em %: realizado ÷ previsto, a regra anterior.</small></div>
+        <div class="field"><label for="o-tx-pct">Taxa de administração · % do valor agregado</label><div style="display:flex;gap:8px;max-width:420px"><input class="inp" id="o-tx-pct" type="number" step="0.01" min="0" placeholder="ex.: 8" value="${o && o.taxaAdm ? fmtNum(o.taxaAdm.pct * 100, 2).replace(',', '.') : ''}"><input class="inp" id="o-tx-mob" type="number" step="0.01" min="0" placeholder="mobilização (R$)" value="${o && o.taxaAdm ? o.taxaAdm.mobilizacao || '' : ''}"></div>
+          <small class="hint">Só para obra por administração. A taxa devida até uma data é a mobilização mais esse % do valor agregado das obras no Prevision (sem a própria linha da taxa), limitada ao contrato. É o previsto da linha da taxa no dashboard. Em branco, a linha usa o avanço físico da obra.</small></div>
         <div class="bar-actions"><button class="btn" type="submit">Salvar obra</button><button class="btn sec2" type="button" data-go="${o ? 'obra' : 'portfolio'}">Cancelar</button></div>
       </form>`;
   }
@@ -1944,8 +1946,25 @@
     // (a taxa é medida proporcional ao avanço físico, balanceada pela saúde do contrato). O Prevision não acompanha isso.
     const contratoTaxa = o.medicao && o.medicao.resumo && o.medicao.resumo.totalContrato;
     const taxaReal = cr && cr.taxa !== null && contratoTaxa > 0 ? cr.taxa / contratoTaxa : null;
+    // Previsto da taxa pela regra do contrato (cadastro: taxaAdm = { pct, mobilizacao }): mobilização + pct × valor agregado
+    // das obras no Prevision na data do corte (VA total menos o da própria linha da taxa), limitado ao contrato.
+    // Saúde do contrato: quanto o saldo (contrato − medido, Controle de Medição) cobre da taxa que ainda falta pela regra
+    // (pct × valor agregado das obras que falta executar). Abaixo de 100%, o saldo não chega ao fim da obra.
+    const tetoTaxa = x => {
+      const T = o.taxaAdm; if (!T || !(T.pct > 0) || !(contratoTaxa > 0) || !cr) return null;
+      const rfT = Core.calcFinanceiro(o, cr.corte); if (!rfT || !(rfT.ev > 0)) return null;
+      const orc = (cr.etapas.find(e => /taxa de administra/i.test(e.nome)) || {}).projecao || contratoTaxa;
+      const vaObras = rfT.ev - (x.real || 0) * orc, bacObras = cr.total - orc;
+      const saldo = o.medicao.resumo.saldo, falta = T.pct * Math.max(0, bacObras - vaObras);
+      return { prev: Math.min(contratoTaxa, (T.mobilizacao || 0) + T.pct * vaObras) / contratoTaxa,
+        cobertura: saldo !== null && saldo !== undefined && falta > 0 ? saldo / falta : null, saldo, falta };
+    };
     const marcos = nos.filter(x => x.nivel === 2 && ehMarco(x)).map(x => {
-      if (/^\s*taxa de administra/i.test(x.nome || '') && taxaReal !== null) return { ...x, base: null, prev: r.real, real: taxaReal, nota: 'medido ÷ contrato · previsto = avanço físico da obra' };
+      if (/^\s*taxa de administra/i.test(x.nome || '') && taxaReal !== null) {
+        const t = tetoTaxa(x);
+        return { ...x, base: null, prev: t ? t.prev : r.real, real: taxaReal,
+          nota: t ? `medido ÷ contrato · previsto = mobilização + ${fmtNum(o.taxaAdm.pct * 100, 0)}% do valor agregado${t.cobertura !== null ? ` · saldo ${Core.moedaCurta(t.saldo)} cobre ${fmtNum(t.cobertura * 100, 0)}% da taxa da obra restante (${Core.moedaCurta(t.falta)})` : ''}` : 'medido ÷ contrato · previsto = avanço físico da obra' };
+      }
       if (semBase(x)) return { ...x, base: null, prev: null, nota: 'sem linha de base no cronograma' };
       return x;
     });
@@ -2409,7 +2428,8 @@
       const ini = v('o-ini') || null, fim = v('o-fim') || null;
       if (ini && fim && fim < ini) { toast('O fim contratual é anterior ao início.'); return; }
       const dados = { novo, id: novo ? v('o-codigo') : S.obraId, codigo: v('o-codigo'), nome: v('o-nome'), cliente: v('o-cliente'), contratante: v('o-contratante'), cidade: v('o-cidade'),
-        contrato: v('o-contrato'), local: v('o-local'), responsavel: v('o-resp'), reportVA: v('o-va'), indicePrazo: v('o-ip'), prazo_inicio: ini, prazo_fim: fim, prazo_dias: ini && fim ? Core.diff(ini, fim) + 1 : null };
+        contrato: v('o-contrato'), local: v('o-local'), responsavel: v('o-resp'), reportVA: v('o-va'), indicePrazo: v('o-ip'),
+        taxaAdm: +v('o-tx-pct') > 0 ? { pct: +v('o-tx-pct') / 100, mobilizacao: +v('o-tx-mob') || 0 } : null, prazo_inicio: ini, prazo_fim: fim, prazo_dias: ini && fim ? Core.diff(ini, fim) + 1 : null };
       const atual = !novo && (DB.obras.find(x => x.id === S.obraId) || {}).capa || {};
       const lg = S.logoCli && S.logoCli.id === (novo ? null : S.obraId) ? S.logoCli.src : atual.logo || '';
       dados.capa = { titulo: v('o-capa-titulo'), revisao: v('o-capa-rev') || '00', logo: lg };
