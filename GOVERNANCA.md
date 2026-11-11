@@ -215,3 +215,22 @@ a seleção automática das fotos dos RDOs. O topo do report (só administrador)
   corte. A escolha manual em *Mês da capa* continua valendo para a carga em que foi feita.
 - **Login**: leitura com nova tentativa em falha passageira do GitHub Pages (5xx); o arquivo de restrições é opcional e não
   impede a entrada.
+
+## Custo real e taxa de administração (obras por administração, regra de 10/11/2026)
+
+- **Custo real** = planilha de orçamento cliente da Machine (REVnn (Cliente), abas FÍS X FIN, LANÇ.FIN e CONC.APROP),
+  enviada em Alimentar. Realizado = contas pagas em nome do cliente (faturamento direto, valor bruto, apropriação do
+  título no Sienge, pela data da baixa) + medições da taxa enviadas ao cliente (último dia do mês do envio; a do mês
+  corrente não entra). Com a planilha, ela substitui a Curva S financeira do Prevision nas folhas financeiras.
+- **Corte financeiro do report = fim do mês de referência** (report de outubro = baixas até 31/10), na curva, no mês a mês
+  e por etapa. A aba Obra mostra até a última baixa.
+- **IDC = valor agregado (Curva S financeira do Prevision) ÷ custo real**, na mesma data e na mesma base (total da curva
+  a ±2% do total da planilha). Sem planilha, vale o IDC da Gestão de Custos do Prevision.
+- **Taxa de administração** (cadastro da obra: % do valor agregado e mobilização): teto acumulado = mobilização +
+  % × valor agregado das obras (sem a própria linha da taxa), limitado ao contrato; mede-se abaixo do teto considerando o
+  saldo e a saúde do contrato. No dashboard: realizado = medido ÷ contrato; previsto = teto; nota com a cobertura do saldo.
+- **Controle de Medição**: contrato e medições liberadas pelos valores do Sienge (sem fórmula que mude o passado); ISS só
+  quando o Sienge mostrar; "Medição Machine prevista" nunca acima do saldo do contrato; sem jargão interno no status.
+- **Itens sem linha de base** no Prevision ficam no bloco de acompanhamento, sem seta de desvio.
+- **Conferência antes de publicar**: avanço financeiro do dashboard = folha Financeiro = total por etapa = realizado
+  acumulado do mês. Ajuste se faz na fonte, não no PowerPoint baixado.

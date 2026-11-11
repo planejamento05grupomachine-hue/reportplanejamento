@@ -1,5 +1,15 @@
 # Notas de versão — Painel de Obras Machine
 
+## 2026-11-10g · PowerPoint segue o corte do custo real; governança da taxa
+
+- PowerPoint: a Curva S financeira e as barras do desembolso mensal usam o corte do custo real (fim do mês do report).
+  A curva para no mês do report e o mês só leva asterisco quando é parcial.
+- GOVERNANCA.md: regras de custo real e taxa de administração (obras por administração) fixadas em 10/11/2026.
+## 2026-11-10g · PowerPoint segue o corte do custo real; governança da taxa
+
+- PowerPoint: a Curva S financeira e as barras do desembolso mensal usam o corte do custo real (fim do mês do report).
+  A curva para no mês do report e o mês só leva asterisco quando é parcial.
+- GOVERNANCA.md: regras de custo real e taxa de administração (obras por administração) fixadas em 10/11/2026.
 ## 2026-11-10f · Taxa de administração pela regra do contrato
 
 - Cadastro da obra: **Taxa de administração · % do valor agregado** e mobilização (obras por administração; 207: 8% e
