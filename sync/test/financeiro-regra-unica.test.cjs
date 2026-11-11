@@ -60,10 +60,14 @@ test('IDC = valor agregado ÷ financeiro realizado, na mesma data e base', () =>
   assert.equal(idc.tipo, 'faturamento');
 });
 
-test('IDC: curva do valor agregado em outra base não gera índice (cai para o Prevision)', () => {
+test('IDC: curva do valor agregado em outra base (custo × venda) usa os percentuais', () => {
   const o = obraEmpreitada();
-  o.financeiro.curva = o.financeiro.curva.map(p => ({ ...p, base: p.base * 3, previsto: p.previsto * 3, realizado: p.realizado * 3 }));
-  assert.equal(Core.calcIDC(o, '2026-08-31'), null);
+  // o Prevision exportou a categoria de custos: base de 800 em vez dos 1.000 do contrato, mesmos percentuais
+  o.financeiro.curva = o.financeiro.curva.map(p => ({ ...p, base: p.base * 0.8, previsto: p.previsto * 0.8, realizado: p.realizado * 0.8 }));
+  const idc = Core.calcIDC(o, '2026-08-31');
+  assert.equal(idc.mesmaBase, false);
+  assert.ok(Math.abs(idc.v - 560 / 600) < 1e-9, 'o índice é o mesmo da base de venda');
+  assert.ok(Math.abs(idc.evPct - 0.56) < 1e-9 && Math.abs(idc.acPct - 0.6) < 1e-9);
 });
 
 test('administração (custo real da planilha) usa o mesmo IDC', () => {

@@ -466,7 +466,7 @@
         <div class="kpi"><span>Medido acumulado</span><b>${moeda(rf.faturamento.medido)}</b><small>${rf.faturamento.pctMedido !== null ? pct(rf.faturamento.pctMedido, 1) + ' do contrato · ' : ''}última medição ${esc(rf.faturamento.ultimaMedicao || '—')}</small></div>
         <div class="kpi"><span>Saldo de contrato</span><b>${moeda(rf.faturamento.saldo)}</b><small>a medir</small></div>` : ''}
         <div class="kpi"><span>SPI</span><b>${rf.spi !== null ? fmtNum(rf.spi, 2) : '—'}</b><small>${rf.spi !== null ? `EV ${Core.moedaCurta(rf.ev)} ÷ PV ${Core.moedaCurta(rf.pv)}` : 'EV ÷ PV'}</small></div>
-        <div class="kpi"><span>IDC</span><b>${idcO ? fmtNum(idcO.v, 2) : '—'}</b><small>${idcO ? (idcO.fonte === 'va-real' ? `EV ${Core.moedaCurta(idcO.ev)} ÷ realizado ${Core.moedaCurta(idcO.ac)}` : 'Gestão de Custos do Prevision') : 'sem financeiro realizado'}</small></div>
+        <div class="kpi"><span>IDC</span><b>${idcO ? fmtNum(idcO.v, 2) : '—'}</b><small>${idcO ? (idcO.fonte === 'va-real' ? contaIdc(idcO) : 'Gestão de Custos do Prevision') : 'sem financeiro realizado'}</small></div>
         ${rf.medidoVsExecutado && !ehCliente() ? (() => { const mv = rf.medidoVsExecutado;
           return `<div class="kpi"><span>Medido × executado <em class="int">interno</em></span><b class="${mv.situacao === 'em-linha' ? '' : 'warn'}">${mv.situacao === 'em-linha' ? 'Em linha' : (mv.dif > 0 ? '+' : '−') + Core.moedaCurta(Math.abs(mv.dif))}</b>
             <small>${mv.situacao === 'medido-acima' ? `medição à frente da execução (${pct(mv.frac, 1)} do contrato)` : mv.situacao === 'medido-abaixo' ? `execução ainda não medida (${pct(-mv.frac, 1)} do contrato)` : 'diferença até 2% do contrato'} · medido ${Core.moedaCurta(mv.medido)} × EV ${Core.moedaCurta(mv.ev)}</small></div>`; })() : ''}
@@ -1544,7 +1544,7 @@
   // ou foi faturado). Sem as duas bases iguais, cai para o IDC da Gestão de Custos do Prevision.
   function idcDaObra(o, r) {
     const x = Core.calcIDC(o, corteFinReport(o, r));
-    if (x) return { v: x.v, fonte: 'va-real', data: x.data, ev: x.ev, ac: x.ac, tipo: x.tipo };
+    if (x) return { v: x.v, fonte: 'va-real', data: x.data, ev: x.ev, ac: x.ac, evPct: x.evPct, acPct: x.acPct, mesmaBase: x.mesmaBase, tipo: x.tipo };
     const IP = o.indicesPrevision;
     return IP && IP.idc ? { v: IP.idc, fonte: 'prevision', data: IP.dataReferencia || null } : null;
   }
@@ -1574,7 +1574,9 @@
     faturamento: { sub: 'faturamento do contrato', total: 'Valor do contrato', totalSub: 'com aditivos', real: 'Faturado acumulado', saldo: 'Saldo a faturar', mensal: 'Faturamento mensal', nota: NOTA_FATURAMENTO, curva: 'Curva S do faturamento' },
     desembolso: { sub: 'custo real', total: 'Projeção total da obra', totalSub: 'orçamento consolidado', real: 'Realizado acumulado', saldo: 'Saldo a realizar', mensal: 'Desembolso mensal', nota: NOTA_CUSTO_REAL, curva: 'Curva S financeira' },
   };
-  const notaIdc = idc => idc && idc.fonte === 'va-real' ? `<p class="rx-glos"><b>IDC</b> = EV ÷ realizado acumulado = ${Core.moedaCurta(idc.ev)} ÷ ${Core.moedaCurta(idc.ac)} = <b>${fmtNum(idc.v, 2)}</b> · posição de ${dCurto(idc.data)}</p>` : '';
+  // conta do IDC por extenso: em R$ quando as duas bases coincidem; em % do total de cada uma quando não (custo × venda)
+  const contaIdc = idc => idc.mesmaBase ? `EV ${Core.moedaCurta(idc.ev)} ÷ realizado ${Core.moedaCurta(idc.ac)}` : `${pct(idc.evPct, 1)} do valor agregado ÷ ${pct(idc.acPct, 1)} realizado`;
+  const notaIdc = idc => idc && idc.fonte === 'va-real' ? `<p class="rx-glos"><b>IDC</b> = ${idc.mesmaBase ? 'EV ÷ realizado acumulado' : '% do valor agregado ÷ % realizado'} = ${contaIdc(idc).replace(/^EV /, '').replace(/ realizado /, ' ')} = <b>${fmtNum(idc.v, 2)}</b> · posição de ${dCurto(idc.data)}</p>` : '';
   function cartoesReal(fr) {
     const mc = Core.moedaCurta, R = ROT_REAL[fr.tipo];
     return `<div class="rx-cards">

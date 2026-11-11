@@ -598,15 +598,18 @@
     const a = calcCustoReal(obra, ate);
     return a ? { ...a, tipo: 'desembolso' } : calcFaturamento(obra, ate);
   }
-  // IDC = valor agregado ÷ financeiro realizado, acumulados até a mesma data e na mesma base (índice de desempenho de custo,
-  // CPI = EV ÷ AC, com AC = o que o cliente já pagou ou foi faturado). Só vale quando a curva do valor agregado e o realizado
-  // estão na mesma base (totais a ±2%); senão devolve null e o report cai para o IDC da Gestão de Custos do Prevision.
+  // IDC = valor agregado ÷ financeiro realizado, acumulados até a mesma data (índice de desempenho de custo, CPI = EV ÷ AC,
+  // com AC = o que o cliente já pagou ou foi faturado). Calculado em percentuais — % do valor agregado sobre a base da curva
+  // do Prevision ÷ % realizado sobre o total (contrato ou projeção) —, porque o Prevision exporta a curva em categorias de
+  // base diferente (custos do projeto × recebíveis/valor de venda) e os percentuais são os mesmos. Com as duas bases iguais
+  // (totais a ±2%) é exatamente EV ÷ AC em R$ (mesBase = true).
   function calcIDC(obra, ate) {
     const fr = calcRealFinanceiro(obra, ate);
     if (!fr || !(fr.realizado > 0)) return null;
     const rf = calcFinanceiro(obra, fr.corte);
-    if (!rf || !(rf.ev > 0) || !rf.totalCurva || Math.abs(rf.totalCurva / fr.total - 1) > 0.02) return null;
-    return { v: rf.ev / fr.realizado, ev: rf.ev, ac: fr.realizado, data: fr.corte, tipo: fr.tipo };
+    if (!rf || !(rf.ev > 0) || !(rf.totalCurva > 0)) return null;
+    const evPct = rf.ev / rf.totalCurva, acPct = fr.realizado / fr.total;
+    return { v: evPct / acPct, ev: rf.ev, ac: fr.realizado, evPct, acPct, mesmaBase: Math.abs(rf.totalCurva / fr.total - 1) <= 0.02, data: fr.corte, tipo: fr.tipo };
   }
   // R$ compacto para cartões: "R$ 12,84 mi" · "R$ 103,0 mil"
   const moedaCurta = v => v === null || v === undefined || isNaN(v) ? '—' : Math.abs(v) >= 1e6 ? 'R$ ' + fmtNum(v / 1e6, 2) + ' mi' : Math.abs(v) >= 1e3 ? 'R$ ' + fmtNum(v / 1e3, 1) + ' mil' : 'R$ ' + fmtNum(v, 0);

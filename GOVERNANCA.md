@@ -222,7 +222,7 @@ Toda obra tem **três números**, e o report tem uma folha para cada, na mesma o
 | Número | Fonte | Folha do report |
 |---|---|---|
 | **Físico** (% por duração) | Prevision: Cronograma, Progresso por tarefas, Curva S | Físico + IDP |
-| **Valor agregado** (EV, PV, %) | Prevision: Curva S financeira (Financeiro VA, base = valor de venda / recebíveis do projeto) | Valor agregado (Prevision) + SPI |
+| **Valor agregado** (EV, PV, %) | Prevision: Curva S financeira (Financeiro VA). Empreitada: categoria Recebíveis do projeto (valor de venda); administração: Custos do projeto | Valor agregado (Prevision) + SPI |
 | **Financeiro realizado** (AC) | o que de fato foi faturado ao cliente ou pago por ele (abaixo) | Financeiro (previsto x realizado) e mês a mês / por etapa |
 
 Há só **duas modalidades**, e a diferença é a fonte do financeiro realizado:
@@ -235,8 +235,9 @@ Há só **duas modalidades**, e a diferença é a fonte do financeiro realizado:
 
 **Índices (mesma definição nas duas modalidades):**
 - **IDP** = prazo ganho do Prevision (Earned Schedule), farol em dias. **SPI** = EV ÷ PV.
-- **IDC = EV ÷ financeiro realizado acumulado** (CPI = EV ÷ AC), na mesma data e na mesma base. Só vale quando a curva do valor
-  agregado e o realizado estão na mesma base (totais a ±2%); senão cai para o IDC da Gestão de Custos do Prevision.
+- **IDC = % do valor agregado ÷ % realizado**, acumulados até a mesma data (CPI = EV ÷ AC, com AC = o que o cliente já pagou ou foi
+  faturado). Em percentuais porque o Prevision exporta a curva em duas bases (Custos do projeto × Recebíveis do projeto); com as bases
+  iguais (±2%) é exatamente EV ÷ AC em R$. Sem financeiro realizado, cai para o IDC da Gestão de Custos do Prevision.
 - "Real. ÷ prev." (mês a mês) é a **aderência financeira**: ritmo de desembolso ou faturamento contra o plano. Não é o IDC.
 
 **Regras comuns:**
