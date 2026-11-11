@@ -50,10 +50,12 @@
     const mes = meses.map(k => { const d = porMes[k] || {}; return { base: d.base ?? null, prev: d.previsto ?? null, real: k > mc ? null : k === mc ? Math.max(0, r.periodo.real) : d.realizado ?? null }; });
     return { cat: meses.map(k => rotulo(k, mc)), ac, mes };
   }
+  // custo real (planilha): usa o próprio corte (fim do mês do report) e só marca o mês com * quando ele é parcial
   function serieFinanceira(rf, corte) {
-    const pts = rf.pts, mc = corte.slice(0, 7);
+    const c = rf.fonte === 'planilha' ? rf.corte : corte, pts = rf.pts, mc = c.slice(0, 7);
+    const marca = rf.fonte === 'planilha' && !rf.parcial ? null : mc;
     const meses = mesesEntre(pts[0].data.slice(0, 7), pts.at(-1).data.slice(0, 7));
-    return { cat: meses.map(k => rotulo(k, mc)), ac: acumulado(pts, corte, rf.evFrac, meses) };
+    return { cat: meses.map(k => rotulo(k, marca)), ac: acumulado(pts, c, rf.evFrac, meses) };
   }
 
   // ---------- montagem ----------
@@ -338,7 +340,7 @@
       }
       // custo real (planilha de orçamento cliente): barras do desembolso mensal em R$
       if (el.id === 'ch-cr-mes' && rf && rf.meses) {
-        const cat = rf.meses.map(m => rotulo(m.mes, rf.corte.slice(0, 7)));
+        const cat = rf.meses.map(m => rotulo(m.mes, rf.parcial ? rf.corte.slice(0, 7) : null));
         this.s.addChart(this.pptx.ChartType.bar, [
           { name: 'Previsto no mês', labels: cat, values: rf.meses.map(m => (m.previsto || 0) / 1e6) },
           { name: 'Realizado no mês', labels: cat, values: rf.meses.map(m => m.realizado === null || m.realizado === undefined ? null : m.realizado / 1e6) },
