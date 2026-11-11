@@ -23,6 +23,7 @@ const painel = require('./lib/painel.cjs');
 const { lerConjunto, arquivosDaPasta, lerPlanilha } = require('./lib/leitura.cjs');
 const { validarFisico, validarFinanceiro } = require('./lib/validacao.cjs');
 const prevApi = require('./lib/prevision-api.cjs');
+const Categoria = require('./lib/categoria.cjs');
 
 const erro = (msg, codigo) => Object.assign(new Error(msg), { codigo });
 const NATUREZAS = ['fisico', 'financeiro'];
@@ -64,7 +65,9 @@ function comPadroes(cfg) {
   return cfg.obras.map(o => ({ ...o,
     fisico: { ...p.fisico, ...o.fisico, relatorios: { ...(p.fisico || {}).relatorios, ...((o.fisico || {}).relatorios) } },
     financeiro: { ...p.financeiro, ...o.financeiro, relatorios: { ...(p.financeiro || {}).relatorios, ...((o.financeiro || {}).relatorios) } },
-    exportacao: { ...p.exportacao, ...o.exportacao } }));
+    exportacao: { ...p.exportacao, ...o.exportacao,
+      fisico: { ...(p.exportacao || {}).fisico, ...((o.exportacao || {}).fisico) },
+      financeiro: { ...(p.exportacao || {}).financeiro, ...((o.exportacao || {}).financeiro) } } }));
 }
 function escolherObras(cfg, op) {
   const todas = comPadroes(cfg);
@@ -75,7 +78,23 @@ function escolherObras(cfg, op) {
 // A API só entra num conjunto da obra depois de comparada com a exportação do mesmo dia (sync/comparar-api.cjs)
 const apiValidada = (obra, nat) => !!(obra.api && obra.api.equivalenciaValidada && (obra.api.equivalenciaValidada.conjuntos || []).includes(nat));
 // físico pela API fica incompleto (sem Progresso por tarefas e Cronograma): no automático, só o financeiro vai pela API
-const fonteDe = (obra, nat, op) => (op.fonte !== 'auto' ? op.fonte : nat === 'financeiro' && apiValidada(obra, nat) ? 'api' : 'exportacao');
+// e a API só entrega a categoria principal de orçamentos: obra que pede outra (ex.: Recebíveis) vai pela exportação
+const fonteDe = (obra, nat, op) => (op.fonte !== 'auto' ? op.fonte : nat === 'financeiro' && apiValidada(obra, nat) && !Categoria.exigeInterface(obra) ? 'api' : 'exportacao');
+
+// Categoria de orçamentos do Dashboard (só obras que pedem uma): avisos sem números da obra
+function mensagensDaCategoria(obra, c) {
+  if (!c) return [];
+  const m = [];
+  if (c.restaurada === false) m.push(`ATENÇÃO: o robô trocou a categoria de orçamentos do Dashboard da obra ${obra.codigo} para "${c.pedida}" e NÃO conseguiu devolver a original ("${c.original}"): conferir no Prevision (Dashboard → Categoria de orçamentos).`);
+  if (c.trocou && c.valorTotalAntes != null && c.valorTotalAntes === c.valorTotalDepois) m.push(`Obra ${obra.codigo}: o Valor Total do Dashboard não mudou ao trocar para "${c.pedida}" (as duas categorias podem ter o mesmo total; conferir).`);
+  return m;
+}
+
+// Obra com o orçamento ainda não vinculado ao cronograma no Prevision (financeiro.aguardaVinculo em sync/obras.json): o
+// Dashboard "sem dados" na perspectiva econômica é a situação ESPERADA, não uma falha. Só vale para o financeiro e só nas
+// obras marcadas — numa obra que já tinha Valor Agregado, "sem dados" continua sendo falha.
+const AGUARDANDO = 'aguardando vínculo do orçamento no Prevision';
+const aguardandoVinculo = (obra, nat, e) => nat === 'financeiro' && !!e.erro && e.erro.codigo === 'SEM_DADOS_PREVISION' && !!(obra.financeiro && obra.financeiro.aguardaVinculo);
 
 // ---------- coleta de uma obra: { fisico: { fonte, arquivos | dados | erro }, financeiro: … } ----------
 async function coletar(obra, ctx) {
@@ -87,6 +106,7 @@ async function coletar(obra, ctx) {
     try {
       if (estado.falha.api) throw estado.falha.api;
       if (!obra.prevision.apiProjectId) throw erro(`A obra ${obra.codigo} não tem o id do projeto na API do Prevision.`, 'VINCULO_API_PENDENTE');
+      if (n === 'financeiro' && Categoria.exigeInterface(obra)) throw erro(`A obra ${obra.codigo} usa a categoria "${Categoria.categoriaPedida(obra)}" no financeiro, que a API oficial não entrega (só a principal): use a exportação pela interface.`, 'CATEGORIA_SO_PELA_INTERFACE');
       if (!apiValidada(obra, n) && !op.simular) throw erro(`A API ainda não foi comparada com a exportação (${n}) da obra ${obra.codigo}.`, 'API_NAO_VALIDADA');
       const x = await prevApi.coletarAPI(deps.api(), obra.prevision.apiProjectId, n, obra.exportacao.fisico.perspectiva);
       out[n] = { fonte: 'api', ...x, coletadoEm: new Date().toISOString() };
@@ -99,7 +119,7 @@ async function coletar(obra, ctx) {
       const pasta = fs.mkdtempSync(path.join(tmp, `obra-${obra.codigo}-`));
       const r = await (await deps.exportar())(obra, pasta, arq => lerPlanilha(XLSX, new Uint8Array(fs.readFileSync(arq))).dado, exp);
       const ler = lista => lista.map(x => ({ nome: x.nome, bytes: new Uint8Array(fs.readFileSync(x.caminho)), coletadoEm: x.coletadoEm }));
-      const extra = n => ({ fonte: 'exportacao', projeto: r.projeto, periodoTarefas: (r.periodoTarefas || {})[n] || null, dashboardAtualizado: !!r.dashboardAtualizado });
+      const extra = n => ({ fonte: 'exportacao', projeto: r.projeto, periodoTarefas: (r.periodoTarefas || {})[n] || null, dashboardAtualizado: !!r.dashboardAtualizado, ...(n === 'financeiro' && r.categoria ? { categoria: r.categoria } : {}) });
       exp.forEach(n => { out[n] = (r.erros || {})[n] ? { ...extra(n), erro: r.erros[n] } : { ...extra(n), arquivos: ler(r[n] || []) }; });
     } catch (e) { if (FALHA_DA_FONTE.includes(e.codigo)) estado.falha.exportacao = e; exp.forEach(n => { out[n] = { fonte: 'exportacao', erro: e }; }); }
   }
@@ -143,13 +163,20 @@ async function processarObra(obra, ctx) {
 
   const coleta = await coletar(obra, ctx);
   const entradas = Object.entries(coleta);
-  res.coleta = entradas.every(([, e]) => !e.erro) ? 'concluida' : entradas.some(([, e]) => !e.erro) ? 'parcial' : 'falhou';
+  const semErro = ([n, e]) => !e.erro || aguardandoVinculo(obra, n, e);
+  res.coleta = entradas.every(semErro) ? 'concluida' : entradas.some(semErro) ? 'parcial' : 'falhou';
   res.coletaEm = agoraISO;
+  for (const [, e] of entradas) res.mensagens.push(...mensagensDaCategoria(obra, e.categoria));
   const proj = entradas.map(([, e]) => e.projeto).find(Boolean);
   if (proj) res.projetoPrevision = proj.ganttId;
 
   let novo = null;
   for (const [nat, e] of entradas) {
+    if (aguardandoVinculo(obra, nat, e)) {
+      res.conjuntos[nat] = { status: 'aguardando-vinculo', fonte: e.fonte, aguardando: AGUARDANDO, verificacoes: [], arquivos: [] };
+      res.mensagens.push(`Obra ${obra.codigo}: financeiro ${AGUARDANDO} (esperado; entra sozinho quando o Prevision entregar dados).`);
+      continue;
+    }
     if (e.erro) { res.conjuntos[nat] = { status: 'falhou', fonte: e.fonte, erro: { codigo: e.erro.codigo || null, msg: e.erro.message }, verificacoes: [], arquivos: [] }; continue; }
     const cfg = obra[nat], conj = conjuntoDe(e, nat, XLSX);
     const v = (nat === 'fisico' ? validarFisico : validarFinanceiro)(conj, base, cfg, { hoje, aceitarNovaBase: op.aceitarNovaBase });
@@ -171,7 +198,8 @@ async function processarObra(obra, ctx) {
   }
   const sts = Object.values(res.conjuntos).map(c => c.status);
   if (sts.some(s => s === 'bloqueado' || s === 'falhou')) res.mensagens.push('Parte da carga não entrou: a última carga válida desse conjunto foi preservada.');
-  if (!novo) { res.rascunho = sts.length && sts.every(s => s === 'inalterado') ? 'inalterado' : 'bloqueado'; return res; }
+  const stsReais = sts.filter(s => s !== 'aguardando-vinculo');
+  if (!novo) { res.rascunho = stsReais.length && stsReais.every(s => s === 'inalterado') ? 'inalterado' : 'bloqueado'; return res; }
 
   novo.sync = { versao: 1, coletaEm: agoraISO, conjuntos: Object.fromEntries(Object.entries(res.conjuntos).map(([k, c]) => [k, { status: c.status, fonte: c.fonte, corte: c.corte || null, ultimoRealizado: c.ultimoRealizado || null, ultimaMedicaoPrevision: c.ultimaMedicaoPrevision || null, hash: c.hash || null, arquivos: c.arquivos }])) };
   if (op.simular) { res.rascunho = 'simulado'; res.seria = { dataCorte: novo.dataCorte, dataCorteFinanceiro: novo.dataCorteFinanceiro }; return res; }
@@ -214,6 +242,7 @@ function resumoPublico(r) {
     for (const c of Object.values(o.conjuntos || {})) {
       for (const v of c.verificacoes.filter(x => x.nivel === 'bloqueio')) linhas.push(`    × ${v.publico}`);
       if (c.erro) linhas.push(`    × ${c.erro.msg}`);
+      if (c.aguardando) linhas.push(`    · financeiro ${c.aguardando} (esperado, não é falha)`);
     }
   }
   return linhas.join('\n');

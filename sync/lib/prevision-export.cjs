@@ -5,13 +5,16 @@
 //
 // Parâmetros de exportação conferidos na obra 198 em 27/10/2026 (ver sync/README.md, "Evidências"):
 //   físico     = Dashboard, Perspectiva Física (Duração) + Formato Percentual: realizado igual ao do Cronograma;
-//   financeiro = Dashboard, Perspectiva Econômica (Orçamento) + Formato Moeda (R$) (a física fica desabilitada em R$);
+//   financeiro = Dashboard, Perspectiva Econômica (Orçamento) + Formato Moeda (R$) (a física fica desabilitada em R$) e,
+//                quando a obra pede (exportacao.financeiro.categoria), a "Categoria de orçamentos" do Dashboard — a base do
+//                Valor Agregado: "Recebíveis do projeto" (valor de venda, empreitada global) ou "Custos do projeto (Principal)";
 //   Progresso por tarefas: período cobrindo a obra inteira (o padrão é o mês corrente, e trocar o formato o reinicia);
 //   Cronograma: Gantt com tudo expandido, Excel, "Data de referência" = hoje (o padrão).
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const Cat = require('./categoria.cjs');
 
 const APP = 'https://app.prevision.com.br/app';
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -68,6 +71,68 @@ async function definirVisao(page, perspectiva, formato) {
   await page.waitForTimeout(3000);
   const depois = await atual();
   if (!depois[perspectiva] || !depois[formato]) throw erro(`Não consegui aplicar a visão ${perspectiva}/${formato} no Dashboard.`, 'EXPORTACAO_INTERFACE');
+}
+
+// ---------- categoria de orçamentos do Dashboard ----------
+// Vuetify: .v-select com o rótulo "Categoria de orçamentos" e o valor ("Custos do projeto (Principal)"); as opções saem
+// num menu (.v-menu__content .v-list-item). Trocar a categoria GRAVA a preferência do Dashboard no Prevision (PATCH em
+// dashboards-api): quem troca tem de restaurar a original (ver exportarObra).
+const seletorCategoria = page => page.locator('.v-select').filter({ visible: true }).filter({ hasText: /categoria de or[cç]amentos|(custos|receb[ií]veis) do projeto/i }).first();
+
+async function lerCategoria(page) {
+  const sel = seletorCategoria(page);
+  if (!(await sel.count())) return null;
+  return Cat.valorDoSeletor(await sel.innerText());
+}
+
+// "Valor Total" do Dashboard (best-effort: null se o rótulo não estiver na tela)
+async function lerValorTotal(page) {
+  const txt = await page.evaluate(() => document.body.innerText).catch(() => '');
+  const m = String(txt).match(/Valor Total\s*\n?\s*(?:R\$)?\s*([\d.]+(?:,\d+)?)/i);
+  return m ? Cat.numeroBR(m[1]) : null;
+}
+
+// Escolhe a categoria, espera o Dashboard recarregar e confere (o seletor mostra a categoria; o Valor Total anda).
+// Devolve { antes, depois, trocou, valorTotalAntes, valorTotalDepois }.
+async function definirCategoria(page, categoria) {
+  const sel = seletorCategoria(page);
+  if (!(await sel.count())) throw erro('Não achei o seletor "Categoria de orçamentos" no Dashboard do Prevision.', 'EXPORTACAO_INTERFACE');
+  const antes = Cat.valorDoSeletor(await sel.innerText());
+  if (antes && Cat.mesmaCategoria(antes, categoria)) return { antes, depois: antes, trocou: false };
+  const valorTotalAntes = await lerValorTotal(page);
+  const botao = sel.locator('[role="button"]');
+  await ((await botao.count()) ? botao.first() : sel).click();
+  const itens = page.locator('.v-menu__content .v-list-item').filter({ visible: true });
+  await itens.first().waitFor({ state: 'visible', timeout: 15000 });
+  const textos = (await itens.allInnerTexts()).map(t => t.trim());
+  const i = textos.findIndex(t => Cat.mesmaCategoria(t, categoria));
+  if (i < 0) {
+    await page.keyboard.press('Escape').catch(() => {});
+    throw erro(`A categoria "${categoria}" não está entre as opções do Dashboard (${textos.join(' · ') || 'nenhuma'}).`, 'EXPORTACAO_INTERFACE');
+  }
+  await itens.nth(i).click();
+  await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+  let depois = null;
+  for (let w = 0; w < 60; w++) { depois = await lerCategoria(page); if (depois && Cat.mesmaCategoria(depois, categoria)) break; await page.waitForTimeout(500); }
+  if (!depois || !Cat.mesmaCategoria(depois, categoria)) throw erro(`Não consegui trocar a categoria do Dashboard para "${categoria}" (ficou "${depois || '?'}").`, 'EXPORTACAO_INTERFACE');
+  // o Dashboard recalcula depois da troca: espera o Valor Total mudar (até 20 s); se não mudar, só fica registrado
+  let valorTotalDepois = await lerValorTotal(page);
+  for (let w = 0; w < 40 && valorTotalAntes != null && valorTotalDepois === valorTotalAntes; w++) { await page.waitForTimeout(500); valorTotalDepois = await lerValorTotal(page); }
+  await page.waitForTimeout(2000);
+  return { antes, depois, trocou: true, valorTotalAntes, valorTotalDepois: await lerValorTotal(page) };
+}
+
+// Devolve a categoria original no fim da exportação e registra o resultado em out.categoria.restaurada (true/false);
+// nunca lança: a falha vira aviso no relatório da execução (sincronizar.cjs)
+async function restaurarCategoria(page, obra, pedida, original, out) {
+  out.categoria = out.categoria || { pedida, original, trocou: true };
+  try {
+    await irPara(page, 'dashboard');
+    // o seletor pode só aparecer na perspectiva econômica: se a tela abriu em outra, vai para ela e tenta de novo
+    if (!(await seletorCategoria(page).count())) await definirVisao(page, 'economic', 'monetary');
+    await definirCategoria(page, original);
+    out.categoria.restaurada = true;
+  } catch (e) { out.categoria.restaurada = false; out.categoria.erroRestaurar = e.message; await capturar(page, obra, 'categoria-restaurar'); }
 }
 
 // Marca o botão de menu (⋮) do cabeçalho de cada quadro do Dashboard com o título do quadro
@@ -214,6 +279,8 @@ async function exportarObra(context, obra, pasta, lerCurva, naturezas = ['fisico
   const page = await context.newPage();
   const out = { fisico: [], financeiro: [], projeto: null, erros: {} };
   const exp = obra.exportacao;
+  const categoria = Cat.categoriaPedida(obra);
+  let categoriaOriginal = null; // só preenchido quando o robô trocou a categoria (e portanto precisa devolvê-la)
   try {
     out.projeto = await selecionarProjeto(page, obra).catch(async e => { await capturar(page, obra, 'projeto'); throw e; });
     for (const nat of naturezas) {
@@ -224,7 +291,18 @@ async function exportarObra(context, obra, pasta, lerCurva, naturezas = ['fisico
         await irPara(page, 'dashboard');
         if (nat === 'fisico') await definirVisao(page, exp.fisico.perspectiva, 'percentage');
         else await definirVisao(page, exp.financeiro.perspectiva, 'monetary');
+        if (nat === 'financeiro' && categoria) {
+          const original = await lerCategoria(page);
+          if (original && !Cat.mesmaCategoria(original, categoria)) categoriaOriginal = original;
+          const r = await definirCategoria(page, categoria);
+          out.categoria = { pedida: categoria, original: original || null, trocou: r.trocou, valorTotalAntes: r.valorTotalAntes ?? null, valorTotalDepois: r.valorTotalDepois ?? null, restaurada: null };
+        }
         if (await atualizarDashboard(page)) out.dashboardAtualizado = true;
+        // a atualização do Dashboard não pode ter devolvido a categoria: confere antes de exportar
+        if (nat === 'financeiro' && categoria) {
+          const agora = await lerCategoria(page);
+          if (!agora || !Cat.mesmaCategoria(agora, categoria)) throw erro(`O Dashboard voltou para a categoria "${agora || '?'}" antes da exportação (pedida: "${categoria}").`, 'EXPORTACAO_INTERFACE');
+        }
         const curva = await exportarQuadro(page, 'curva s', dir); out[nat].push(curva);
         if (cfg.relatorios.mensal) out[nat].push(await exportarQuadro(page, 'progresso mensal', dir));
         if (cfg.relatorios.tarefas) {
@@ -244,6 +322,8 @@ async function exportarObra(context, obra, pasta, lerCurva, naturezas = ['fisico
     await capturar(page, obra, 'exportacao');
     throw e;
   } finally {
+    // devolve a categoria original do Dashboard (a troca grava a preferência no Prevision, que é de quem usa a conta)
+    if (categoriaOriginal) await restaurarCategoria(page, obra, categoria, categoriaOriginal, out);
     // devolve o Dashboard à visão de uso diário de quem usa a mesma conta
     if (exp.restaurarVisao) { try { await irPara(page, 'dashboard'); await definirVisao(page, exp.restaurarVisao.perspectiva, exp.restaurarVisao.formato); } catch (e) { /* não impede a carga */ } }
     await page.close();
@@ -253,4 +333,4 @@ async function exportarObra(context, obra, pasta, lerCurva, naturezas = ['fisico
 
 module.exports = { abrirNavegador, exportarObra, selecionarProjeto, hashNome, normNome, primeiroDoMesAnterior, primeiroDoSegundoMesSeguinte,
   // para os diagnósticos locais (sync/diagnostico-*.cjs)
-  _internas: { irPara, definirVisao, atualizarDashboard, exportarQuadro } };
+  _internas: { irPara, definirVisao, atualizarDashboard, exportarQuadro, lerCategoria, definirCategoria, lerValorTotal, restaurarCategoria } };

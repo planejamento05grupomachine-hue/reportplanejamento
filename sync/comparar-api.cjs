@@ -22,6 +22,9 @@ const { PrevisionAPI, coletarAPI, comparar } = require('./lib/prevision-api.cjs'
   const api = new PrevisionAPI({ token: process.env.PREVISION_API_TOKEN });
   const persp = (o.exportacao && o.exportacao.fisico && o.exportacao.fisico.perspectiva) || cfg.padroes.exportacao.fisico.perspectiva;
   const out = { obra: cod, projetoApi: id, em: new Date().toISOString() };
+  // a API só entrega a categoria principal de orçamentos: numa obra que usa outra (ex.: Recebíveis) o financeiro da API
+  // e o da exportação não são comparáveis
+  if (require('./lib/categoria.cjs').exigeInterface(o)) console.error(`ATENÇÃO: a obra ${cod} usa a categoria "${o.exportacao.financeiro.categoria}" no financeiro; a API só traz a principal, então a comparação do financeiro não vale.`);
   for (const nat of ['fisico', 'financeiro']) {
     const exp = lerConjunto(XLSX, nat, arquivosDaPasta(path.join(dir, cod, nat))).dados;
     const doApi = await coletarAPI(api, id, nat, persp);

@@ -20,11 +20,12 @@
       "vinculo": "confirmado",
       "evidencia": "27/10/2026: código 198 no nome do projeto, nome confere com o hash e id 32419 igual na interface (Gantt) e na API oficial. Exportações reais conferidas: Cronograma e Progresso por tarefas com 410 linhas ligadas e o mesmo realizado da Curva S física. Na execução, a tarefa raiz ainda é comparada com a da carga atual do painel.",
       "habilitada": true,
+      "exportacao": { "financeiro": { "categoria": "Recebíveis do projeto" } },
       "api": {
         "equivalenciaValidada": {
           "em": "2026-10-27",
-          "conjuntos": ["financeiro"],
-          "resultado": "API × exportação do mesmo dia (sync/comparar-api.cjs): Curva S física e financeira com as mesmas 535 datas, diferença máxima 3,7e-7 (fração) e R$ 0,0000002; Progresso mensal físico e financeiro idênticos (18 meses); 68 datas de medição iguais. O físico continua pela exportação porque a API não tem o Progresso por tarefas nem o Cronograma."
+          "conjuntos": [],
+          "resultado": "API × exportação do mesmo dia (sync/comparar-api.cjs), na categoria principal (custos): Curva S física e financeira com as mesmas 535 datas, diferença máxima 3,7e-7 (fração) e R$ 0,0000002; Progresso mensal físico e financeiro idênticos (18 meses); 68 datas de medição iguais. O físico continua pela exportação porque a API não tem o Progresso por tarefas nem o Cronograma. 11/11/2026: o financeiro saiu da API (conjuntos vazio) porque a obra é empreitada global e usa a categoria Recebíveis do projeto, que a API não escolhe; voltar só depois de comparar a API (primary=false?) com a exportação em Recebíveis."
         }
       }
     },
@@ -44,6 +45,7 @@
       "vinculo": "confirmado",
       "evidencia": "27/10/2026: código 208 no nome do projeto, nome confere com o hash e id 40210 igual na interface e na API. 28/10/2026: exportação automática simulada sem bloqueio (físico e Valor Agregado).",
       "habilitada": true,
+      "exportacao": { "financeiro": { "categoria": "Recebíveis do projeto" } },
       "api": { "equivalenciaValidada": null }
     },
     {
@@ -51,9 +53,9 @@
       "conferenciaNome": { "sha256": "f332bc74383ea0a8bcda9bc5ea0033d6281d1f5b385cd7eae26b156d74fad357" },
       "prevision": { "ganttId": 41940, "apiProjectId": "41940" }, "sienge": { "obraId": null }, "diarioObra": { "obraId": null },
       "vinculo": "confirmado",
-      "evidencia": "27/10/2026: código 211 no nome do projeto, nome confere com o hash e id 41940 igual na interface e na API. 28/10/2026: físico simulado sem bloqueio (602 de 602 linhas ligadas, depois de atualizar o Dashboard do Prevision). Valor Agregado desligado: no Prevision a perspectiva econômica está sem dados (falta vincular o orçamento ao cronograma) — religar quando vincular.",
+      "evidencia": "27/10/2026: código 211 no nome do projeto, nome confere com o hash e id 41940 igual na interface e na API. 28/10/2026: físico simulado sem bloqueio (602 de 602 linhas ligadas, depois de atualizar o Dashboard do Prevision). 11/11/2026: Valor Agregado PRÉ-CONFIGURADO (financeiro ativo + aguardaVinculo): enquanto o orçamento não estiver vinculado ao cronograma no Prevision (perspectiva econômica sem dados), o robô registra aguardando vínculo do orçamento no Prevision (sem falha); quando o Prevision entregar dados, o financeiro entra pela validação normal, sem mexer aqui.",
       "habilitada": true,
-      "financeiro": { "ativo": false },
+      "financeiro": { "ativo": true, "aguardaVinculo": true },
       "api": { "equivalenciaValidada": null }
     },
     {
@@ -61,9 +63,9 @@
       "conferenciaNome": { "sha256": "2973c7559fd2e7d64717bc6d248a9689438d7028e6346456b06ceb98d9dd91b9" },
       "prevision": { "ganttId": 42528, "apiProjectId": "42528" }, "sienge": { "obraId": null }, "diarioObra": { "obraId": null },
       "vinculo": "confirmado",
-      "evidencia": "03/11/2026: código 212 no nome do projeto, nome confere com o hash e id 42528 na interface (Gantt). Exportação automática dos 4 relatórios físicos validada sem bloqueio. Obra começando (início 03/11/2026, término base 07/05/2027). Cadastrada no painel em 03/11/2026; primeira carga automática aceita sem carga anterior. VA desligado: visão econômica sem dados no Prevision (como na 211).",
+      "evidencia": "03/11/2026: código 212 no nome do projeto, nome confere com o hash e id 42528 na interface (Gantt). Exportação automática dos 4 relatórios físicos validada sem bloqueio. Obra começando (início 03/11/2026, término base 07/05/2027). Cadastrada no painel em 03/11/2026; primeira carga automática aceita sem carga anterior. 11/11/2026: VA pré-configurado como na 211 (financeiro ativo + aguardaVinculo): aguardando o vínculo do orçamento ao cronograma no Prevision; entra sozinho quando houver dados.",
       "habilitada": true,
-      "financeiro": { "ativo": false },
+      "financeiro": { "ativo": true, "aguardaVinculo": true },
       "api": { "equivalenciaValidada": null }
     }
   ],

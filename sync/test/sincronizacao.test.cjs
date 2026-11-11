@@ -243,3 +243,94 @@ test('conferência do site: espera o GitHub Pages servir exatamente o arquivo gr
   try { assert.equal(await verificarSite('https://site/', 'x.bin', sha256(bytes), 1, f), 'atualizado'); } finally { global.setTimeout = orig; }
   assert.equal(n, 2); assert.ok(Date.now() - t0 < 5000);
 });
+
+// ---------- categoria de orçamentos do Dashboard (obra de empreitada: Recebíveis do projeto) ----------
+const OBRA_RECEBIVEIS = { painelId: '901', codigo: '901', prevision: { ganttId: 1, apiProjectId: 77 }, exportacao: { financeiro: { categoria: 'Recebíveis do projeto' } },
+  api: { equivalenciaValidada: { em: '2026-07-15', conjuntos: ['financeiro'] } } };
+
+test('categoria pedida: o financeiro vai pela exportação (mesmo com API validada), com a visão do padrão preservada', async () => {
+  const c = await cenario(); c.config = configTeste([OBRA_RECEBIVEIS]);
+  let visto = null;
+  const exportar = async (obra, pasta, lerCurva, nats) => {
+    visto = { obra, nats };
+    const pastas = fx.escreverColeta(XLSX, pasta, fx.projeto());
+    const ls = dir => fs.readdirSync(dir).map(nome => ({ nome, caminho: path.join(dir, nome), coletadoEm: '2026-07-15T10:20:00Z' }));
+    return { projeto: { ganttId: 1 }, fisico: ls(pastas.fisico), financeiro: ls(pastas.financeiro), categoria: { pedida: 'Recebíveis do projeto', original: 'Custos do projeto (Principal)', trocou: true, valorTotalAntes: 10, valorTotalDepois: 12, restaurada: true } };
+  };
+  const r = await rodar(c, ['--obra', '901'], { deps: { api: () => { throw new Error('a API não deve ser usada nesta obra'); }, exportar } });
+  const o = r.relatorio.obras[0];
+  assert.deepEqual(visto.nats, ['fisico', 'financeiro']);
+  assert.equal(o.conjuntos.financeiro.fonte, 'exportacao');
+  assert.deepEqual([visto.obra.exportacao.financeiro.perspectiva, visto.obra.exportacao.financeiro.categoria], ['economic', 'Recebíveis do projeto'], 'a obra acrescenta a categoria sem perder a perspectiva do padrão');
+  assert.equal(visto.obra.exportacao.fisico.perspectiva, 'physical');
+  assert.ok(!o.mensagens.some(m => /categoria/i.test(m)), 'restaurada e Valor Total mudou: sem aviso');
+});
+
+test('categoria que não voltou ao original e Valor Total que não mudou viram aviso no relatório', async () => {
+  const c = await cenario(); c.config = configTeste([OBRA_RECEBIVEIS]);
+  const exportar = async (obra, pasta) => {
+    const pastas = fx.escreverColeta(XLSX, pasta, fx.projeto());
+    const ls = dir => fs.readdirSync(dir).map(nome => ({ nome, caminho: path.join(dir, nome), coletadoEm: '2026-07-15T10:20:00Z' }));
+    return { projeto: { ganttId: 1 }, fisico: ls(pastas.fisico), financeiro: ls(pastas.financeiro), categoria: { pedida: 'Recebíveis do projeto', original: 'Custos do projeto (Principal)', trocou: true, valorTotalAntes: 10, valorTotalDepois: 10, restaurada: false } };
+  };
+  const r = await rodar(c, ['--obra', '901'], { deps: { exportar } });
+  const m = r.relatorio.obras[0].mensagens.join('\n');
+  assert.match(m, /NÃO conseguiu devolver a original \("Custos do projeto \(Principal\)"\)/);
+  assert.match(m, /Valor Total do Dashboard não mudou/);
+});
+
+test('categoria diferente da principal: forçar a fonte API é recusado (a API só entrega a categoria principal)', async () => {
+  const c = await cenario(); c.config = configTeste([OBRA_RECEBIVEIS]);
+  const n = c.gh.historico().length;
+  const r = await rodar(c, ['--obra', '901', '--fonte', 'api'], { deps: { api: () => { throw new Error('não deveria chamar'); } } });
+  assert.equal(r.relatorio.obras[0].conjuntos.financeiro.erro.codigo, 'CATEGORIA_SO_PELA_INTERFACE');
+  assert.equal(c.gh.historico().length, n);
+});
+// ---------- obra aguardando o vínculo do orçamento no Prevision (211 e 212) ----------
+const semDados = () => Object.assign(new Error('O Dashboard do Prevision está sem dados nesta perspectiva (na econômica, falta vincular o orçamento ao cronograma).'), { codigo: 'SEM_DADOS_PREVISION' });
+function exportadorFicticio({ comFinanceiro }) {
+  return async (obra, pasta) => {
+    const pastas = fx.escreverColeta(XLSX, pasta, fx.projeto());
+    const ls = dir => fs.readdirSync(dir).map(nome => ({ nome, caminho: path.join(dir, nome), coletadoEm: '2026-07-15T10:20:00Z' }));
+    return { projeto: { ganttId: 1 }, fisico: ls(pastas.fisico), financeiro: comFinanceiro ? ls(pastas.financeiro) : [], erros: comFinanceiro ? {} : { financeiro: semDados() } };
+  };
+}
+const OBRA_AGUARDA = { painelId: '901', codigo: '901', prevision: { ganttId: 1, apiProjectId: null }, financeiro: { ativo: true, aguardaVinculo: true } };
+
+test('aguardaVinculo: Dashboard sem dados no financeiro não é falha — físico entra, relatório registra a espera e o exit code é 0', async () => {
+  const c = await cenario(); c.config = configTeste([OBRA_AGUARDA]);
+  const r = await rodar(c, ['--obra', '901'], { deps: { exportar: exportadorFicticio({ comFinanceiro: false }) } });
+  const o = r.relatorio.obras[0];
+  assert.equal(o.conjuntos.fisico.status, 'valido'); assert.equal(o.conjuntos.financeiro.status, 'aguardando-vinculo');
+  assert.equal(o.conjuntos.financeiro.aguardando, 'aguardando vínculo do orçamento no Prevision'); assert.equal(o.conjuntos.financeiro.erro, undefined);
+  assert.equal(o.coleta, 'concluida'); assert.equal(o.rascunho, 'atualizado');
+  assert.equal(r.codigoSaida, 0, r.resumo);
+  assert.ok(o.mensagens.some(m => /aguardando vínculo do orçamento no Prevision/.test(m)));
+  assert.ok(!o.mensagens.some(m => /Parte da carga não entrou/.test(m)));
+  assert.match(r.resumo, /financeiro \(exportacao\): aguardando-vinculo/); assert.match(r.resumo, /aguardando vínculo do orçamento no Prevision \(esperado, não é falha\)/);
+  const ras = await abrir(c.vault.ki, c.gh.ler(RAS('901')));
+  assert.equal(ras.sync.conjuntos.financeiro.status, 'aguardando-vinculo');
+  // semana seguinte, mesmos dados físicos: nada a gravar e continua verde
+  const r2 = await rodar(c, ['--obra', '901'], { deps: { exportar: exportadorFicticio({ comFinanceiro: false }) } });
+  assert.equal(r2.relatorio.obras[0].rascunho, 'inalterado'); assert.equal(r2.codigoSaida, 0, r2.resumo);
+});
+
+test('aguardaVinculo: quando o Prevision passa a entregar dados, o financeiro entra pela validação normal', async () => {
+  const c = await cenario(); c.config = configTeste([OBRA_AGUARDA]);
+  await rodar(c, ['--obra', '901'], { deps: { exportar: exportadorFicticio({ comFinanceiro: false }) } });
+  const r = await rodar(c, ['--obra', '901'], { deps: { exportar: exportadorFicticio({ comFinanceiro: true }) } });
+  const o = r.relatorio.obras[0];
+  assert.equal(o.conjuntos.financeiro.status, 'valido', JSON.stringify(o.conjuntos.financeiro.verificacoes));
+  assert.equal(o.rascunho, 'atualizado'); assert.equal(r.codigoSaida, 0, r.resumo);
+  const ras = await abrir(c.vault.ki, c.gh.ler(RAS('901')));
+  assert.equal(ras.dataCorteFinanceiro, '2026-07-10'); assert.ok(ras.financeiro.curva.length > 0);
+  assert.ok(!r.relatorio.obras[0].mensagens.some(m => /aguardando/.test(m)));
+});
+
+test('sem a marca aguardaVinculo, "sem dados" no financeiro continua sendo falha (e o físico entra)', async () => {
+  const c = await cenario(); c.config = configTeste(['901']);
+  const r = await rodar(c, ['--obra', '901'], { deps: { exportar: exportadorFicticio({ comFinanceiro: false }) } });
+  const o = r.relatorio.obras[0];
+  assert.equal(o.conjuntos.financeiro.status, 'falhou'); assert.equal(o.conjuntos.financeiro.erro.codigo, 'SEM_DADOS_PREVISION');
+  assert.equal(o.conjuntos.fisico.status, 'valido'); assert.equal(r.codigoSaida, 1);
+});

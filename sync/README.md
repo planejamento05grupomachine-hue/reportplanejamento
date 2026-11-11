@@ -29,8 +29,8 @@ também não altera cadastro, prazos contratuais ou textos.
   por SHA-256).
 - **Fonte `auto` (padrão), por conjunto:**
   - **Valor Agregado → API oficial** (`https://api.prevision.com.br`, token Bearer), nas obras em que a equivalência com
-    a exportação foi comprovada (`api.equivalenciaValidada` em `sync/obras.json`; hoje, a 198). Não depende de navegador
-    nem de sessão.
+    a exportação foi comprovada (`api.equivalenciaValidada` em `sync/obras.json`; hoje, nenhuma: a 198 saiu em
+    11/11/2026 por usar a categoria Recebíveis, ver "Categoria de orçamentos"). Não depende de navegador nem de sessão.
   - **Dados físicos → exportação pela interface** (Playwright), porque a API não tem o Progresso por tarefas nem o
     Cronograma com EAP e "Linha", que o painel exige. Os arquivos são os mesmos da alimentação manual, lidos pelos mesmos
     parsers.
@@ -52,7 +52,7 @@ também não altera cadastro, prazos contratuais ou textos.
 | Progresso mensal físico | barras por mês, ritmo, projeção | sim na rotina¹ | Dashboard · Progresso Mensal | `monthly-progress` — **idêntico na 198** |
 | Progresso por tarefas | avanço por frente e etapa, pesos | sim | Dashboard · período da obra inteira | **não existe** |
 | Cronograma | Gantt, atrasos, mapa de avanço | sim na rotina¹ | Cronograma · Exportar · Excel · data de referência hoje | **não existe** |
-| Curva S financeira (VA) | PV, EV, SPI | sim | Dashboard · Econômica · Moeda (R$) | `daily-progress` economic/monetary + `measurement_tasks` — **equivalente na 198** |
+| Curva S financeira (VA) | PV, EV, SPI | sim | Dashboard · Econômica · Moeda (R$) · categoria de orçamentos da obra | `daily-progress` economic/monetary + `measurement_tasks` — só na categoria principal (custos); **na 198 foi equivalente em 27/10, mas ela agora usa Recebíveis (interface)** |
 | Progresso mensal financeiro | guardado | opcional | idem | `monthly-progress` — **idêntico na 198** |
 | Progresso por tarefas financeiro | guardado | fora da rotina | — | não existe |
 
@@ -98,9 +98,19 @@ configurado, e a tarefa raiz exportada tem de ser a mesma da carga atual do pain
 | 198 | 32419 | confirmado | sim | físico: exportação · VA: API | exportações e API conferidas com dados reais |
 | 207 | 37748 | confirmado | sim | exportação | a carga manual de 25/10 tinha a Curva S na perspectiva Econômica (idêntica à exportação Econômica nos 12 pontos) e tarefas/Cronograma na Física; em 02/11/2026 passou para a Física, a régua das outras obras (nenhuma linha de base nova no Prevision desde 06/08) |
 | 208 | 40210 | confirmado | sim | exportação | exportação automática simulada sem bloqueio em 28/10/2026 |
-| 211 | 41940 | confirmado | sim (só físico) | exportação | VA desligado: no Prevision a visão econômica está sem dados (orçamento não vinculado ao cronograma) |
-| 212 | 42528 | confirmado | sim (só físico) | exportação | cadastrada em 03/11/2026; obra começando; VA desligado (visão econômica sem dados no Prevision) |
+| 211 | 41940 | confirmado | sim | exportação | VA pré-configurado (`aguardaVinculo`): visão econômica sem dados no Prevision (orçamento não vinculado ao cronograma) → "aguardando vínculo", sem falha; entra sozinho quando houver dados |
+| 212 | 42528 | confirmado | sim | exportação | cadastrada em 03/11/2026; obra começando; VA pré-configurado como na 211 (`aguardaVinculo`) |
 | — | 42195 (210) | fora | — | — | projeto do Prevision sem obra no painel: não é importado |
+
+**Obra aguardando o vínculo do orçamento (211 e 212).** Com `financeiro: { "ativo": true, "aguardaVinculo": true }`, o robô
+tenta o Valor Agregado todas as semanas. Enquanto o Dashboard do Prevision estiver "sem dados" na perspectiva econômica
+(`SEM_DADOS_PREVISION`), o conjunto fica com o status `aguardando-vinculo` — registrado no relatório e nas mensagens da
+obra como "aguardando vínculo do orçamento no Prevision" — e **não** conta como falha nem muda o código de saída; o físico
+segue normal. Quando o Prevision passar a entregar os dados, o financeiro entra sozinho, pela mesma validação das outras
+obras (curva obrigatória, mensal opcional) e vai para o rascunho; o painel mostra a folha de VA/IDC conforme a regra do
+cadastro da obra (`reportVA`: "auto" exige SPI e Curva S na base do contrato; "mostrar" força). `aguardaVinculo` pode ficar
+depois do vínculo (não faz nada com dados) e só vale para o financeiro das obras marcadas: numa obra sem a marca, "sem
+dados" continua sendo falha. A categoria de orçamentos é a principal (custos), por serem obras de administração.
 
 Para habilitar 207/208/211: exportar no mesmo dia os arquivos da obra (com os parâmetros acima), simular com
 `--fonte arquivos`, rodar `comparar-api.cjs` e, com diferenças nulas, registrar `api.equivalenciaValidada` e
@@ -208,6 +218,43 @@ simulando (bom para as primeiras semanas).
 
 Observações do GitHub: horários agendados podem atrasar alguns minutos; em repositório público sem atividade por 60 dias
 o agendamento é suspenso (as cargas mantêm o repositório ativo).
+
+## Categoria de orçamentos do Dashboard (11/11/2026)
+
+O Dashboard do Prevision tem o seletor **"Categoria de orçamentos"** com duas opções: **"Custos do projeto (Principal)"**
+(o padrão) e **"Recebíveis do projeto"** (valor de venda). Ela muda a base do Valor Agregado (198: custo R$ 10,70 mi ×
+recebíveis/contrato R$ 12,84 mi; 208: custo R$ 9,01 mi). Regra do Carlos: **empreitada global (198, 208) usa Recebíveis;
+administração (207) usa Custos**. Antes, o robô exportava a Curva S sem escolher categoria e trazia a base de custo.
+
+- **Configuração por obra** em `sync/obras.json`: `exportacao.financeiro.categoria` (texto da opção; comparado sem
+  acento nem caixa). Hoje: 198 e 208 = `"Recebíveis do projeto"`; 207 sem o campo. **Sem o campo, o robô não mexe na
+  categoria** (usa a que estiver no Dashboard). A obra só acrescenta o campo: a perspectiva/formato do padrão continuam.
+- **Na exportação** (`sync/lib/prevision-export.cjs`, natureza `financeiro`): depois de Econômica + Moeda, o robô lê a
+  categoria atual do seletor (`.v-select` "Categoria de orçamentos"), abre o menu (`.v-menu__content .v-list-item`),
+  escolhe a pedida, espera o Dashboard recarregar, confere que o seletor mostra a categoria e que o **Valor Total** do
+  Dashboard mudou, atualiza o Dashboard se estiver desatualizado e **reconfere a categoria antes de exportar** a Curva S.
+  A categoria só é trocada quando difere da pedida.
+- **Restauração:** trocar a categoria grava a preferência do Dashboard no Prevision (PATCH em `dashboards-api`). Por isso,
+  no `finally` da obra, o robô devolve a **categoria original** (como já faz com `restaurarVisao`). Se não conseguir, a
+  carga não é afetada, mas a execução registra o aviso "NÃO conseguiu devolver a original" nas mensagens da obra: conferir
+  no Prevision. (Se a sessão expirar no meio da obra, não há como restaurar; o aviso aparece na execução seguinte.)
+- **API oficial:** `daily-progress` e `monthly-progress` não têm parâmetro de categoria. Há apenas `primary` (booleano,
+  "usar a perspectiva primária", padrão `true`) — provavelmente a categoria principal; com `primary=false` talvez
+  venha a outra, mas **isso não foi testado** (falta o token) e o endpoint `budget_reports` só lista os orçamentos. Por
+  isso, obra que pede categoria diferente da principal **sai da API**: o financeiro vai pela exportação da interface
+  (`fonteDe` em `sincronizar.cjs`; `--fonte api` nessa obra falha com `CATEGORIA_SO_PELA_INTERFACE`), e a 198 teve
+  `financeiro` retirado de `api.equivalenciaValidada.conjuntos`. Para voltar à API: comparar `primary=false` com a
+  exportação em Recebíveis (`sync/comparar-api.cjs`) e só então recolocar.
+- **Consequência operacional:** o financeiro da 198 e da 208 passa a depender da sessão do Prevision (como o físico). Com a
+  sessão vencida, o financeiro dessas obras falha com `SESSAO_PREVISION_EXPIRADA` e a última carga válida é preservada.
+- **Conferência na tela Alimentar** (`js/carga.js`): avisa quando a Curva S financeira de uma empreitada vem fora da base
+  do contrato (±2%).
+- **Validação ao vivo (11/11/2026, sessão do Prevision renovada):** 198 na categoria Recebíveis com a base do contrato
+  (≈ R$ 12,84 mi) e a categoria original do Dashboard devolvida depois; 208 também em Recebíveis, com a categoria original
+  devolvida; 207 sem troca de categoria; 211 com o financeiro `aguardando-vinculo` e código de saída 0. A tela mudando de
+  novo, o aviso de restauração e `EXPORTACAO_INTERFACE` apontam onde ajustar. Os seletores também têm teste com página
+  fictícia (`sync/test/categoria.test.cjs`). Para repetir: `node sync/sessao.cjs` e depois
+  `node sync/sincronizar.cjs --obra 198 --simular --detalhar`.
 
 ## IDC da Gestão de Custos do Prevision (09/11/2026)
 
