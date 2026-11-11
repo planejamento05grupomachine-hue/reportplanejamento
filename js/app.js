@@ -1569,7 +1569,7 @@
 
   // ----- Financeiro realizado: faturamento do contrato (empreitada global) ou custo real (administração) -----
   const NOTA_CUSTO_REAL = '<p class="rx-glos"><b>Realizado</b> = notas pagas em nome do cliente (faturamento direto, pela data do pagamento) + taxa de administração faturada · <b>Previsto</b> = cronograma de desembolso da projeção consolidada da obra</p>';
-  const NOTA_FATURAMENTO = '<p class="rx-glos"><b>Realizado</b> = valor medido do contrato, bruto (antes do desconto do faturamento direto e dos impostos) · <b>Previsto</b> = Previsto (CT) do Controle de Medição</p>';
+  const NOTA_FATURAMENTO = '<p class="rx-glos"><b>Realizado</b> = todos os custos do contrato, valor bruto: faturamento direto (contas pagas pela empresa do cliente) + medição Machine · <b>Previsto</b> = Previsto (CT) do Controle de Medição</p>';
   const ROT_REAL = {
     faturamento: { sub: 'faturamento do contrato', total: 'Valor do contrato', totalSub: 'com aditivos', real: 'Faturado acumulado', saldo: 'Saldo a faturar', mensal: 'Faturamento mensal', nota: NOTA_FATURAMENTO, curva: 'Curva S do faturamento' },
     desembolso: { sub: 'custo real', total: 'Projeção total da obra', totalSub: 'orçamento consolidado', real: 'Realizado acumulado', saldo: 'Saldo a realizar', mensal: 'Desembolso mensal', nota: NOTA_CUSTO_REAL, curva: 'Curva S financeira' },

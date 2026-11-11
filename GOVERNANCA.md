@@ -227,9 +227,9 @@ Toda obra tem **três números**, e o report tem uma folha para cada, na mesma o
 
 Há só **duas modalidades**, e a diferença é a fonte do financeiro realizado:
 
-- **Empreitada global** (198, 208 e demais com contrato Machine no Sienge): **faturamento do contrato** = Controle de Medição,
-  valor bruto medido (Realizado CT) contra o Previsto (CT), com o valor do contrato como base. Por etapa, o boletim mais recente.
-  O faturamento direto (contas pagas pela empresa do cliente) entra no desconto da medição Machine, não no financeiro realizado.
+- **Empreitada global** (198, 208 e demais com contrato Machine no Sienge): **faturamento do contrato** = Controle de Medição, valor
+  bruto medido (Realizado CT) contra o Previsto (CT), com o valor do contrato como base; por etapa, o boletim mais recente. É o
+  custo completo do contrato para o cliente: faturamento direto (contas pagas pela empresa do cliente) + medição Machine.
 - **Administração** (207): **custo real** = planilha de orçamento cliente (REVnn (Cliente): contas pagas em nome do cliente,
   valor bruto, apropriação do Sienge, data da baixa, mais as medições da taxa enviadas ao cliente). Por etapa, pela CONC.APROP.
 
