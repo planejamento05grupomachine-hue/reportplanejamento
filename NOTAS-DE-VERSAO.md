@@ -1,5 +1,19 @@
 # Notas de versão — Painel de Obras Machine
 
+## 2026-11-10f · Taxa de administração pela regra do contrato
+
+- Cadastro da obra: **Taxa de administração · % do valor agregado** e mobilização (obras por administração; 207: 8% e
+  R$ 460.000).
+- Dashboard: o previsto da linha da taxa é o teto acumulado da regra (mobilização + % do valor agregado das obras no
+  Prevision, limitado ao contrato); a nota mostra quanto o saldo do contrato cobre da taxa da obra restante (saúde do
+  contrato). Sem a regra no cadastro, o previsto continua sendo o avanço físico da obra.
+## 2026-11-10f · Taxa de administração pela regra do contrato
+
+- Cadastro da obra: **Taxa de administração · % do valor agregado** e mobilização (obras por administração; 207: 8% e
+  R$ 460.000).
+- Dashboard: o previsto da linha da taxa é o teto acumulado da regra (mobilização + % do valor agregado das obras no
+  Prevision, limitado ao contrato); a nota mostra quanto o saldo do contrato cobre da taxa da obra restante (saúde do
+  contrato). Sem a regra no cadastro, o previsto continua sendo o avanço físico da obra.
 ## 2026-11-10e · Revisão do report (obra 207): corte do mês, IDC, taxa e itens sem base
 
 - **Custo real no fim do mês do report:** o report de outubro usa as baixas até 31/10, inclusive o realizado por etapa
