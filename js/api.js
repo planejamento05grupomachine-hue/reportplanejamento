@@ -387,8 +387,6 @@
           contrato: d.contrato || '', local: d.local || '', responsavel: d.responsavel || '',
           reportVA: ['mostrar', 'ocultar'].includes(d.reportVA) ? d.reportVA : 'auto',
           indicePrazo: d.indicePrazo === 'percentual' ? 'percentual' : 'tempo',
-          // obra por administração: taxa = % do valor agregado das obras (Prevision) + entrada de mobilização (R$)
-          taxaAdm: d.taxaAdm && d.taxaAdm.pct > 0 ? { pct: +d.taxaAdm.pct, mobilizacao: +d.taxaAdm.mobilizacao || 0 } : null,
           // capa do report: nome da obra na capa, revisão e logo do cliente (PNG em data URL); sem d.capa, mantém a atual
           capa: d.capa ? { titulo: String(d.capa.titulo || '').trim(), revisao: String(d.capa.revisao || '00').trim() || '00',
             logo: /^data:image\/png;base64,/.test(d.capa.logo || '') ? d.capa.logo : '' } : ((OB[id] && OB[id].pub && OB[id].pub.capa) || null),

@@ -1,5 +1,39 @@
 # Notas de versão — Painel de Obras Machine
 
+## 2026-11-11a · Financeiro do report: regra única para empreitada global e administração
+
+Toda obra passa a ter os mesmos três números, uma folha para cada, na mesma ordem: **físico**, **valor agregado** (Prevision)
+e **financeiro realizado** (faturamento do contrato na empreitada global; custo real na administração). Ver "Regra única do
+financeiro" na GOVERNANCA.md.
+
+- **Valor agregado (EV, PV, SPI)** em todas as obras com a Curva S financeira, na base da própria curva (antes só quando a
+  base batia com o contrato: a 198 e a 207 ficavam sem a folha).
+- **Financeiro realizado** em todas as obras: curva previsto × realizado, barras mensais, mês a mês e por etapa. Na empreitada
+  vem do Controle de Medição (Previsto CT × Realizado CT, etapas pelo boletim); na administração, da planilha de orçamento.
+- **IDC = % do valor agregado ÷ % realizado** (igual a EV ÷ AC quando as bases coincidem), acumulados até o fim do mês do
+  report. A conta aparece escrita na folha financeira.
+- Cartão "Avanço financeiro" do dashboard volta a ser o valor agregado do Prevision (também na 207).
+- Folhas financeiras e PowerPoint no corte do fim do mês de referência.
+- **Realizado = todos os custos do contrato**, em valor bruto: faturamento direto (contas pagas) + medição Machine.
+- **Alimentar:** a conferência avisa quando a Curva S financeira de uma obra de empreitada vem fora da base do contrato (±2%):
+  exportar a categoria "Recebíveis do projeto" do Prevision.
+- **Taxa de administração (207):** a linha da taxa no dashboard mostra o faturado ÷ contrato contra o avanço das obras (valor
+  agregado); faturado acima do previsto é antecipação. Saem do cadastro da obra os campos "% do valor agregado" e "mobilização",
+  da versão 20261110f (regra do FEE fixo do contrato, ver GOVERNANCA.md).
+## 2026-11-11a · Financeiro do report: regra única para empreitada global e administração
+
+Toda obra passa a ter os mesmos três números, uma folha para cada, na mesma ordem: **físico**, **valor agregado** (Prevision)
+e **financeiro realizado** (faturamento do contrato na empreitada global; custo real na administração). Ver "Regra única do
+financeiro" na GOVERNANCA.md.
+
+- **Valor agregado (EV, PV, SPI)** em todas as obras com a Curva S financeira, na base da própria curva (antes só quando a
+  base batia com o contrato: a 198 e a 207 ficavam sem a folha).
+- **Financeiro realizado** em todas as obras: curva previsto × realizado, barras mensais, mês a mês e por etapa. Na empreitada
+  vem do Controle de Medição (Previsto CT × Realizado CT, etapas pelo boletim); na administração, da planilha de orçamento.
+- **IDC = % do valor agregado ÷ % realizado** (igual a EV ÷ AC quando as bases coincidem), acumulados até o fim do mês do
+  report. A conta aparece escrita na folha financeira.
+- Cartão "Avanço financeiro" do dashboard volta a ser o valor agregado do Prevision (também na 207).
+- Folhas financeiras e PowerPoint no corte do fim do mês de referência.
 ## 2026-11-10g · PowerPoint segue o corte do custo real; governança da taxa
 
 - PowerPoint: a Curva S financeira e as barras do desembolso mensal usam o corte do custo real (fim do mês do report).

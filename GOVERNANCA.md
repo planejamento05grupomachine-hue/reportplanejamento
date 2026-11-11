@@ -63,10 +63,9 @@ A estrutura de pastas é sempre a mesma por obra (`<obra>/contrato`, `<obra>/cus
 
 ## Valor agregado no report
 
-O cadastro da obra define se o quadro de valor agregado entra no report (`reportVA`): **Automático** (padrão) mostra
-só quando há SPI e a Curva S financeira está na base do contrato (198 e 208); **Mostrar sempre**; **Não mostrar**.
-Na 207, a curva do Prevision é o orçamento da obra e não o contrato Machine, então no automático o quadro fica fora do
-report. O cliente segue a mesma regra na aba Obra; administradores e diretoria sempre veem os números lá.
+A folha de valor agregado (EV, PV, SPI e a Curva S financeira do Prevision) entra no report de **toda obra que tem a Curva S
+financeira (Financeiro VA) carregada**, na própria base da curva (a folha mostra o total). O cadastro da obra só serve para
+tirá-la (`reportVA` = *Não mostrar*). Ver "Regra única do financeiro" no fim deste arquivo.
 
 ## Cadência de atualização
 
@@ -216,21 +215,41 @@ a seleção automática das fotos dos RDOs. O topo do report (só administrador)
 - **Login**: leitura com nova tentativa em falha passageira do GitHub Pages (5xx); o arquivo de restrições é opcional e não
   impede a entrada.
 
-## Custo real e taxa de administração (obras por administração, regra de 10/11/2026)
+## Regra única do financeiro (11/2026)
 
-- **Custo real** = planilha de orçamento cliente da Machine (REVnn (Cliente), abas FÍS X FIN, LANÇ.FIN e CONC.APROP),
-  enviada em Alimentar. Realizado = contas pagas em nome do cliente (faturamento direto, valor bruto, apropriação do
-  título no Sienge, pela data da baixa) + medições da taxa enviadas ao cliente (último dia do mês do envio; a do mês
-  corrente não entra). Com a planilha, ela substitui a Curva S financeira do Prevision nas folhas financeiras.
-- **Corte financeiro do report = fim do mês de referência** (report de outubro = baixas até 31/10), na curva, no mês a mês
-  e por etapa. A aba Obra mostra até a última baixa.
-- **IDC = valor agregado (Curva S financeira do Prevision) ÷ custo real**, na mesma data e na mesma base (total da curva
-  a ±2% do total da planilha). Sem planilha, vale o IDC da Gestão de Custos do Prevision.
-- **Taxa de administração** (cadastro da obra: % do valor agregado e mobilização): teto acumulado = mobilização +
-  % × valor agregado das obras (sem a própria linha da taxa), limitado ao contrato; mede-se abaixo do teto considerando o
-  saldo e a saúde do contrato. No dashboard: realizado = medido ÷ contrato; previsto = teto; nota com a cobertura do saldo.
-- **Controle de Medição**: contrato e medições liberadas pelos valores do Sienge (sem fórmula que mude o passado); ISS só
-  quando o Sienge mostrar; "Medição Machine prevista" nunca acima do saldo do contrato; sem jargão interno no status.
-- **Itens sem linha de base** no Prevision ficam no bloco de acompanhamento, sem seta de desvio.
-- **Conferência antes de publicar**: avanço financeiro do dashboard = folha Financeiro = total por etapa = realizado
-  acumulado do mês. Ajuste se faz na fonte, não no PowerPoint baixado.
+Toda obra tem **três números**, e o report tem uma folha para cada, na mesma ordem em qualquer obra:
+
+| Número | Fonte | Folha do report |
+|---|---|---|
+| **Físico** (% por duração) | Prevision: Cronograma, Progresso por tarefas, Curva S | Físico + IDP |
+| **Valor agregado** (EV, PV, %) | Prevision: Curva S financeira (Financeiro VA). Empreitada: categoria Recebíveis do projeto (valor de venda); administração: Custos do projeto | Valor agregado (Prevision) + SPI |
+| **Financeiro realizado** (AC) | o que de fato foi faturado ao cliente ou pago por ele (abaixo) | Financeiro (previsto x realizado) e mês a mês / por etapa |
+
+Há só **duas modalidades**, e a diferença é a fonte do financeiro realizado:
+
+- **Empreitada global** (198, 208 e demais com contrato Machine no Sienge): **faturamento do contrato** = Controle de Medição, valor
+  bruto medido (Realizado CT) contra o Previsto (CT), com o valor do contrato como base; por etapa, o boletim mais recente. É o
+  custo completo do contrato para o cliente: faturamento direto (contas pagas pela empresa do cliente) + medição Machine.
+- **Administração** (207): **custo real** = planilha de orçamento cliente (REVnn (Cliente): contas pagas em nome do cliente,
+  valor bruto, apropriação do Sienge, data da baixa, mais as medições da taxa enviadas ao cliente). Por etapa, pela CONC.APROP.
+
+**Índices (mesma definição nas duas modalidades):**
+- **IDP** = prazo ganho do Prevision (Earned Schedule), farol em dias. **SPI** = EV ÷ PV.
+- **IDC = % do valor agregado ÷ % realizado**, acumulados até a mesma data (CPI = EV ÷ AC, com AC = o que o cliente já pagou ou foi
+  faturado). Em percentuais porque o Prevision exporta a curva em duas bases (Custos do projeto × Recebíveis do projeto); com as bases
+  iguais (±2%) é exatamente EV ÷ AC em R$. Sem financeiro realizado, cai para o IDC da Gestão de Custos do Prevision.
+- "Real. ÷ prev." (mês a mês) é a **aderência financeira**: ritmo de desembolso ou faturamento contra o plano. Não é o IDC.
+
+**Regras comuns:**
+- **Corte financeiro = fim do mês de referência** (report de outubro = posição de 31/10): cartões, curvas, mês a mês e por etapa.
+- Os dois primeiros cartões do dashboard (físico e financeiro) vêm do Prevision; o IDC, da regra acima.
+- Valor do contrato e medições liberadas = Sienge; ISS só quando o Sienge mostrar; status sem jargão interno.
+- Itens sem linha de base no Prevision ficam no bloco de acompanhamento, sem seta de desvio.
+- Conferência antes de publicar: dashboard = folha de valor agregado; folha Financeiro = total por etapa = realizado acumulado do
+  mês. Ajuste se faz na fonte (planilha, Controle de Medição, Prevision), não no PowerPoint baixado.
+
+**Administração · taxa** (FEE fixo do contrato, não vinculado ao custo final): taxa devida acumulada = taxa total × % de avanço das
+obras (valor agregado sem a linha da taxa ÷ orçamento sem a linha da taxa). O adiantamento operacional de entrada está dentro do
+contrato; a medição do mês = devida − (adiantamento + medições anteriores), nunca acima do saldo. No dashboard, a linha da taxa mostra
+o faturado ÷ contrato (realizado) contra o avanço das obras (previsto); acima do previsto é antecipação. A medição do mês corrente não
+entra no custo real.
