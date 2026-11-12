@@ -1,5 +1,13 @@
 # Notas de versão — Painel de Obras Machine
 
+## 2026-11-11b · Correção do login: leitura dos arquivos pelo blob do GitHub
+
+Com o token do GitHub salvo, o painel lia os arquivos pelo endpoint `/contents` da API, que trata alguns binários pequenos
+como texto e devolve os bytes convertidos (210.bin, 209.bin e 1280.bin, recém-cadastradas, chegavam maiores que o arquivo
+real). O arquivo cifrado não abria e o login caía em "Seu acesso foi atualizado. Entre novamente com a sua senha", mesmo
+com a senha certa. Agora a leitura usa a árvore do commit e o `/git/blobs` (bytes exatos). Os dados no repositório estavam
+íntegros; nada foi recifrado.
+
 ## 2026-11-11a · Financeiro do report: regra única para empreitada global e administração
 
 Toda obra passa a ter os mesmos três números, uma folha para cada, na mesma ordem: **físico**, **valor agregado** (Prevision)
