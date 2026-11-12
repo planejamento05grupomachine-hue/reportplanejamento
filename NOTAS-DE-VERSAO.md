@@ -1,5 +1,18 @@
 # Notas de versão — Painel de Obras Machine
 
+## 2026-11-11c · Atualização pelas APIs com um clique (só o administrador)
+
+- **Tela Alimentar → "Atualização pelas APIs"**: o botão dispara o robô do GitHub Actions (`sync-prevision.yml`) para uma
+  obra ou para todas as habilitadas, acompanha o andamento na própria tela e, ao concluir, relê os dados do repositório.
+  Grava só **rascunho** (publicar para o cliente continua manual) e **não altera restrições**.
+- **Segurança:** o cartão só aparece para os logins de `robo.liberadoPara` (js/config.js); quem garante de fato é o GitHub,
+  que só aceita o disparo com o token do administrador com **Actions: Read and write** neste repositório. As credenciais do
+  Prevision, Sienge e Diário de Obra ficam nos segredos do repositório e nunca passam pelo navegador.
+- **Prompt de reserva:** abaixo do botão, um texto pronto para pedir ao Claude a mesma atualização pelo Chrome (skill
+  `alimentar-painel-machine`), sem senha nem token no texto.
+- **Obra 210** entra no robô (`sync/obras.json`, projeto 42195 do Prevision; VA pré-configurado aguardando o vínculo do
+  orçamento).
+
 ## 2026-11-11b · Correção do login: leitura dos arquivos pelo blob do GitHub
 
 Com o token do GitHub salvo, o painel lia os arquivos pelo endpoint `/contents` da API, que trata alguns binários pequenos

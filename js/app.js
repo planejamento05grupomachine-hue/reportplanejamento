@@ -1010,6 +1010,7 @@
     return `
       <div><div class="kicker">Administração</div><h1 class="h1">Alimentar dados</h1>
       <p class="sub">Envie as exportações do Prevision (Curva S, Progresso mensal, Progresso por tarefas e Cronograma), o PDF dos diários de obra dos últimos 30 dias e, mensalmente, o Controle de Medição e a Curva S financeira (Valor Agregado). O painel reconhece cada arquivo, confere os números e grava a carga como rascunho.</p></div>
+      ${API.robo.liberado() ? cartaoRobo(o) : ''}
       <div class="card card-pad steps">
         <div class="step-t">1 · Tipo de dados</div>
         <div class="seg" role="group" aria-label="Tipo de dados do lote">
@@ -1039,6 +1040,82 @@
         <div class="step-t">Último carregamento</div>
         <div class="meta" style="margin:0"><span>Obra <b>${esc(o.codigo)}</b></span><span>Data de corte <b>${dBR(o.dataCorte)}</b></span><span>Financeiro atualizado em <b>${o.dataCorteFinanceiro ? dBR(o.dataCorteFinanceiro) : '—'}</b></span><span>Publicado ao cliente até <b>${dBR(o.publicadoAte)}</b></span><span>${(o.tarefas || []).length} tarefas · ${(o.curva || []).length} pontos de curva · ${(o.rdos || []).length} RDOs</span></div>
       </div>`;
+  }
+  // ---------- atualização pelas APIs (robô do GitHub Actions) ----------
+  // Só para o administrador liberado em js/config.js (robo.liberadoPara). O clique pede ao GitHub que rode o robô
+  // (.github/workflows/sync-prevision.yml); as credenciais das ferramentas ficam nos segredos do repositório. O robô
+  // grava só rascunho (publicar para o cliente continua manual) e não toca nas restrições.
+  const PASSO_ROBO = { 'Sincronizar': 'coletando e gravando o rascunho', 'Dependências (Playwright + Chromium)': 'preparando o navegador do robô', 'Fontes externas (Sienge, Diário de Obra) — conexão': 'conferindo Sienge e Diário de Obra' };
+  function promptReserva(obra) {
+    const alvo = obra ? `a obra ${obra}` : 'todas as obras habilitadas';
+    return `Atualize o Painel de Obras Machine, ${alvo}, seguindo a skill alimentar-painel-machine: exporte do Prevision pelo Chrome já logado (Curva S, Progresso mensal, Progresso por tarefas com o período da obra inteira e Cronograma; Valor Agregado só se a obra tiver orçamento vinculado), envie na tela Alimentar e salve como rascunho. Não publique para o cliente, não digite senhas e não altere restrições. No fim, me mostre a conferência de cada obra e o que ficou pendente.`;
+  }
+  function cartaoRobo(o) {
+    const R = S.robo || (S.robo = {});
+    if (!R.obras && !R.buscando) {
+      R.buscando = true;
+      Promise.all([API.robo.obras(), API.robo.ultimas().catch(() => [])]).then(([ob, ult]) => {
+        R.obras = ob; R.buscando = false;
+        const ativa = ult.find(x => x.status !== 'completed');
+        if (ativa && !R.exec) { R.exec = { ...ativa, passos: [] }; acompanharRobo(ativa.id); }
+        render();
+      }).catch(e => { R.buscando = false; R.obras = []; R.erro = e.message; render(); });
+    }
+    const lista = R.obras || null;
+    const sel = R.sel !== undefined ? R.sel : (lista && lista.includes(o.id) ? o.id : '');
+    const ex = R.exec, rodando = !!(ex && ex.status !== 'completed');
+    const passo = ex && (ex.passos || []).find(p => p.status === 'in_progress');
+    const falhou = ex && (ex.passos || []).find(p => p.conclusao === 'failure');
+    const estado = R.erro ? `<div class="note-box err" role="alert">${esc(R.erro)}</div>`
+      : !ex ? ''
+      : rodando ? `<div class="note-box lendo" role="status"><span class="sync"><i></i></span>Robô ${ex.status === 'queued' || ex.status === 'waiting' ? 'na fila' : 'rodando'}${passo ? ' · ' + esc(PASSO_ROBO[passo.nome] || passo.nome) : ''}. Pode continuar usando o painel; o resultado aparece aqui. <a href="${esc(ex.url)}" target="_blank" rel="noopener">Acompanhar no GitHub</a></div>`
+      : ex.conclusao === 'success' ? `<div class="note-box" role="status">Concluído em ${new Date(ex.atualizadaEm || Date.now()).toLocaleString('pt-BR')}: dados relidos do repositório. Confira a obra e publique para o cliente quando estiver pronto. <a href="${esc(ex.url)}" target="_blank" rel="noopener">Ver execução</a></div>`
+      : `<div class="note-box err" role="alert">O robô terminou ${ex.conclusao === 'cancelled' ? 'cancelado' : 'com falha'}${falhou ? ` no passo <b>${esc(PASSO_ROBO[falhou.nome] || falhou.nome)}</b>` : ''}. Nada foi publicado. Causas comuns: sessão do Prevision vencida (renovar com <code>node sync/sessao.cjs --enviar</code>) ou token do robô expirado (segredo PAINEL_GH_TOKEN). <a href="${esc(ex.url)}" target="_blank" rel="noopener">Ver execução</a></div>`;
+    return `<div class="card card-pad steps no-print" id="robo">
+        <div class="step-t">Atualização pelas APIs</div>
+        <p class="sub" style="margin:0">Um clique pede ao robô do GitHub que colete os dados no Prevision (e no Sienge e no Diário de Obra, quando configurados) e grave a carga como <b>rascunho</b>, com as mesmas conferências desta tela. Nada é publicado para o cliente e as restrições não são alteradas. As senhas e tokens das ferramentas ficam guardados no GitHub, não neste navegador.</p>
+        <div class="field" style="max-width:420px"><label for="robo-obra">Obra</label><select class="inp" id="robo-obra" ${rodando ? 'disabled' : ''}>${lista ? ['<option value="">Todas as obras habilitadas</option>', ...lista.map(id => { const x = DB.obras.find(y => y.id === id); return `<option value="${esc(id)}" ${id === sel ? 'selected' : ''}>${esc(id)}${x ? ' · ' + esc(x.nome) : ''}</option>`; })].join('') : '<option>carregando…</option>'}</select></div>
+        <div class="bar-actions"><button class="btn" id="robo-ir" ${rodando || !lista ? 'disabled' : ''}>Atualizar pelas APIs</button></div>
+        ${estado}
+        <details class="robo-prompt" ${R.promptAberto ? 'open' : ''}><summary><b>Prompt de reserva</b> · para pedir ao Claude quando o robô não puder rodar</summary>
+          <textarea class="inp" id="robo-prompt" rows="4" readonly>${esc(promptReserva(sel))}</textarea>
+          <div class="bar-actions"><button class="btn sec2" type="button" id="robo-copiar">Copiar prompt</button></div>
+          <small class="hint">O prompt não leva senha nem token. O Claude usa o Chrome já logado e o procedimento fixo da skill; ele não publica para o cliente.</small>
+        </details>
+      </div>`;
+  }
+  let roboTimer = null;
+  async function acompanharRobo(id, desde) {
+    clearTimeout(roboTimer);
+    const R = S.robo || (S.robo = {});
+    try {
+      if (!id) { // disparo aceito, execução ainda não listada: procura pela hora do clique
+        const r = (await API.robo.ultimas()).find(x => Date.parse(x.criadaEm) >= (desde || 0) - 60000);
+        if (!r) { roboTimer = setTimeout(() => acompanharRobo(null, desde), 10000); return; }
+        id = r.id;
+      }
+      const ex = await API.robo.execucao(id);
+      R.exec = ex;
+      if (ex.status === 'completed') {
+        if (ex.conclusao === 'success') { try { DB.obras = await API.reler(); } catch (e) { R.erro = 'Robô concluído, mas não consegui reler os dados: ' + e.message; } toast('Robô concluído: rascunho atualizado.'); }
+        if (S.view === 'alimentar') render();
+        return;
+      }
+      if (S.view === 'alimentar') render();
+    } catch (e) { R.erro = e.message; if (S.view === 'alimentar') render(); }
+    roboTimer = setTimeout(() => acompanharRobo(id), 10000);
+  }
+  async function dispararRobo() {
+    const R = S.robo || (S.robo = {});
+    const obra = $('#robo-obra') ? $('#robo-obra').value : '';
+    R.sel = obra; R.erro = null;
+    const alvo = obra ? `a obra ${obra}` : 'todas as obras habilitadas';
+    confirma({ titulo: 'Atualizar pelas APIs', texto: `O robô vai coletar ${esc(alvo)} e gravar como <b>rascunho</b>. Nada vai para o cliente. Leva alguns minutos.`, ok: 'Atualizar' }, async () => {
+      R.exec = { status: 'queued', passos: [], url: `https://github.com/${API.github.repo()}/actions` }; render();
+      const r = await gravando('Pedindo ao robô do GitHub…', () => API.robo.disparar(obra));
+      if (!r) { R.exec = null; R.erro = 'O robô não foi disparado. Veja a mensagem acima e tente de novo.'; render(); return; }
+      R.exec = { ...r, passos: [] }; render(); acompanharRobo(r.id, r.desde);
+    });
   }
   function resumoTipo(k, d) {
     if (k === 'curva' || k === 'financeiro.curva') return `${d.length} meses`;
@@ -2457,6 +2534,11 @@
       dr.addEventListener('drop', e => { if (e.dataTransfer.files.length) lerArquivos([...e.dataTransfer.files]); });
     }
     const so = $('#imp-obra'); if (so) so.onchange = () => { S.obraId = so.value; };
+    // atualização pelas APIs (só aparece para o administrador liberado)
+    const rIr = $('#robo-ir'); if (rIr) rIr.onclick = dispararRobo;
+    const rOb = $('#robo-obra'); if (rOb) rOb.onchange = () => { (S.robo || (S.robo = {})).sel = rOb.value; const t = $('#robo-prompt'); if (t) t.value = promptReserva(rOb.value); };
+    const rPr = $('.robo-prompt'); if (rPr) rPr.ontoggle = () => { (S.robo || (S.robo = {})).promptAberto = rPr.open; };
+    const rCp = $('#robo-copiar'); if (rCp) rCp.onclick = async () => { const t = $('#robo-prompt'); try { await navigator.clipboard.writeText(t.value); toast('Prompt copiado.'); } catch (e) { t.select(); toast('Selecione o texto e copie manualmente.'); } };
     const ap = $('#imp-aplicar'); if (ap) ap.onclick = aplicarImport;
     const li = $('#imp-limpar'); if (li) li.onclick = () => { S.imp = null; render(); };
     const pdf = $('#bt-pdf'); if (pdf) pdf.onclick = () => baixarPdf(pdf);

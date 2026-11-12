@@ -188,6 +188,11 @@ simulando (bom para as primeiras semanas).
 
 ## Operação
 
+- **Pelo painel (um clique, desde 11/11/2026):** tela **Alimentar → Atualização pelas APIs** (só o login de
+  `robo.liberadoPara` em `js/config.js`). Dispara este workflow com `simular=false`, `fonte=auto`, sem aceitar nova linha
+  de base, acompanha o andamento e relê os dados ao concluir. O token do GitHub informado no painel precisa de
+  **Actions: Read and write** (além de Contents: Read and write) neste repositório; sem isso o GitHub recusa o disparo.
+  Reserva sem o robô: o "prompt de reserva" do mesmo cartão (skill `alimentar-painel-machine`, pelo Chrome).
 - **Executar agora:** Actions → *Sincronização Prevision* → *Run workflow* (obra vazia = todas as habilitadas;
   "Simulação" vem marcada; fonte `auto`).
 - **Localmente**, com arquivos já exportados (`<pasta>/<obra>/fisico` e `<pasta>/<obra>/financeiro`):

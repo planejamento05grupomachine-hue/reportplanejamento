@@ -129,6 +129,27 @@
       p.catch(() => { if (this._arv && this._arv.p === p) this._arv = null; });
       return p;
     },
+    // ----- robô (GitHub Actions) -----
+    // Dispara o workflow do robô e acompanha a execução. O GitHub só aceita o disparo com token que tenha
+    // "Actions: Read and write" neste repositório; sem isso responde 403 e nada roda.
+    async dispararRobo(workflow, inputs) {
+      const b = await this.branch();
+      try { await this.req('POST', `${this.repo()}/actions/workflows/${encodeURIComponent(workflow)}/dispatches`, { ref: b, inputs }); }
+      catch (e) {
+        if (e.codigo === 'TOKEN') throw erro('O token do GitHub não tem permissão para disparar o robô. No GitHub, edite o token e dê "Actions: Read and write" neste repositório (além de Contents: Read and write).', 'TOKEN_ACTIONS');
+        throw e;
+      }
+    },
+    async execucoesRobo(workflow) {
+      const r = await this.req('GET', `${this.repo()}/actions/workflows/${encodeURIComponent(workflow)}/runs?event=workflow_dispatch&per_page=10`);
+      return (r.workflow_runs || []).map(x => ({ id: x.id, status: x.status, conclusao: x.conclusion, criadaEm: x.created_at, url: x.html_url, titulo: x.display_title, por: x.actor && x.actor.login }));
+    },
+    async execucaoRobo(id) {
+      const [run, jobs] = await Promise.all([this.req('GET', `${this.repo()}/actions/runs/${encodeURIComponent(id)}`), this.req('GET', `${this.repo()}/actions/runs/${encodeURIComponent(id)}/jobs`)]);
+      const passos = ((jobs.jobs || [])[0] || {}).steps || [];
+      return { id: run.id, status: run.status, conclusao: run.conclusion, url: run.html_url, criadaEm: run.created_at, atualizadaEm: run.updated_at,
+        passos: passos.map(p => ({ nome: p.name, status: p.status, conclusao: p.conclusion })) };
+    },
     // arquivos: { caminho: Uint8Array | string | null (apagar) }
     async commit(arquivos, mensagem, { orfao = false, apagarPrefixos = [], progresso } = {}) {
       const b = await this.branch();
@@ -345,6 +366,37 @@
       limpar() { GH.limparToken(); refAtual = null; },
       repo: () => `${GHCFG.owner}/${GHCFG.repo}`,
     },
+
+    // ----- atualização pelas APIs (robô do GitHub Actions) -----
+    // Só para os logins de CFG.robo.liberadoPara (administradores). O robô grava só rascunho e não toca em restrições.
+    robo: {
+      liberado: () => ehAdmin() && !!(CFG.robo && CFG.robo.workflow) && (CFG.robo.liberadoPara || []).map(e => String(e).toLowerCase()).includes(String((CH && CH.email) || '').toLowerCase()),
+      // obras que o robô conhece (sync/obras.json publicado no site; só código e habilitação, sem dados)
+      async obras() {
+        const b = await lerJSON('sync/obras.json');
+        return ((b && b.obras) || []).filter(o => o.habilitada && /^\d{2,5}$/.test(String(o.painelId))).map(o => String(o.painelId));
+      },
+      async disparar(obra) {
+        if (!API.robo.liberado()) throw erro('A atualização pelas APIs está liberada só para o administrador do painel.');
+        if (!GH.temToken()) throw erro('Para disparar o robô, informe o token do GitHub.', 'SEM_TOKEN');
+        const cod = String(obra || '').trim();
+        if (cod && !/^\d{2,5}$/.test(cod)) throw erro('Código de obra inválido.');
+        const antes = Date.now();
+        await GH.dispararRobo(CFG.robo.workflow, { obra: cod, simular: 'false', fonte: 'auto', aceitar_nova_base: 'false' });
+        // o GitHub não devolve o id da execução no disparo: procura a execução criada depois do clique
+        for (let t = 0; t < 10; t++) {
+          await new Promise(ok => setTimeout(ok, 3000));
+          const r = (await GH.execucoesRobo(CFG.robo.workflow)).find(x => Date.parse(x.criadaEm) >= antes - 60000);
+          if (r) return r;
+        }
+        // disparado, mas a execução ainda não apareceu na lista: o painel continua procurando
+        return { id: null, status: 'queued', desde: antes, url: `https://github.com/${GHCFG.owner}/${GHCFG.repo}/actions` };
+      },
+      ultimas: () => GH.execucoesRobo(CFG.robo.workflow),
+      execucao: id => GH.execucaoRobo(id),
+    },
+    // Relê do repositório o que mudou (ex.: rascunho gravado pelo robô) sem sair do painel
+    async reler() { if (GH.temToken()) await sincronizar(); return API.listar(); },
 
     // 'configurar' quando o painel ainda não tem acessos; 'login' nos demais casos
     async estado() {

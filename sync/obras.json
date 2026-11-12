@@ -49,6 +49,16 @@
       "api": { "equivalenciaValidada": null }
     },
     {
+      "painelId": "210", "codigo": "210",
+      "conferenciaNome": { "sha256": "58a1d2e4b2d72f4115db46d256dbdf97a3605c45089ce9ed18f85582d2258cf1" },
+      "prevision": { "ganttId": 42195, "apiProjectId": "42195" }, "sienge": { "obraId": null }, "diarioObra": { "obraId": null },
+      "vinculo": "confirmado",
+      "evidencia": "11/11/2026: código 210 no nome do projeto, nome confere com o hash e id 42195 na interface (projects/42195; antes listado em foraDoEscopo). Obra cadastrada no painel em 11/11/2026; exportação manual dos 4 relatórios físicos validada no Alimentar sem bloqueio (Curva S 26/08/2026 a 30/07/2027, 301 de 301 linhas ligadas). Orçamento ainda não vinculado ao cronograma no Prevision: VA pré-configurado como na 211 (financeiro ativo + aguardaVinculo).",
+      "habilitada": true,
+      "financeiro": { "ativo": true, "aguardaVinculo": true },
+      "api": { "equivalenciaValidada": null }
+    },
+    {
       "painelId": "211", "codigo": "211",
       "conferenciaNome": { "sha256": "f332bc74383ea0a8bcda9bc5ea0033d6281d1f5b385cd7eae26b156d74fad357" },
       "prevision": { "ganttId": 41940, "apiProjectId": "41940" }, "sienge": { "obraId": null }, "diarioObra": { "obraId": null },
@@ -69,7 +79,5 @@
       "api": { "equivalenciaValidada": null }
     }
   ],
-  "foraDoEscopo": [
-    { "codigo": "210", "prevision": "42195", "motivo": "Projeto ativo no Prevision sem obra cadastrada no painel: não é importado." }
-  ]
+  "foraDoEscopo": []
 }

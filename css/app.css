@@ -697,3 +697,8 @@ details.sec { scroll-margin-top: calc(var(--mast-h) + 64px); }
 .mp-fotos { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 8px; }
 .mp-foto { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); }
 .mp-foto img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 4px; display: block; }
+
+/* Atualização pelas APIs (Alimentar): prompt de reserva */
+.robo-prompt { border-top: 1px solid var(--rule); padding-top: 12px; }
+.robo-prompt > summary { cursor: pointer; list-style: revert; }
+.robo-prompt textarea { width: 100%; margin-top: 10px; resize: vertical; font: inherit; line-height: 1.45; }
