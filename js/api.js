@@ -112,8 +112,22 @@
     },
     async branch() { if (!this._branch) await this.verificar(); return this._branch; },
     async head() { const b = await this.branch(); return (await this.req('GET', `${this.repo()}/git/ref/heads/${encodeURIComponent(b)}`)).object.sha; },
+    // Lê o arquivo pelo blob (bytes exatos). O endpoint /contents trata alguns binários pequenos como texto e devolve os
+    // bytes convertidos (ex.: 210.bin de 319 bytes chegava com 478, 11/11/2026): o arquivo cifrado não abria e o login caía
+    // em "Seu acesso foi atualizado". A árvore do commit dá a sha de cada blob; fica guardada por commit.
     async ler(caminho, ref) {
-      return this.req('GET', `${this.repo()}/contents/${caminho.split('/').map(encodeURIComponent).join('/')}?ref=${ref}`, null, 'application/vnd.github.raw');
+      const arv = await this.arvore(ref);
+      const sha = arv.get(caminho);
+      if (!sha) return null;
+      return this.req('GET', `${this.repo()}/git/blobs/${sha}`, null, 'application/vnd.github.raw');
+    },
+    arvore(ref) {
+      if (this._arv && this._arv.ref === ref) return this._arv.p;
+      const p = this.req('GET', `${this.repo()}/git/trees/${encodeURIComponent(ref)}?recursive=1`)
+        .then(t => new Map((t.tree || []).filter(x => x.type === 'blob').map(x => [x.path, x.sha])));
+      this._arv = { ref, p };
+      p.catch(() => { if (this._arv && this._arv.p === p) this._arv = null; });
+      return p;
     },
     // arquivos: { caminho: Uint8Array | string | null (apagar) }
     async commit(arquivos, mensagem, { orfao = false, apagarPrefixos = [], progresso } = {}) {
