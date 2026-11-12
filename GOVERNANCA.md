@@ -80,6 +80,17 @@ percentual (a que bate com o realizado do Cronograma), financeiro na **Econômic
 de datas, tudo exportado junto e gravado como rascunho. A Curva S que o Prevision exporta hoje tem um ponto por dia; a
 conferência com o Progresso mensal usa o último ponto de cada mês.
 
+**Três caminhos para alimentar, na ordem de preferência (11/2026):**
+1. **Botão "Atualização pelas APIs"** (tela Alimentar, só o administrador de `robo.liberadoPara` em `js/config.js`):
+   dispara o robô do GitHub Actions para uma obra ou todas e acompanha na tela. As credenciais das ferramentas ficam só
+   nos segredos do repositório; o disparo exige o token do administrador com *Actions: Read and write*. Grava só rascunho
+   e não toca em restrições.
+2. **Prompt de reserva** (no mesmo cartão): pede ao Claude a mesma carga pelo Chrome, seguindo a skill
+   `alimentar-painel-machine` (nunca digita senha, nunca publica, não mexe em restrições).
+3. **Envio manual** dos arquivos na própria tela Alimentar.
+
+Em qualquer caminho, publicar para o cliente continua sendo um ato manual do administrador, na tela da obra.
+
 O painel avisa quando um dado está desatualizado além da cadência esperada (aba Obra →
 Conferência dos dados): mais de 10 dias sem corte físico, ou mais de 35 dias sem corte
 financeiro (`LIMIAR_DIAS_FISICO`/`LIMIAR_DIAS_FINANCEIRO` em `js/core.js`).
@@ -130,7 +141,13 @@ não medida. Aparece só para administradores e diretoria, na aba Obra (não vai
 - **Report no celular**: em tela estreita, um resumo legível (situação, avanço, prazo, projeção, atenções e marcos) vem
   antes das folhas A4. Não entra no PDF nem na impressão.
 - **Token do GitHub**: por padrão fica só até fechar o navegador; *Lembrar neste computador* vale 7 dias. Use token
-  fine-grained, só deste repositório, com validade de até 90 dias.
+  fine-grained, só deste repositório, com validade de até 90 dias. Um token por finalidade, cada um com o mínimo:
+  navegador do administrador (*Contents* + *Actions*: Read and write), robô `PAINEL_GH_TOKEN` (*Contents*), renovação da
+  sessão do Prevision (*Secrets*, arquivo local `~/.painel-sync/github-segredos.token`, nunca no repositório).
+- **Leitura dos dados com token**: pela árvore do commit e `/git/blobs` (bytes exatos). O endpoint `/contents` da API do
+  GitHub converte alguns binários pequenos como texto e fazia o login cair em "Seu acesso foi atualizado" com a senha
+  certa (incidente de 11/11/2026, corrigido na versão 20261111b). Não voltar a ler arquivos cifrados por `/contents`.
+- **Senhas**: nunca são escritas em conversa, e-mail ou arquivo; se isso acontecer, trocar a senha em seguida.
 
 ## Mapa de restrições (aba Restrições, uso interno)
 
@@ -138,6 +155,14 @@ Registro e gestão das restrições revisadas na reunião semanal, no padrão do
 precisa estar resolvido para uma frente avançar (projeto, contratação, material, mão de obra, aprovação, cliente...).
 
 - **Quem vê**: administradores registram e atualizam; diretoria consulta; cliente não vê a aba nem recebe os dados.
+- **Regra absoluta (Carlos, 11/11/2026): as restrições nunca vão para o cliente** — nem na tela, nem no report, PDF,
+  PowerPoint ou qualquer exportação futura. Barreiras que precisam continuar valendo: cifra com a chave interna (o
+  chaveiro de cliente não recebe), `paraApp` apaga o campo para perfil cliente, aba e resumo da obra só para a equipe
+  interna, report e PowerPoint sem restrições. Toda saída nova para o cliente deve ser conferida contra esta regra.
+- **Fontes da atualização** (rotina definida em 11/11/2026): os PDFs "Remoção de Restrições — Time X" do grupo de WhatsApp
+  *Gestão Operações - MACHINE* (base oficial do GGO, importados em *Somar*), as urgências do grupo *Lideranças - OPERAÇÕES*
+  e os e-mails do Planejamento. Nas restrições existentes muda-se só status e observação (com data e fonte); a data limite
+  original não é alterada. Restrição nova só leva data limite quando a fonte traz a data; sem data, entra condicionada.
 - **Onde fica**: `data/restricoes/<obra>.bin`, cifrado com a chave interna (a mesma do rascunho), fora do arquivo publicado
   ao cliente. Entra na troca de chaves. A gravação é item a item sobre a versão mais recente do repositório.
 - **Campos**: frente/item, tipo, ação para remover, responsável (aceita "Ana / Bia", "André + Gisele"), data limite ou
